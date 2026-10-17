@@ -35,21 +35,29 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 WIDTH = 400
 HEIGHT = 300
 MAGIC = b"AIB1"
-FONT_PATH = ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf"
-# 现代黑体（无衬线中文体）与数显字体的分工：
-# - 中文/常规：MiSans-Medium（现代几何黑体，中文友好）
-# - 数字/数值：ShareTechMono-Regular（等宽数显风格，用于指数、涨跌幅、成交、涨停等）
+# 网页与可用设备字体统一优先使用 Microsoft YaHei；设备渲染机若未安装，
+# 回退到仓库内的 MiSans，以保证离线/CI 渲染始终可用。
+FONT_FALLBACK_PATH = ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf"
+_YAHEI_CANDIDATES = (
+    Path(os.environ["MICROSOFT_YAHEI_FONT"]) if os.environ.get("MICROSOFT_YAHEI_FONT") else None,
+    Path("C:/Windows/Fonts/msyh.ttc"),
+    Path("C:/Windows/Fonts/msyh.ttf"),
+    Path("/System/Library/Fonts/Microsoft/微软雅黑.ttf"),
+    Path("/usr/share/fonts/truetype/microsoft/微软雅黑.ttf"),
+    ROOT / "device_brief" / "fonts" / "MicrosoftYaHei.ttf",
+)
+FONT_PATH = next((path for path in _YAHEI_CANDIDATES if path and path.is_file()), FONT_FALLBACK_PATH)
+# 兼容原有测试/调用方的常量名；实际渲染不再区分中文、数字或粗体字体。
 FONT_CHINESE_PATH = FONT_PATH
-FONT_DIGITAL_PATH = ROOT / "device_brief" / "fonts" / "ShareTechMono-Regular.ttf"
-FONT_DIGITAL_BOLD_PATH = ROOT / "device_brief" / "fonts" / "DejaVuSansMono-Bold.ttf"
+FONT_DIGITAL_PATH = FONT_PATH
+FONT_DIGITAL_BOLD_PATH = FONT_PATH
 BLACK, WHITE = 0, 255
 
 # 字号下限：面板为 4.2" 400×300（约 120dpi），1px ≈ 0.21mm。
 # 旧版正文 9~10px、页脚 7px，汉字只有约 2mm 高，1bpp 阈值化后笔画粘连看不清。
 # 新版正文 13px、次要信息 12px、页眉元信息最低 10px，不再使用更小的字号；
 # 版面放不下时删内容（见 draw_sheet 的取舍），不许靠缩小字号硬塞。
-# 标题加粗、正文小一号：标题/分栏标题采用加粗（描边/粗体字体）以建立层级，
-# 正文与次要信息保持常规字重，字号逐级递减一档（18→14→13→12→11→10）。
+# 全文采用常规字重，通过字号层级建立视觉结构（18→14→13→12→11→10）。
 MARGIN = 10
 CONTENT_W = WIDTH - MARGIN * 2
 FONT_TITLE = 18
@@ -58,11 +66,6 @@ FONT_BODY = 13
 FONT_SMALL = 12
 FONT_META = 11
 FONT_MIN = 10
-
-# 数显字符集：仅对这些字符使用等宽数显字体，其余一律走中文字体。
-# 覆盖指数、收盘价、涨跌幅、成交额、涨跌停计数、日期时间、多空比例等数值区间。
-_DIGITAL_CHARS = set("0123456789.,%+-:°/")
-
 
 # ---------------------------------------------------------------- 数据收集
 def collect_brief(limit: int = 12) -> tuple[dict, dict, dict | None, dict | None]:
@@ -117,87 +120,42 @@ class Sheet:
     def __init__(self, font_path: Path | None = None):
         self.image = Image.new("L", (WIDTH, HEIGHT), WHITE)
         self.draw = ImageDraw.Draw(self.image)
-        # 中文：现代黑体（无衬线中文体）；数显：等宽数字字体
-        self.font_path = font_path or FONT_CHINESE_PATH
-        self.font_chinese_path = FONT_CHINESE_PATH if FONT_CHINESE_PATH.exists() else self.font_path
-        self.font_digital_path = FONT_DIGITAL_PATH if FONT_DIGITAL_PATH.exists() else self.font_chinese_path
-        self.font_digital_bold_path = FONT_DIGITAL_BOLD_PATH if FONT_DIGITAL_BOLD_PATH.exists() else self.font_digital_path
+        self.font_path = font_path or FONT_PATH
+        # 所有字符使用同一个常规字重字体；保留旧字段仅兼容外部调用。
+        self.font_chinese_path = self.font_path
+        self.font_digital_path = self.font_path
+        self.font_digital_bold_path = self.font_path
         # 缓存键：(字体路径, 字号)
         self._cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
 
     def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        # 标题加粗：中文用描边合成粗体（字号≥14 时不粘连），数显用独立粗体文件
-        if is_digital and bold:
-            path = self.font_digital_bold_path
-        elif is_digital:
-            path = self.font_digital_path
-        else:
-            path = self.font_chinese_path
-        key = (str(path), size)
+        # bold/is_digital 参数保留兼容旧接口，但简报统一使用微软雅黑常规字重。
+        key = (str(self.font_path), size)
         if key not in self._cache:
-            self._cache[key] = ImageFont.truetype(str(path), size)
+            self._cache[key] = ImageFont.truetype(str(self.font_path), size)
         return self._cache[key]
 
     def _is_digital_char(self, ch: str) -> bool:
-        return ch in _DIGITAL_CHARS
+        # 兼容旧接口；数值不再切换到另一套等宽字体。
+        return False
 
     def _runs(self, text: str):
-        if not text:
-            return
-        cur_is = self._is_digital_char(text[0])
-        cur = text[0]
-        for ch in text[1:]:
-            is_d = self._is_digital_char(ch)
-            if is_d == cur_is:
-                cur += ch
-            else:
-                yield cur_is, cur
-                cur_is, cur = is_d, ch
-        yield cur_is, cur
+        if text:
+            yield False, text
 
     def font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        # 兼容旧接口：默认返回中文字体
-        return self._font(False, size, bold)
+        return self._font(False, size)
 
     def measure(self, text: str, size: int, bold: bool = False) -> int:
-        # 混合排版：中文用现代黑体，数字用数显等宽，逐段累加
-        total = 0.0
-        for is_digital, seg in self._runs(text):
-            total += self.draw.textlength(seg, font=self._font(is_digital, size, bold))
-        # 标题加粗采用 1px 描边/叠影，实测宽度约 +1px，需计入排版避免溢出
-        if bold and text:
-            total += 1
-        return int(round(total))
+        # 不论调用方传入何种字重标记，都按常规字重计算实际文本宽度。
+        return int(round(self.draw.textlength(text, font=self._font(False, size))))
 
     def text(self, x: int, y: int, text: str, size: int = 11, bold: bool = False,
              fill: int = BLACK) -> int:
-        # 标题加粗：字号≥14 的标题/分栏标题采用描边或叠影加粗
-        # 正文保持常规字重（小一号），避免小字号描边在 1bpp 阈值化后粘连
-        cur_x = x
-        for is_digital, seg in self._runs(text):
-            font = self._font(is_digital, size, bold)
-            if bold:
-                # 中文与数显分别加粗：数显已有粗体文件，但仍叠加 1px 描边以统一视觉重量
-                # 小字号（≤12）不做描边，避免 1bpp 下笔画糊死；但标题/Section 为 14/18，可安全加粗
-                if size >= 14:
-                    # 使用 stroke_width 模拟粗体（实测在 14–18px 下清晰不粘连）
-                    try:
-                        self.draw.text((cur_x, y), seg, font=font, fill=fill, stroke_width=1, stroke_fill=fill)
-                    except TypeError:
-                        # 兼容旧版 Pillow：退化为双写叠影
-                        self.draw.text((cur_x, y), seg, font=font, fill=fill)
-                        self.draw.text((cur_x + 1, y), seg, font=font, fill=fill)
-                else:
-                    # 小字号加粗需求少，若需则同样用叠影但偏移 1px 仍可辨
-                    self.draw.text((cur_x, y), seg, font=font, fill=fill)
-                    self.draw.text((cur_x + 1, y), seg, font=font, fill=fill)
-            else:
-                self.draw.text((cur_x, y), seg, font=font, fill=fill)
-            # 累加本段宽度
-            cur_x += int(round(self.draw.textlength(seg, font=font)))
-        if bold and text:
-            cur_x += 1
-        return cur_x - x
+        # 统一字体、常规字重；不描边、不叠影，bold 参数仅为兼容保留。
+        font = self._font(False, size)
+        self.draw.text((x, y), text, font=font, fill=fill)
+        return int(round(self.draw.textlength(text, font=font)))
 
     def wrap(self, text: str, size: int, max_width: int, max_lines: int = 2,
              bold: bool = False) -> list[str]:

@@ -104,6 +104,27 @@ class FontSizeFloorTest(unittest.TestCase):
         self.assertGreaterEqual(min(sizes), render_brief.FONT_MIN, sizes)
 
 
+class TypographyTest(unittest.TestCase):
+    def test_all_text_uses_one_regular_font(self):
+        sheet = render_brief.Sheet(render_brief.FONT_PATH)
+        self.assertIs(sheet.font(13, bold=False), sheet.font(13, bold=True))
+        self.assertEqual(sheet.measure("AI 12.3%", 13, bold=False),
+                         sheet.measure("AI 12.3%", 13, bold=True))
+
+        calls = []
+        original = sheet.draw.text
+
+        def recording(position, text, **kwargs):
+            calls.append(kwargs)
+            return original(position, text, **kwargs)
+
+        with mock.patch.object(sheet.draw, "text", recording):
+            sheet.text(0, 0, "标题 123", 14, bold=True)
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("stroke_width", calls[0])
+        self.assertIs(calls[0]["font"], sheet.font(14))
+
+
 class LayoutTest(unittest.TestCase):
     def test_fullest_day_fits_and_fills_page(self):
         sheet = draw()
