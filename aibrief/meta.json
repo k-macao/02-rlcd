@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-17 15:05:08",
+  "generated_at": "2026-10-17 15:11:14",
   "bias": "中性",
   "bull": 45,
   "bear": 55,
-  "signals": 103,
+  "signals": 104,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
@@ -20,6 +20,6 @@
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "386ae40c2d8bcc7de768d632d8e82040274400c7d3fa7b1501c23153515adeab",
-  "crc32_bitmap": "9c9ff738"
+  "sha256": "c0238a63400c3dd34422156ea8f36293fb7f7ed1e81edab35e246bbaf8516db1",
+  "crc32_bitmap": "5f9dcc2d"
 }
