@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-17 11:17:20",
+  "generated_at": "2026-10-17 14:56:51",
   "bias": "中性",
-  "bull": 41,
-  "bear": 59,
-  "signals": 105,
+  "bull": 45,
+  "bear": 55,
+  "signals": 104,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
-  "market_source": "tencent",
+  "market_source": "eastmoney",
   "headlines": [
-    "Chinese premier Li Qiang attended the opening ceremony of the 2026 World Traditional Medicine Congress and delivered remarks, Xinhua reported.",
-    "NBU Governor Pyshnyi said Russia’s unwarranted aggression must stop.",
-    "Ukraine's central bank governor Pishni said many delegates walked out during Russia's speech, calling it a deep and moving moment.",
-    "Explosion at chemical plant in Gujarat state kills at least five 【Explosion at chemical plant in Gujarat state kills at least five】A chemical plant in Gujarat state in western India exploded late on the 16th (local time). Local officials said on the 17th the blast killed at least five workers and injured five others, who were taken to hospital.",
-    "Gold may face further pressure through year-end, Capital Economics cites Fed hikes and AI outlook 【Gold may face further pressure through year-end, Capital Economics cites Fed hikes and AI outlook】Capital Economics climate and commodities economist Hamad Hussain said on Oct. 16 that gold could gradually weaken through the rest of the year, citing two factors: continued Fed rate hikes and the view that market worries about an end to the AI boom will ultimately prove temporary. TD Securities global head of commodities strategy Bart Melek said gold remains range-bound and is biased toward the lower end of its range amid substantial uncertainty over the Fed's next move.",
-    "China's Premier Li arrives in Tashkent to begin official visit to Uzbekistan 【China's Premier Li arrives in Tashkent to begin official visit to Uzbekistan】China's Premier Li arrived in Tashkent on the morning of Oct. 17 to begin an official visit to Uzbekistan at the invitation of Uzbek Prime Minister Aripov. He departed Beijing with State Councilor and State Council Secretary-General Wu Zhenglong among those accompanying him."
+    "Yemeni armed forces said they destroyed 190 Houthi armored and combat vehicles in the past 24 hours.",
+    "Saudi-led coalition said it intercepted and destroyed four drones over Riyadh and the eastern and southern regions.",
+    "German media: applications to refuse military service nearly triple in 2026 【German media: applications to refuse military service nearly triple in 2026】German media, citing data from the Federal Office for Family and Civil Society Affairs, reported 14,977 applications to refuse military service received since January 2026, versus 3,879 such applications in all of 2025, a year-on-year rise described as nearly threefold.",
+    "Blue Origin aims for multiple New Glenn heavy launches per week by 2030 【Blue Origin aims for multiple New Glenn heavy launches per week by 2030】Blue Origin targets multiple weekly New Glenn heavy-launches by 2030 to challenge SpaceX's lead in the global launch market. The plan calls for large-scale expansion of manufacturing, launch infrastructure and operational reliability. The company has invested more than $3.0 billion at its Florida production and rocket-integration facility and plans an additional $330 million expansion to support a higher-capacity New Glenn variant.",
+    "UK research firm BMI says September 2026 European EV deliveries hit a record at nearly 600,000 units, up 10% MoM. North American EV sales fell 44% MoM in September, the largest single-month drop so far in 2026.",
+    "BMI Research: Jan-Sep global electric vehicle sales rose 3% year-to-date to 15.5 million units."
   ],
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "5a7c98e6aa96a7c8ba2f228424cef76aae59ae3dfdfb7b17538317d5be881954",
-  "crc32_bitmap": "43a8f456"
+  "sha256": "1cc8fde784ac8a4c3979a34269ed897fe5b873338f26f10e9b175c8eaf90039f",
+  "crc32_bitmap": "9411c4dc"
 }
