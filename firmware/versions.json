@@ -1,6 +1,20 @@
 {
-  "latest": "v1.6.17",
+  "latest": "v1.7.0",
   "items": [
+    {
+      "version": "v1.7.0",
+      "notes": "v1.7.0：新增「章鱼AI 简报」页。\n1. 设置 → 网络 → 「章鱼AI 简报」进入，设备联网拉取 400×300 单色简报图，覆盖 AI 每日总结、AI 看盘、板块机会与全网快讯。\n2. 简报图每天自动重建；打开页面时若缓存超过 6 小时会自动刷新，长按 KEY 返回设置页。\n3. 离线模式、低电量模式下不发请求；缓存在重启后保留，失败时继续显示上一版并保留提示。\n完整说明见源码仓库同版本 Release。",
+      "app": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.0/weather_clock_v1.7.0.bin",
+        "sha256": "90320f016be32ebea758176e8465f6a68bde9c738cd92f6f9ad07a5f6646ebb3",
+        "size": 6321520
+      },
+      "merged": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.0/weather_clock_v1.7.0_merged.bin",
+        "sha256": "e5d234c46d693509c5b972c51c41b1426b7aa06b6aa4613d8ed9cd4356f4e42a",
+        "size": 16509951
+      }
+    },
     {
       "version": "v1.6.17",
       "notes": "v1.6.17：共 2 项更新。\n1. 温湿历史曲线连线更加圆滑，保留真实小时采样点、最高/最低值标记和缺测断线，采样与刷新频…\n2. 图片时钟更换七张内置星期图片，分别对应周一至周日；使用阈值141、关闭抖动和反色、8p…\n完整说明见源码仓库同版本 Release。",
@@ -124,20 +138,6 @@
       "merged": {
         "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.9/weather_clock_v1.6.9_merged.bin",
         "sha256": "612108130a5412f88f448bf8751f4b99b6fbcec4b9df22083f8a5692e67cc4e0",
-        "size": 16509951
-      }
-    },
-    {
-      "version": "v1.6.8",
-      "notes": "v1.6.8：共 4 项更新。\n1. 聚合时钟新增多云与阴天静态手工云层，保留原高低温点阵与页面布局，仅随天气变化更新，不增…\n2. 修复聚合天气装饰层按布局前省略号宽度进行避让不准确的问题，避免云层与温度读数区域重叠。\n3. 修复 WeatherClock Studio 更新后旧 Service Worker…\n4. 优化 Studio 在线固件安装流程、芯片与容量识别、覆盖确认和资源写入前置门禁；发布…\n完整说明见源码仓库同版本 Release。",
-      "app": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.8/weather_clock_v1.6.8.bin",
-        "sha256": "7c322e8a300f4e7bf28cf0f57835be85cae7af21b4c6be5ef247e8bec16b64bf",
-        "size": 6303312
-      },
-      "merged": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.8/weather_clock_v1.6.8_merged.bin",
-        "sha256": "f24d50cc216694c09040757c3dadb3ef8d6533a7b3a0ddff15b5206dd6c11d2c",
         "size": 16509951
       }
     }

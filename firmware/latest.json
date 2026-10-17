@@ -1,7 +1,7 @@
 {
-  "version": "v1.6.17",
-  "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.17/weather_clock_v1.6.17.bin",
-  "sha256": "39636e7faecf4da977440f2e266365a8b3bf62a5c4b28a3a08bdf7c3010fb9bb",
-  "size": 6317648,
-  "notes": "v1.6.17：共 2 项更新。\n1. 温湿历史曲线连线更加圆滑，保留真实小时采样点、最高/最低值标记和缺测断线，采样与刷新频…\n2. 图片时钟更换七张内置星期图片，分别对应周一至周日；使用阈值141、关闭抖动和反色、8p…\n完整说明见源码仓库同版本 Release。"
+  "version": "v1.7.0",
+  "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.0/weather_clock_v1.7.0.bin",
+  "sha256": "90320f016be32ebea758176e8465f6a68bde9c738cd92f6f9ad07a5f6646ebb3",
+  "size": 6321520,
+  "notes": "v1.7.0：新增「章鱼AI 简报」页。\n1. 设置 → 网络 → 「章鱼AI 简报」进入，设备联网拉取 400×300 单色简报图，覆盖 AI 每日总结、AI 看盘、板块机会与全网快讯。\n2. 简报图每天自动重建；打开页面时若缓存超过 6 小时会自动刷新，长按 KEY 返回设置页。\n3. 离线模式、低电量模式下不发请求；缓存在重启后保留，失败时继续显示上一版并保留提示。\n完整说明见源码仓库同版本 Release。"
 }
