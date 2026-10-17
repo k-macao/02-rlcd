@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-10-17 11:15:23",
+  "generated_at": "2026-10-17 11:17:20",
   "bias": "中性",
-  "bull": 42,
-  "bear": 58,
-  "signals": 106,
+  "bull": 41,
+  "bear": 59,
+  "signals": 105,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
-  "market_source": "eastmoney",
+  "market_source": "tencent",
   "headlines": [
     "Chinese premier Li Qiang attended the opening ceremony of the 2026 World Traditional Medicine Congress and delivered remarks, Xinhua reported.",
     "NBU Governor Pyshnyi said Russia’s unwarranted aggression must stop.",
@@ -20,6 +20,6 @@
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "7509db0ce8e354b3836e2cd4c4aac40d5d47a1c794860b5f9ed73e3572279369",
-  "crc32_bitmap": "5f292583"
+  "sha256": "5a7c98e6aa96a7c8ba2f228424cef76aae59ae3dfdfb7b17538317d5be881954",
+  "crc32_bitmap": "43a8f456"
 }
