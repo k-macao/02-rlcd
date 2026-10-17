@@ -78,7 +78,7 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: bash /project/.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }}
+          command: bash ../.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }}
 
       - name: 校验构建产物
         env:
