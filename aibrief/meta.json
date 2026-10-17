@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-10-17 16:12:05",
+  "generated_at": "2026-10-17 16:12:41",
   "bias": "中性",
   "bull": 45,
   "bear": 55,
-  "signals": 102,
-  "live_sources": 51,
+  "signals": 100,
+  "live_sources": 50,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
-  "market_source": "tencent",
+  "market_source": "eastmoney",
   "headlines": [
     "Israeli Jewish settlers attack European diplomats' vehicles in West Bank 【Israeli Jewish settlers attack European diplomats' vehicles in West Bank】On the 17th Israeli authorities reported diplomats from France, Belgium and Poland taking part in an olive harvest in the West Bank were confronted by seven masked Israeli Jewish settlers who surrounded their vehicle, demanded identification and smashed the window of a car belonging to the Belgian consulate. Israeli police said they will investigate the incident.",
     "Egypt's parliament to hold special session to review support for Saudi Arabia 【Egypt's parliament to hold special session to review support for Saudi Arabia】At the president's request, Egypt's parliament will hold a special session on Sunday to discuss the regional situation and Cairo's stance on safeguarding Saudi Arabia's security and stability.",
@@ -20,6 +20,6 @@
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "a4dd4d039c7b18489dd4eb65600a97e7b2a8d61a73c4c854c29f24d803c0a8c2",
-  "crc32_bitmap": "b35a3462"
+  "sha256": "4c131f7151563759d5e624c1ab1d296858a357d0154d5f5d15d5cdcb1df17545",
+  "crc32_bitmap": "7d50155b"
 }
