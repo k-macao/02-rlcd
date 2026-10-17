@@ -6,9 +6,8 @@ on:
     - cron: "10 23 * * *"
   push:
     branches: ["**"]
+    # 仅在自身变更时触发一次自检；日常靠定时任务与手动触发，避免和 OTA 清单提交抢写 main。
     paths:
-      - "device_brief/**"
-      - "05/**"
       - ".github/workflows/aibrief.yml"
   workflow_dispatch:
     inputs:
