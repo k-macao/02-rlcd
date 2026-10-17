@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-17 15:34:19",
+  "generated_at": "2026-10-17 15:41:35",
   "bias": "中性",
-  "bull": 45,
-  "bear": 55,
-  "signals": 103,
-  "live_sources": 51,
+  "bull": 47,
+  "bear": 53,
+  "signals": 105,
+  "live_sources": 46,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
@@ -20,6 +20,6 @@
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "df2ed772c0ef01dc8645f0a5dec8a756364e16e3f7b2820bab85e636f3156547",
-  "crc32_bitmap": "850d0f4e"
+  "sha256": "e5adb0eb4ee17188ec9ab3d34aef5190a6c3bda0380cec9a293fc92690a0f934",
+  "crc32_bitmap": "b4bb675f"
 }
