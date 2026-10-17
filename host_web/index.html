@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c0e10">
+  <title>WeatherClock Studio</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">42</span>
+      <div>
+        <h1>WeatherClock Studio</h1>
+        <p>GIF 动图与静图资源制作、预览和写入</p>
+      </div>
+    </div>
+    <div class="top-meta">
+      <span>使用 Edge / Chrome · 素材与配置本地处理，不上传服务器</span>
+      <span class="top-version"><b id="hostVersion">v1.0.12</b> · <span id="cacheState">离线缓存准备中</span> · <span class="hosting-note">页面服务托管于 GitHub Pages</span></span>
+    </div>
+    <div class="top-actions">
+      <span id="serialSupport" class="status-pill">检测中</span>
+      <select id="languageSelect" class="language-select" aria-label="切换语言" title="切换语言" translate="no">
+        <option value="zh-CN">简体中文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+      </select>
+      <a id="sourceRepoLink" class="icon-button link-button" href="https://github.com/wickenzh/ESP32-S3-RLCD-4.2" target="_blank" rel="noopener noreferrer" title="打开 GitHub 源码主页" aria-label="打开 GitHub 源码主页">
+        <span class="source-plus" aria-hidden="true"></span>
+      </a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="workspace">
+      <nav class="tabs" aria-label="上位机功能">
+        <button class="tab is-active" data-tab="firmware" type="button">固件烧录</button>
+        <button class="tab" data-tab="assets" type="button">资源制作</button>
+        <button class="tab" data-tab="writer" type="button">资源写入</button>
+        <button class="tab" data-tab="serial" type="button">串口日志</button>
+        <button class="tab" data-tab="screens" type="button">界面预览</button>
+        <button class="tab" data-tab="settings" type="button">快捷配置</button>
+      </nav>
+
+      <section id="assets" class="tab-panel">
+        <div class="work-summary">
+          <div class="summary-specs">
+            <div><span>GIF 动图</span><strong>84 x 84 / 60 帧</strong></div>
+            <div><span>静图</span><strong>220 x 208 / 最多 24 张</strong></div>
+          </div>
+          <p id="summaryNote" class="summary-note">资源包支持 GIF、静图和兜底配置。
+写入并重启后，优先加载自定义资源。</p>
+          <div class="summary-actions">
+            <button id="buildAssetsBtn" class="primary-button" type="button">③ 生成资源包</button>
+            <button id="downloadAssetsBtn" class="secondary-button" type="button" disabled>下载 BIN（可选）</button>
+          </div>
+        </div>
+        <div id="assetReadyNotice" class="asset-ready-notice" hidden>
+          <p id="assetReadyMessage" role="status"></p>
+          <button id="goToWriterBtn" class="primary-button" type="button">前往资源写入</button>
+        </div>
+        <div class="asset-grid">
+          <div class="asset-card gif-asset-card">
+            <h2>GIF 动图（适用天气时钟）</h2>
+            <label class="file-picker">
+              <span>① 选择 GIF（只支持 GIF 文件）</span>
+              <input id="gifInput" type="file" accept="image/gif">
+            </label>
+            <div class="mini-settings">
+              <label class="control-fit">
+                <span>适配方式</span>
+                <select id="gifFit">
+                  <option value="cover" selected>铺满裁切</option>
+                  <option value="contain">完整显示</option>
+                  <option value="stretch">拉伸</option>
+                </select>
+              </label>
+              <label class="control-threshold">
+                <span>阈值 <b id="gifThresholdValue">150</b></span>
+                <input id="gifThreshold" type="range" min="0" max="255" value="150">
+              </label>
+              <label class="check-row control-dither"><input id="gifDither" type="checkbox" checked> 抖动</label>
+              <label class="check-row control-invert"><input id="gifInvert" type="checkbox"> 反色</label>
+            </div>
+            <div class="canvas-pair small-canvas preview-band">
+              <div>
+                <span>原始 GIF</span>
+                <div class="gif-source-box">
+                  <img id="gifOriginalPreview" alt="原始 GIF 预览">
+                  <canvas id="gifSourceCanvas" width="84" height="84"></canvas>
+                </div>
+              </div>
+              <div><span>转换预览</span><canvas id="gifPreviewCanvas" width="84" height="84"></canvas></div>
+            </div>
+            <div class="action-strip">
+              <button id="previewGifBtn" class="primary-button" type="button">② 转换 GIF</button>
+              <button id="clearGifBtn" class="secondary-button" type="button">清除 GIF</button>
+            </div>
+          </div>
+
+          <div class="asset-card image-asset-card">
+            <h2>静图（适用图片时钟）</h2>
+            <label class="file-picker">
+              <span>① 选择静图（JPG / PNG / WebP / BMP 等）</span>
+              <input id="imageInput" type="file" accept="image/*" multiple>
+            </label>
+            <div class="mini-settings">
+              <label class="control-fit">
+                <span>适配方式</span>
+                <select id="imageFit">
+                  <option value="cover" selected>铺满裁切</option>
+                  <option value="contain">完整显示</option>
+                  <option value="stretch">拉伸</option>
+                </select>
+              </label>
+              <label class="check-row control-dither"><input id="imageDither" type="checkbox" checked> 抖动</label>
+              <label class="check-row control-invert"><input id="imageInvert" type="checkbox"> 反色</label>
+              <label class="control-threshold">
+                <span>阈值 <b id="imageThresholdValue">150</b></span>
+                <input id="imageThreshold" type="range" min="0" max="255" value="150">
+              </label>
+              <label class="control-edge-fade">
+                <span>边缘淡化 <b id="imageEdgeFadeValue">18</b>px</span>
+                <input id="imageEdgeFade" type="range" min="0" max="48" value="18">
+              </label>
+            </div>
+            <div class="image-preview-row">
+              <div class="canvas-pair preview-band">
+                <div><span>原图裁切</span><canvas id="imageSourceCanvas" width="220" height="208"></canvas></div>
+                <div><span>转换预览</span><canvas id="imagePreviewCanvas" width="220" height="208"></canvas></div>
+              </div>
+              <div class="image-side-panel">
+                <label>
+                  <span>预览图片</span>
+                  <select id="imagePreviewSelect" disabled>
+                    <option value="">尚未选择静图</option>
+                  </select>
+                </label>
+                <div class="asset-list" id="imageList">尚未选择静图。</div>
+              </div>
+            </div>
+            <div class="action-strip">
+              <button id="previewImagesBtn" class="primary-button" type="button">② 转换静图</button>
+              <button id="clearImagesBtn" class="secondary-button" type="button">清除静图</button>
+            </div>
+          </div>
+
+        </div>
+        <output id="assetResult" class="output-box">生成资源包后，可在资源写入页面写入设备。</output>
+      </section>
+
+      <section id="screens" class="tab-panel" aria-label="SDL 界面预览">
+        <div class="simulator-heading">
+          <div><h2>交互模拟器</h2><p>LVGL + SDL2 · WebAssembly（Emscripten）</p></div>
+          <div class="simulator-actions">
+            <button id="simPortalToggle" class="secondary-button" type="button" aria-pressed="false" aria-controls="simPortalPanel">配网模拟</button>
+            <a class="link-button" href="https://github.com/wickenzh/ESP32-S3-RLCD-4.2" target="_blank" rel="noopener noreferrer">GitHub 源码</a>
+          </div>
+        </div>
+        <p id="simulatorBuildInfo" class="sim-build" role="status">等待加载模拟器构建信息</p>
+        <p class="sim-language-note">语言切换仅影响网页工具，固件画面、配网模拟及原始串口输出保持原样。</p>
+        <div class="simulator-layout">
+          <section class="virtual-device" aria-label="虚拟设备" tabindex="0">
+            <div class="sim-section-title"><h3>虚拟设备</h3><button id="simReset" class="secondary-button" type="button" disabled>重置设备</button></div>
+            <div class="device-workspace">
+            <div class="device-display">
+            <div class="device-keys">
+              <button id="simKey" class="secondary-button" type="button" aria-describedby="simKeyHelp" title="KEY：短按选择，按住 1.2 秒返回（K）" disabled>KEY</button>
+              <div class="device-key-help">
+                <p id="simKeyHelp">KEY：短按选择，长按 1.2 秒返回</p>
+                <p id="simBootHelp">BOOT：短按切页 / 确认</p>
+              </div>
+              <button id="simBoot" class="secondary-button" type="button" aria-describedby="simBootHelp" title="BOOT：短按切页或确认（B）" disabled>BOOT</button>
+            </div>
+            <canvas id="simulatorCanvas" width="400" height="300" aria-label="虚拟设备400×300显示屏"></canvas>
+            </div>
+            <div class="device-settings">
+            <p id="simulatorStatus" class="sim-status" role="status">模拟器加载中</p>
+            <div class="form-grid">
+              <label><span>显示场景</span><select id="simScene" disabled>
+                <option value="0">天气时钟</option><option value="1">图片时钟</option><option value="2">天气看板</option><option value="3">温湿时钟</option><option value="4">日历</option><option value="5">温湿历史</option><option value="6">小智 AI</option><option value="7">聚合时钟</option><option value="8">设置</option><option value="9">关于本机</option><option value="10">网络检测</option><option value="11">检查更新</option><option value="12">设备配网提示</option><option value="13">天气预警</option><option value="14">低电量</option><option value="15">启动页</option>
+              </select></label>
+              <label><span>聚合天气场景</span><select id="simWeather" disabled><option value="20">多云</option><option value="21">晴</option><option value="22">雨</option><option value="23">雪</option><option value="24">雾</option></select></label>
+            </div>
+            <div class="action-strip"><button id="simDialogue" class="secondary-button" type="button" disabled>模拟对话</button><button id="simPomodoro" class="secondary-button" type="button" disabled>开始 / 取消番茄钟</button></div>
+            </div>
+            </div>
+          </section>
+          <section id="simPortalPanel" class="virtual-portal" aria-label="虚拟配网表单" hidden>
+            <div class="sim-section-title"><h3>虚拟配网</h3><span>独立假数据演示</span></div>
+            <iframe id="portalSimulator" title="虚拟配网表单" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
+          </section>
+        </div>
+        <details class="screen-snapshots"><summary>静态预览对照</summary>
+        <div class="screen-gallery">
+          <figure><figcaption>天气时钟</figcaption><img src="./assets/screens/weather_clock_main.png" alt="天气时钟 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>天气看板</figcaption><img src="./assets/screens/weather_clock_weather_board.png" alt="天气看板 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>图片时钟</figcaption><img src="./assets/screens/weather_clock_gallery.png" alt="图片时钟 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>温湿时钟</figcaption><img src="./assets/screens/weather_clock_flip_clock.png" alt="温湿时钟 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>温湿历史</figcaption><img src="./assets/screens/weather_clock_history.png" alt="温湿历史 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>日历</figcaption><img src="./assets/screens/weather_clock_calendar.png" alt="日历 SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>小智 AI</figcaption><img src="./assets/screens/weather_clock_xiaozhi.png" alt="小智 AI SDL 预览" width="400" height="300"></figure>
+          <figure><figcaption>聚合时钟</figcaption><img src="./assets/screens/weather_clock_aggregate_clock.png" alt="聚合时钟 SDL 预览" width="400" height="300"></figure>
+        </div>
+        </details>
+      </section>
+
+      <section id="settings" class="tab-panel">
+        <h2 class="quick-title">快捷配置链接</h2>
+        <div class="quick-notice">
+          <p><strong>使用条件：</strong><span>请先将设备切换至配网模式，并连接其 Wi-Fi 热点。在浏览器中打开配置链接后，设备将保存配置并启动网络连接。</span></p>
+          <p><strong>数据隐私：</strong><span>配置信息仅在浏览器本地处理，不上传至服务器。生成的链接包含明文 Wi-Fi 密码及 API Key，URL 编码不提供加密保护。</span></p>
+          <p><strong>安全保管：</strong><span>请勿公开或向不可信对象分享配置链接。浏览器历史、剪贴板及分享记录可能保留敏感信息，使用后请及时清理。</span></p>
+        </div>
+        <form id="quickConfigForm" method="dialog" autocomplete="off">
+          <div class="quick-provider-heading">
+            <label class="check-row quick-provider-toggle"><input id="quickOpenMeteo" name="use_open_meteo" type="checkbox" value="1"><span>使用 Open-Meteo</span></label>
+            <div>
+              <small>开启后无需和风密钥；不提供天气预警，空气质量使用 US AQI。公共接口仅限非商业使用。</small>
+              <small>数据来源：Open-Meteo / CAMS；城市查询：GeoNames。</small>
+            </div>
+          </div>
+          <div class="quick-fields">
+            <div class="quick-field-group" role="group" aria-labelledby="quickWifiHeading"><h3 id="quickWifiHeading">联网配置</h3>
+              <label><span>主 Wi-Fi 名称（SSID，联网时必填）</span><input name="ssid" type="text" autocomplete="off"></label>
+              <div class="quick-password-field"><label for="quickWifiPassword"><span>主 Wi-Fi 密码</span></label><div class="quick-password-control"><input id="quickWifiPassword" name="pass" type="text" autocomplete="off" spellcheck="false" autocapitalize="none"><button class="quick-password-toggle" type="button" data-password="quickWifiPassword" data-label="主 Wi-Fi 密码" aria-controls="quickWifiPassword" aria-pressed="true" aria-label="隐藏主 Wi-Fi 密码" title="隐藏主 Wi-Fi 密码"><span aria-hidden="true"></span></button></div><small>同名网络已有密码时可留空沿用；开放网络可留空。</small></div>
+              <label><span>备用 Wi-Fi 名称（选填）</span><input name="backup_ssid" type="text" autocomplete="off"><small>留空会取消备用 Wi-Fi，不是保留原值。</small></label>
+              <div class="quick-password-field"><label for="quickBackupPassword"><span>备用 Wi-Fi 密码（选填）</span></label><div class="quick-password-control"><input id="quickBackupPassword" name="backup_pass" type="text" autocomplete="off" spellcheck="false" autocapitalize="none"><button class="quick-password-toggle" type="button" data-password="quickBackupPassword" data-label="备用 Wi-Fi 密码" aria-controls="quickBackupPassword" aria-pressed="true" aria-label="隐藏备用 Wi-Fi 密码" title="隐藏备用 Wi-Fi 密码"><span aria-hidden="true"></span></button></div><small>备用同名网络已有密码时可留空沿用。</small></div>
+            </div>
+            <div class="quick-field-group" role="group" aria-labelledby="quickWeatherHeading"><h3 id="quickWeatherHeading">天气服务</h3>
+              <label><span>和风天气 API Key（首次配置必填）</span><input name="api_key" type="password" autocomplete="new-password"><small>须与 API Host 同时填写，或同时留空沿用设备已有天气配置。</small></label>
+              <label><span>和风天气 API Host（首次配置必填）</span><input name="api_host" type="text" placeholder="abc123.re.qweatherapi.com" autocomplete="off"><small>与 API Key 成对填写；仅填专属域名，不含 https:// 或路径。</small></label>
+              <label><span>天气城市（选填）</span><input name="weather_city" type="text" placeholder="例如：杭州" autocomplete="off"><small>自动定位不准时填写城市名；留空会恢复 IP 自动定位。</small></label>
+              <label><span>离线日期和时间（仅离线使用时必填）</span><input name="manual_time" type="datetime-local" min="2024-01-01T00:00" max="2035-12-31T23:59"><small>不填写主 Wi-Fi 时使用；联网时忽略此项。链接保存的是固定时间，不会随访问时间更新。</small></label>
+            </div>
+          </div>
+          <div class="action-strip">
+            <button id="quickGenerate" class="primary-button" type="submit" disabled>生成链接</button>
+            <button id="quickCopy" class="secondary-button" type="button" disabled>复制链接</button>
+            <button class="secondary-button" type="reset">清空</button>
+          </div>
+          <label class="quick-result-label" for="quickResult">配置链接（含明文凭据）</label>
+          <textarea id="quickResult" readonly spellcheck="false" autocomplete="off" placeholder="生成后显示链接；不会自动打开或连接设备。"></textarea>
+          <p id="quickStatus" class="quick-status" role="status">仅生成链接，不会直接修改设备。</p>
+        </form>
+        <details class="quick-fallback"><summary>资源包兜底配置</summary>
+        <div class="settings-grid">
+          <div class="asset-card settings-card">
+            <h2>天气城市兜底</h2>
+            <p class="card-note">仅填写城市名；设备 NVS 已保存手动城市时，会优先使用设备端配置。</p>
+            <label>
+              <span>天气城市（可选）</span>
+              <input id="customWeatherCity" type="text" maxlength="31" placeholder="例如：杭州">
+            </label>
+          </div>
+          <div class="asset-card settings-card">
+            <h2>OTA 清单兜底</h2>
+            <p class="card-note">留空时不写入；填写服务器基础地址会自动规范化到 /firmware/latest.json。</p>
+            <label>
+              <span>OTA 清单地址（可选）</span>
+              <input id="customOtaServer" type="url" placeholder="https://example.com 或 .../firmware/latest.json">
+            </label>
+          </div>
+        </div>
+        <output class="output-box">设置会随 custom_assets.bin 写入 assets 分区，只作为固件兜底配置，不改写 NVS。</output>
+        </details>
+      </section>
+
+      <section id="serial" class="tab-panel">
+        <div class="toolbar">
+          <label class="select-field">
+            <span>波特率</span>
+            <select id="baudRate">
+              <option value="115200" selected>115200</option>
+              <option value="230400">230400</option>
+              <option value="460800">460800</option>
+              <option value="921600">921600</option>
+            </select>
+          </label>
+          <button id="connectSerialBtn" class="primary-button" type="button">连接串口</button>
+          <button id="clearLogBtn" class="secondary-button" type="button">清空日志</button>
+          <button id="saveLogBtn" class="secondary-button" type="button">保存日志</button>
+        </div>
+        <div class="metrics">
+          <div><span>连接</span><strong id="serialState">未连接</strong></div>
+          <div><span>设备</span><strong id="serialDevice">未选择</strong></div>
+          <div><span>接收</span><strong id="rxBytes">0 B</strong></div>
+          <div><span>最近日志</span><strong id="lastLineTime">-</strong></div>
+        </div>
+        <pre id="serialLog" class="terminal" aria-live="polite">等待连接设备串口...</pre>
+        <form id="sendForm" class="send-row">
+          <input id="serialCommand" type="text" placeholder="输入串口命令，回车发送">
+          <button type="submit" class="primary-button">发送</button>
+        </form>
+      </section>
+
+      <section id="writer" class="tab-panel">
+        <div id="writerLockedNotice" class="writer-locked-notice" role="status">
+          <div><strong>资源包尚未生成</strong><p>请先在“资源制作”中完成素材转换并点击“生成资源包”，生成后才能读取设备并写入资源。</p></div>
+          <button id="goToAssetsFromWriterBtn" class="secondary-button" type="button">前往资源制作</button>
+        </div>
+        <div class="toolbar">
+          <label class="select-field">
+            <span>写入波特率</span>
+            <select id="assetBaudRate" disabled>
+              <option value="115200" selected>115200</option>
+              <option value="230400">230400</option>
+              <option value="460800">460800</option>
+              <option value="921600">921600</option>
+            </select>
+          </label>
+          <button id="selectAssetDeviceBtn" class="primary-button" type="button" disabled>① 选择并核对设备</button>
+          <button id="writeAssetsBtn" class="primary-button" type="button" disabled>② 串口写入资源</button>
+          <button id="eraseAssetsBtn" class="secondary-button" type="button" disabled>清空资源分区</button>
+        </div>
+        <div class="device-panel">
+          <div class="metrics writer-metrics">
+            <div><span>已选设备</span><strong id="assetDeviceName">未选择</strong></div>
+            <div><span>芯片</span><strong id="assetChipName">等待核对</strong></div>
+            <div><span>MAC</span><strong id="assetMacAddress">-</strong></div>
+            <div><span>分区核对</span><strong id="assetPartitionState">未核对</strong></div>
+          </div>
+          <div class="partition-table-wrap">
+            <table class="partition-table" aria-label="设备分区表">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>类型</th>
+                  <th>偏移</th>
+                  <th>大小</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="partitionTableBody">
+                <tr><td colspan="5">选择设备后读取分区表。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="progress-block">
+          <div class="progress-head"><span id="assetWriteState">等待资源包</span><strong id="assetWritePercent">0%</strong></div>
+          <progress id="assetWriteProgress" value="0" max="100"></progress>
+        </div>
+        <pre id="writeLog" class="terminal compact-terminal">生成资源包后，请先读取设备分区表，再写入设备 assets 分区。</pre>
+      </section>
+
+      <section id="firmware" class="tab-panel is-active">
+        <div class="firmware-install-card">
+          <div class="firmware-install-layout">
+            <div class="firmware-install-main">
+              <div class="firmware-install-heading">
+                <div><h2>在线完整安装</h2><p>默认安装最新正式版 merged 固件，适合首次安装或分区迁移。</p></div>
+                <span id="firmwareInstallConnection" class="status-pill">设备未连接</span>
+              </div>
+              <div class="firmware-install-facts">
+                <div><span>最新版本</span><div class="firmware-version-line"><strong id="firmwareInstallVersion">加载中</strong><small id="firmwareVersionBuildTime">固件构建时间加载中</small></div></div>
+                <div><span>已选设备</span><strong id="firmwareInstallDevice">未连接</strong></div>
+              </div>
+              <p class="firmware-install-warning">这会覆盖固件、分区表和设备资源。确认后将下载、校验并写入最新 merged 固件。</p>
+              <div class="firmware-install-actions">
+                <button id="firmwareInstallConnectBtn" class="primary-button" type="button">① 连接设备并识别</button>
+                <button id="firmwareInstallBtn" class="primary-button" type="button" disabled>② 安装最新固件</button>
+              </div>
+              <div id="firmwareInstallConfirm" class="firmware-confirm" hidden>
+                <p><strong>请确认完整安装</strong><span>这会覆盖固件、分区表和设备资源。确认后将下载、校验并写入最新 merged 固件。</span></p>
+                <div><button id="firmwareInstallCancelBtn" class="secondary-button" type="button">取消</button><button id="firmwareInstallConfirmBtn" class="primary-button" type="button">我已了解并继续</button></div>
+              </div>
+              <div class="progress-block firmware-install-progress">
+                <div class="progress-head"><span id="firmwareInstallState">连接设备后可安装</span><strong id="firmwareInstallPercent">0%</strong></div>
+                <progress id="firmwareInstallProgress" value="0" max="100"></progress>
+              </div>
+              <p id="firmwareInstallResult" class="firmware-install-result">安装完成后设备会自动复位；页面不会自动跳转，可按需打开配网或快捷配置。</p>
+            </div>
+            <aside class="firmware-notes-panel">
+              <div class="firmware-notes-panel-heading">
+                <div><span>版本说明</span><strong id="firmwareInstallNotesVersion">加载中</strong></div>
+                <span>GitHub Release</span>
+              </div>
+              <div class="firmware-notes-body"><p id="firmwareInstallNotes">-</p></div>
+              <a id="firmwareInstallNotesLink" href="https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases" target="_blank" rel="noopener noreferrer" hidden>查看完整发布说明</a>
+            </aside>
+          </div>
+        </div>
+        <template id="firmwareInternalState">
+        <div class="form-grid">
+          <label>
+            <span>固件来源</span>
+            <select id="firmwareSource">
+              <option value="remote" selected>GitHub Release</option>
+              <option value="local">自定义固件文件</option>
+            </select>
+          </label>
+          <label>
+            <span>选择在线固件</span>
+            <select id="remoteFirmwareSelect">
+              <option value="">正在加载固件清单</option>
+            </select>
+          </label>
+          <label class="wide-field file-picker">
+            <span>选择自定义 bin 文件</span>
+            <input id="firmwareInput" type="file" accept=".bin,application/octet-stream" disabled>
+          </label>
+          <label>
+            <span>写入目标</span>
+            <select id="firmwareTarget">
+              <option value="merged" selected>0x0：完整 merged 固件</option>
+            </select>
+          </label>
+          <label>
+            <span>烧录波特率</span>
+            <select id="firmwareBaudRate">
+              <option value="115200" selected>115200</option>
+              <option value="230400">230400</option>
+              <option value="460800">460800</option>
+              <option value="921600">921600</option>
+            </select>
+          </label>
+        </div>
+        <div class="action-strip">
+          <button id="selectFirmwareDeviceBtn" class="secondary-button" type="button">① 选择并读取分区表</button>
+          <button id="refreshFirmwareBtn" class="secondary-button" type="button">刷新在线固件</button>
+          <button id="downloadFirmwareBtn" class="secondary-button" type="button">② 下载并校验固件</button>
+          <button id="writeFirmwareBtn" class="primary-button" type="button" disabled>③ 串口烧录固件</button>
+        </div>
+        <div class="device-panel">
+          <div class="metrics writer-metrics">
+            <div><span>已选设备</span><strong id="firmwareDeviceName">未选择</strong></div>
+            <div><span>芯片</span><strong id="firmwareChipName">等待读取</strong></div>
+            <div><span>MAC</span><strong id="firmwareMacAddress">-</strong></div>
+            <div><span>App 分区</span><strong id="firmwarePartitionState">未读取</strong></div>
+          </div>
+          <div class="partition-table-wrap">
+            <table class="partition-table" aria-label="固件烧录分区表">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>类型</th>
+                  <th>偏移</th>
+                  <th>大小</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="firmwarePartitionTableBody">
+                <tr><td colspan="5">选择设备后读取分区表；App 写入只允许 ota_0 / ota_1。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="progress-block">
+          <div class="progress-head"><span id="firmwareWriteState">等待固件文件</span><strong id="firmwareWritePercent">0%</strong></div>
+          <progress id="firmwareWriteProgress" value="0" max="100"></progress>
+        </div>
+        <output id="flashResult" class="output-box">默认读取 GitHub Release 提供的最近版本固件。首次迁移到 v1.5.x 分区表时请使用完整 merged 固件写入 0x0。</output>
+        </template>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js" type="module"></script>
+  <script src="./simulator-ui.js" type="module"></script>
+  <script src="./quick-config.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+name: 构建固件并附加到 Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "需要构建的版本标签，例如 v1.7.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clock-firmware-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    name: ESP32-S3 固件
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 确定构建版本
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${REQUESTED_VERSION#refs/tags/}"
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "版本格式无效：$version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: 检出待发布源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: 校验源码版本
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_version="$(sed -n 's/.*PROJECT_VER "\(v[^"]*\)".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+          if [[ "$project_version" != "$EXPECTED_VERSION" ]]; then
+            echo "标签版本 $EXPECTED_VERSION 与工程版本 $project_version 不一致" >&2
+            exit 1
+          fi
+
+      - name: 准备 OTA 端点
+        env:
+          OTA_MANIFEST_URL: ${{ vars.WEATHER_CLOCK_OTA_MANIFEST_URL || format('https://raw.githubusercontent.com/{0}/main/firmware/latest.json', github.repository) }}
+          OTA_BACKUP_MANIFEST_URL: ${{ vars.WEATHER_CLOCK_OTA_BACKUP_MANIFEST_URL || format('https://cdn.jsdelivr.net/gh/{0}@main/firmware/latest.json', github.repository) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/prepare_ota_endpoint.py \
+            --output RLCD_CLOCK/main/core/ota_endpoint_local.h
+          test -s RLCD_CLOCK/main/core/ota_endpoint_local.h
+          echo "OTA 端点已注入"
+
+      - name: 编译并生成双固件
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.3
+          target: esp32s3
+          path: RLCD_CLOCK
+          command: bash /project/.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }}
+
+      - name: 校验构建产物
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "weather_clock_${VERSION}.bin"
+          test -s "weather_clock_${VERSION}_merged.bin"
+          sha256sum "weather_clock_${VERSION}.bin" "weather_clock_${VERSION}_merged.bin"
+
+      - name: 生成 OTA 清单
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$VERSION"
+          python3 .github/scripts/update_manifests.py \
+            --version "$VERSION" \
+            --app "weather_clock_${VERSION}.bin" \
+            --merged "weather_clock_${VERSION}_merged.bin" \
+            --artifact-base "$artifact_base" \
+            --notes-file firmware/OTA_RELEASE_NOTES.md \
+            --latest firmware/latest.json \
+            --versions firmware/versions.json
+
+      - name: 创建或更新 Release 并上传固件
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          NOTES: ${{ github.event.release.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --notes "${NOTES:-详见 firmware/OTA_RELEASE_NOTES.md}"
+          fi
+          gh release upload "$VERSION" \
+            "weather_clock_${VERSION}.bin" \
+            "weather_clock_${VERSION}_merged.bin" \
+            --clobber
+
+      - name: 更新源码仓库 OTA 清单
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp firmware/latest.json "$RUNNER_TEMP/latest.json"
+          cp firmware/versions.json "$RUNNER_TEMP/versions.json"
+          git fetch origin main
+          git checkout -B ota-manifest-update origin/main
+          cp "$RUNNER_TEMP/latest.json" firmware/latest.json
+          cp "$RUNNER_TEMP/versions.json" firmware/versions.json
+          if git diff --quiet -- firmware/latest.json firmware/versions.json; then
+            echo "OTA 清单无需更新"
+            exit 0
+          fi
+          git config user.name "GitHub Actions Firmware Builder"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add firmware/latest.json firmware/versions.json
+          git commit -m "Update ${VERSION} OTA manifests [skip ci]"
+          git push origin HEAD:main
+
+      - name: 保存 Actions 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-clock-${{ steps.version.outputs.version }}
+          path: |
+            weather_clock_${{ steps.version.outputs.version }}.bin
+            weather_clock_${{ steps.version.outputs.version }}_merged.bin
+            firmware/latest.json
+            firmware/versions.json
+          if-no-files-found: error
+          retention-days: 14

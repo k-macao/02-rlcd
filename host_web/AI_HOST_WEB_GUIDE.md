@@ -1,0 +1,268 @@
+# WeatherClock Host Web AI Guide
+
+This document is for future AI agents or developers taking over `host_web/`.
+
+Current maintenance baseline: firmware v1.6.16, Host Web v1.0.12 and cache v86.
+Read version fields rather than relying on historical paragraphs below. The
+current private checkout also has a Chinese maintenance entry at repository-root
+MAINTENANCE_START_HERE.md; that internal handoff is not part of the public export.
+
+Device identification: esptool-js 0.5.6 exposes getFlashSize() on ESPLoader,
+not chip. Successful firmware inspection retains its loader and transport for
+online installation; cancel, tab departure and installation completion release
+the session. Failed inspection and resource inspection reset before disconnect.
+Preserve original installation errors. Do not reload on worker updates during
+firmware sessions. Advanced flashing is no longer exposed; its legacy DOM state
+is inert in firmwareInternalState, retained only for shared helper compatibility.
+
+The visible Host Web version is `HOST_WEB_VERSION` in `app.js`, mirrored by
+`#hostVersion` in `index.html`. Update both the displayed version and the
+Service Worker cache revision for each web release, then run the version and
+Pages tests so stale offline assets are not mistaken for the new release.
+
+The Write assets tab is intentionally read-only until `custom_assets.bin` has
+been generated. Keep the package gate on the baud selector, device selection,
+partition read, write and clear actions; the guidance button should return the
+user to Create assets without changing the resource protocol.
+
+## Local UI Languages
+
+`i18n.js` owns the zh-CN / zh-TW / ja / en selector between Web Serial status and
+the source shortcut. Default is zh-CN; only the locale is persisted under
+`weather-clock-studio:language`. Catalog rows in `locales/static.js` and
+`locales/dynamic.js` use the Simplified Chinese source message as a stable key,
+followed by Taiwan Traditional Chinese, Japanese and English translations.
+Use `tr('message')` or tagged `tr` templates; placeholders must match in all locales.
+
+Static owned text nodes and title/placeholder/aria-label/alt attributes are
+registered once. Dynamic UI uses `setText(element, () => ...)` and `setAttr` so
+switching languages updates the displayed state without replaying business
+actions. Keep render callbacks side-effect-free; capture event times rather
+than generating new timestamps on a locale change. `LocalizedError` formats
+messages lazily; firmware size/hash failures use stable codes, never translated
+message text, for classification. Never apply translation to user data or raw
+serial bytes. Translation uses textContent/attributes, not HTML injection.
+
+Firmware canvas pixels and the Wi-Fi setup iframe are explicitly outside the
+language boundary. Do not translate their HTML, add a locale bridge or modify
+firmware build inputs for host language support. Native browser dialogs and
+third-party/release text retain their original language. File chooser captions
+inside the host are localized without changing file input values.
+
+Run `test_i18n.mjs` for catalog/static coverage, placeholders and config-byte
+invariance. Existing GIF/quick-config/Pages/input tests remain required. Browser
+checks cover four locales × six tabs × 1024/1280/1440 desktop widths, state and
+BIN hash preservation, serial mocks, hash failures, persistence and offline
+switching. Update all eight User manuals for user-facing behavior changes.
+
+Mobile layout rules are scoped to `max-width: 800px`: simulator columns stack,
+KEY/help/BOOT remain a stable three-column row above the canvas, and at 480px
+the six tabs become a visible two-column grid. Do not shrink the 400x300 canvas
+below its aspect ratio or allow controls to overlap. Mobile support is for
+viewing and editing; Web Serial operations still require desktop Chrome/Edge.
+
+## Interactive Simulator
+
+Keep the simulator aligned to the page content edges. Use 18px page headings,
+15px subsection headings, 12px muted metadata, and 16px control spacing. The
+portal toggle has a fixed width to avoid moving when its text changes. Portal
+form styling intentionally follows the firmware, not the dark host UI.
+
+Device view is the default. The portal button next to the source link toggles
+between device and portal without resetting either. Portal HTML loads on first
+open; hidden device rendering and pending key holds are paused/cancelled.
+
+`simulator-ui.js` lazily loads the WASM target built from `RLCD_CLOCK/simulator`.
+The firmware renderer is shared where available; `web_demo_state.h` supplies
+fake state and does not mutate NVS or call production services. The independent
+portal reuses the firmware HTML/CSS with a demo-only script, an opaque sandbox,
+and CSP blocking network and form navigation. Its trusted build artifact is
+fetched through the parent service worker for offline use, then assigned to
+srcdoc. Never interpolate user input into that document.
+
+The aggregate weather selector maps scene values 20-24 to cloudy, clear, rain,
+snow and fog. The fog option must pass the fog theme to the shared firmware
+renderer; keep the four-language label in locales/static.js in sync.
+
+Pages requires generated artifacts with matching hashes; missing/corrupt files
+fail the build. `test_simulator_artifacts.mjs`, `test_pages_site.mjs`, native
+`web_demo_state_test` and browser offline/key checks cover this boundary.
+
+The device toolbar places KEY on the left and BOOT on the right. Holding KEY
+for 1.2 seconds dispatches one long-press event before release; release must not
+also dispatch a short press. Mouse capture cancellation, focus loss and tab
+changes cancel pending holds. Keyboard K/B uses the same timing. Run
+`node host_web/scripts/test_simulator_keys.mjs` for the input regression checks.
+This browser adapter does not change physical firmware button handling.
+
+## Simplified Firmware Install
+
+The Firmware tab presents the latest merged Release as the default Online full
+installation. Full install only needs verified ESP32-S3 identity and a known
+Flash capacity; an empty or invalid partition table is allowed because merged
+firmware includes the partition table. It requires an explicit confirmation,
+freezes version/target while active, reuses the existing download/SHA-256/
+esptool/reset path, and never enables writing after a failed hash. It does not
+expose erase-all.
+
+Advanced flashing is not a visible user workflow. Legacy local/App state and
+helpers remain inert for compatibility; do not restore their controls as a
+maintenance refactor. Device disconnect, unknown chip/capacity, user
+cancel, duplicate clicks and failed writes must leave the main install blocked
+or retryable. Completion shows setup/Quick setup guidance without navigation.
+Mobile browsers can view the page but Web Serial still needs desktop Chrome/Edge.
+
+The updateFirmwareInstallSummary function runs during device identification and
+cleanup. Keep its dependencies defined in app.js; an exception there can abort
+cleanup before the connect button is re-enabled. The device-identification
+regression test executes this summary with a verified-session fixture and
+asserts both connection and installation buttons are available.
+
+## Scope
+
+Quick configuration stays on the `settings` hash and uses `quick-config.js` to
+generate a fixed `http://192.168.4.1/save` URL with URLSearchParams. It never
+fetches, navigates, logs credentials or persists input. The inert dialog-method
+form and initially disabled submit button prevent native network submission if
+the module fails. Editing invalidates output; page exit/reset clears it.
+Match firmware field capacities (UTF-8), the 159-byte encoded field limit and
+512-byte request URI limit. API key/host must both be filled or both blank for
+network configuration; blanks require existing device values;
+city and backup SSID blanks clear those settings. Empty main SSID selects fixed
+offline time (2024–2035). Do not change firmware or WCA1 for this feature.
+Run `node host_web/scripts/test_quick_config.mjs` and verify zero network traffic
+and script-failure behavior with dummy data only.
+The two groups share five subgrid rows (heading plus four inputs), keeping
+corresponding inputs aligned despite different help lengths. Safety notices
+use three separate complete sentences, not forced line breaks inside a paragraph.
+
+For a Host Web-only task, keep changes scoped to `host_web/` unless shared
+firmware renderer or protocol work was explicitly requested.
+
+Read the repository-root AGENTS.md, TASK.md, HANDOFF.md and docs/DECISIONS.md before development. Ordinary changes follow the same rules as firmware: validate, commit and push only the private development origin. Gitea development is retired; Gitee OTA is still the fallback firmware mirror. Keep firmware versions unchanged for web-only work.
+
+With explicit one-time authorization, use the unified source publisher with GITHUB_CLOCK_SOURCE_ONLY=1. The only active public repository is `wickenzh/ESP32-S3-RLCD-4.2`, with firmware under `RLCD_CLOCK/` and this app under `host_web/`. The old `_Web` repository retains its code and history, but its Pages site was removed and deployment workflow disabled at the user's request on 2026-09-09. Do not re-enable or publish the legacy site without explicit authorization.
+
+## Product Focus
+
+The host web app is mainly a browser-based resource tool for WeatherClock:
+
+- Convert a user GIF into the device main-page GIF resource.
+- Convert user still images into gallery-page image resources.
+- Preview converted 1-bit results before writing.
+- Build `custom_assets.bin`.
+- Write `custom_assets.bin` to the ESP32-S3 `assets` flash partition.
+
+Online full firmware installation is the first/default tab; resource creation
+and writing, serial logs, shared simulation and Quick setup remain available.
+
+## Device Resource Format
+
+The firmware reads a custom asset package from the `assets` partition:
+
+- Partition name: `assets`
+- Offset: read dynamically from the device partition table.
+- Size: read dynamically from the device partition table; WCA1 package generation still keeps a `2M` upper bound.
+- Package filename used by the app: `custom_assets.bin`
+
+Package magic/version:
+
+- Magic: `WCA1`, little-endian `0x31414357`
+- Version: `1`
+
+Supported entry types:
+
+- `1`: `main_gif`
+  - Fixed size: `84 x 84`
+  - Fixed frames: `60`
+  - Continuous full-frame 1-bit bitstream. Do not pad each row.
+  - Frame size: `84 * 84 / 8 = 882` bytes.
+  - Total payload size: `882 * 60 = 52920` bytes.
+  - `bytes_per_row` should be `0`; firmware does not use row stride for GIF.
+- `2`: `gallery_image`
+  - Fixed size: `220 x 208`
+  - Up to `24` images.
+  - Packed 1-bit rows.
+  - Row stride: `ceil(220 / 8) = 28` bytes.
+  - Payload size per image: `28 * 208 = 5824` bytes.
+- `3`: `weather_city`
+  - Optional UTF-8 fallback text payload, `1..31` bytes.
+  - `index`, `width`, `height`, `frame_count`, and `bytes_per_row` are `0`.
+  - Omit this entry when the user leaves the city empty. It is only a fallback and does not write NVS.
+- `4`: `ota_manifest_url`
+  - Optional UTF-8 fallback text payload, `1..255` bytes.
+  - `index`, `width`, `height`, `frame_count`, and `bytes_per_row` are `0`.
+  - Omit this entry when empty. If the user enters a base URL, normalize it to `/firmware/latest.json`.
+
+The browser app builds the header, entry table, payload, header CRC32, payload CRC32, and per-entry CRC32 in `host_web/app.js`.
+
+## Current UI
+
+Tab navigation uses hash routes: #screens opens the shared simulator directly; other routes are #assets, #writer, #firmware, #serial and #settings. activateTab validates against actual tab IDs, updates history without an anchor scroll, and restores state on hashchange/popstate. Empty or unknown hashes show firmware. Keep route changes independent from resource generation and device actions. Earlier cache v53 routing records are historical, not the current cache revision.
+
+Six tabs include `界面预览` (`screens`) after serial and before settings. Eight 400x300 SDL snapshots are served from assets/screens. GitHub deployment MUST use repository-root previews via SDL_PREVIEW_SOURCE; previews/** pushes trigger Pages. build_sdl_previews.mjs selects the eight names referenced by index.html, validates and copies the canonical PNGs, then embeds their aggregate SHA256 in SW v52's cache name. Missing/corrupt images fail deployment instead of falling back to stale bundled files. Local full-repo builds default to assets/previews; sync_sdl_previews.py is only for standalone local preview copies. Run test_sdl_preview_sync.mjs to verify upstream changes and cache invalidation. These are snapshots, not live device telemetry; normal page reopen after deployment loads the updated worker.
+
+Next-step guidance uses one transient target and one 2400ms timer. Only enabled, visible controls are hinted after successful operations. User click/input/change, tab changes and package invalidation clear the hint. CSS pulses an outline-like shadow three times; reduced-motion uses a static outline. No autonomous serial connection, write or tab navigation is allowed. Run scripts/test_next_step_hint.mjs for eligibility/replacement/expiry. Cache v50 includes this change; ordinary development keeps the displayed/firmware versions unchanged. The privacy notice covers local image/GIF/config processing, not offline availability of remote firmware downloads.
+
+Web v0.0.29 / cache v47 removes the ESP Web Tools fallback entry, loader, bundled dependency and example manifest. Main esptool-js flashing remains. Number only primary steps: resource creation 1 select, 2 convert, 3 build (BIN download optional); resource writing 1 inspect device, 2 write; firmware 1 source/version, 2 inspect partitions, 3 download/verify or select custom file, 4 flash. Refresh and clearing are unnumbered alternatives, never required steps.
+
+Since web v0.0.30 / cache v48, successful WCA1 generation stays on the creation tab without moving focus. A green notice distinguishes generated from written and offers an explicit go-to-writer button. Only that button activates writer and focuses inspection. Invalidation hides the notice; never auto-navigate while creating resources or automatically connect/write a device.
+
+Version v0.0.27 uses a default dark desktop theme. Validate at 1440x900 and 1024x768; mobile is not a supported acceptance target per the user's scope. Keep preview pixels unchanged: light canvas backgrounds represent device output, not missing dark styling. Keep hover geometry stable, visible keyboard focus, reduced-motion support, and table overflow inside its own wrapper. Business code in app.js is unchanged by this theme update. The isolated Service Worker cache suffix is v45; its prefix and cleanup ownership remain unchanged.
+
+The current six tabs are 固件烧录, 资源制作, 资源写入, 串口日志, 界面预览, 快捷配置:
+
+- `资源制作`: Handles GIF and still-image conversion; it is not the default tab.
+- `资源写入`: Selects a Web Serial device, reads the ESP-IDF partition table from `0x8000`, verifies `assets` as `data / subtype 0x40`, then writes generated `custom_assets.bin` to the actual `assets` address from the device partition table.
+- `固件烧录`: Default online merged installation, only at `0x0`, after identity/capacity checks and data-overwrite confirmation. Retained App helpers require dynamically discovered partitions and are not exposed as a user workflow.
+- `串口日志`: Auxiliary serial log and manual command console.
+- `界面预览`: Interactive shared LVGL/SDL WebAssembly simulation of the eight pages; static snapshots remain regression/public-preview assets.
+- `快捷配置`: Local generation of the current dual-Wi-Fi/weather-source/offline provisioning URL. Optional WCA1 fallback fields remain separate resource-package inputs, not this provisioning workflow.
+
+Do not add duplicate provisioning services, default AP/IP panels, device info
+sidebars or autonomous network requests as a UI refactor. Quick setup already
+exists but only generates the local URL; it never calls the device itself.
+
+All baud-rate selectors currently default to `115200`.
+
+Update the displayed web version in `index.html` on every user-visible development change; do not change the firmware version for web-only updates.
+
+## GitHub Pages Preview
+
+Use the deployed GitHub Pages URL for preview and testing:
+
+```text
+https://wickenzh.github.io/ESP32-S3-RLCD-4.2/
+```
+
+Do not add local HTTP/HTTPS preview servers back into `host_web/` unless the user explicitly asks.
+
+## Important Files
+
+- `index.html`: Static UI structure.
+- `styles.css`: Layout and visual styling.
+- `app.js`: All client-side conversion, package building, serial writing, and flashing logic.
+- `README.md`: User-facing usage/deployment summary.
+
+## Known Constraints
+
+- GIF original previews validate GIF87a/GIF89a bytes before creating an image/gif Blob, require HTMLImageElement, preserve animation bytes, and reject stale header reads. Run node host_web/scripts/test_gif_preview.mjs for these boundaries. Pages mock fetch uses parsed HTTPS hostname/path checks and rejects unexpected requests. CodeQL alerts #9/#10 require a future authorized GitHub scan to confirm closure; do not dismiss them merely because local tests pass. Cache v49 contains this hardening; displayed and firmware versions remain unchanged for ordinary development.
+
+- GIF decoding first uses the local parser in `app.js`, including global/local palettes, transparency, interlaced frames, and GIF disposal modes. Keep this local path so conversion preview works on intranet Gitea/GitHub Pages without a runtime CDN dependency.
+- If local GIF decoding fails, the app tries the browser `ImageDecoder` API, then falls back to a single-frame image preview repeated across 60 frames.
+- GIF conversion must output exactly 60 frames. The local decoder samples those frames evenly across the full GIF playback timeline using frame delays, so long animations are represented from start to end instead of only taking the first 60 source frames.
+- Converted GIF preview is animated by replaying the 60 converted 1-bit frames on the preview canvas.
+- Original GIF preview uses a normal `<img>` element with an object URL, so the uploaded GIF should animate before conversion.
+- File selection immediately draws the uploaded GIF first frame or the currently selected still image on the source canvas so users can see what was loaded before conversion.
+- Still images support selecting up to 24 files and converting them together. The preview selector shows one chosen image at a time; the converted preview is reconstructed from that image's packed 1-bit data.
+- Still image conversion applies a configurable edge fade before 1-bit packing. The default is 18 px and blends the four edges toward white so non-transparent image backgrounds do not leave a hard rectangle on the device screen.
+- The resource writer's erase action writes an erased 4 KB sector header (`0xFF`) at the actual `assets` address read from the device partition table, invalidating the custom asset package so firmware falls back to built-in resources after reset.
+- Web Serial and browser flashing need Chrome/Edge or another Chromium browser with serial support.
+- The serial writing path uses a repository-local pinned copy of `esptool-js 0.5.6` under `host_web/vendor/`; do not replace it with runtime CDN imports. Preserve its license and update the service-worker asset list when changing versions. `esptool-js` expects file data as a binary string, so `Uint8Array` payloads are converted before calling `writeFlash`.
+- After `writeFlash`, the app explicitly pulses serial RTS/DTR signals to reset the ESP32-S3. Keep this behavior unless hardware reset wiring changes.
+- The resource writer must keep the partition-table preflight: read flash `0x8000..0x8FFF`, parse 32-byte ESP-IDF partition entries, and only enable resource write/erase after finding `assets` with type `data`, subtype `0x40`, and enough space for the generated resource package.
+- Firmware flashing uses GitHub Release assets from `wickenzh/ESP32-S3-RLCD-4.2` as the sole online source. GitHub's final Release asset CDN does not expose CORS headers for JavaScript byte access, so the page must never fetch Release binaries directly. `.github/workflows/static.yml` runs `scripts/build_pages_site.mjs` to mirror the latest 10 complete releases into the ephemeral Pages artifact, after checking size and GitHub asset `digest` (`sha256:...`); do not commit mirrored bin files to Git history. The deployed page reads same-origin `firmware/releases.json` and same-origin firmware bytes, then verifies size and SHA256 again in browser memory before enabling flashing. Online firmware remains fully automatic; only the separate custom-firmware source uses a file picker. Accept the merged asset only for the `0x0` target and the App asset only for dynamically discovered App targets.
+- WeatherClock v1.5.x adds a `model` partition. The web host must not write App binaries to `assets`, `model`, `nvs`, bootloader, partition-table, or any fixed legacy address. Future standalone model flashing must also discover `model` address and size from the device partition table.
+## 双天气源快捷配置
+
+weather_provider协议值为qweather/open_meteo，开关默认关。Open-Meteo忽略并不输出api_key/api_host，保留DOM输入方便切回；离线链接不输出天气字段。四语词库同步动态警告和静态说明，语言切换不重新生成、不修改参数或用户输入。表单右栏使用同一subgrid，新增开关说明须放在标题容器，不能额外挤占既有五行导致后续字段重叠。

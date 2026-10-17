@@ -1,0 +1,236 @@
+// 用真实LVGL验证聚合时钟秒变化只失效秒牌，其他模块缓冲保持不变。
+#include "ui_aggregate_clock_view.h"
+#include "ui_aggregate_weather_policy.h"
+#include "ui_aggregate_weather_texture.h"
+#include <cassert>
+#include <cstring>
+#include <vector>
+#include <cstdio>
+LV_FONT_DECLARE(qweather_icons_36);
+
+static std::vector<lv_area_t> areas;
+static void flush(lv_disp_drv_t *driver,const lv_area_t *area,lv_color_t *) {
+    areas.push_back(*area); lv_disp_flush_ready(driver);
+}
+void invalidate_canvas_rect(lv_obj_t *canvas,int x1,int y1,int x2,int y2) {
+    lv_area_t coords={}; lv_obj_get_coords(canvas,&coords);
+    lv_area_t area={static_cast<lv_coord_t>(coords.x1+x1),
+                    static_cast<lv_coord_t>(coords.y1+y1),
+                    static_cast<lv_coord_t>(coords.x1+x2),
+                    static_cast<lv_coord_t>(coords.y1+y2)};
+    lv_obj_invalidate_area(canvas,&area);
+}
+int main() {
+    int sun_pixels=0,rain_pixels=0;
+    for(int y=0;y<120;++y) for(int x=0;x<222;++x) {
+        sun_pixels+=aggregate_weather_texture_pixel(1,x,y);
+        rain_pixels+=aggregate_weather_texture_pixel(2,x,y);
+        assert(!aggregate_weather_texture_pixel(0,x,y));
+        if(y<28 || y>98) assert(!aggregate_weather_texture_pixel(2,x,y));
+    }
+    assert(sun_pixels>50 && rain_pixels>300);
+    for(const auto &origin:{std::pair<int,int>{204,43},{184,57},{202,73},{185,85}}) {
+        int pixels=0;
+        for(int y=0;y<kAggregateSnowflakeSize;++y) for(int x=0;x<kAggregateSnowflakeSize;++x)
+            pixels+=aggregate_weather_texture_pixel(3,origin.first+x,origin.second+y,35,180);
+        assert(pixels>20);
+    }
+    for(int y=43;y<59;++y) for(int x=203;x<219;++x)
+        assert(!aggregate_weather_texture_pixel(3,x,y,35,215));
+    for(int y=85;y<99;++y) for(int x=185;x<199;++x)
+        assert(!aggregate_weather_texture_pixel(3,x,y,35,192));
+    for(int x=2;x<192;++x) for(int y=36;y<44;++y)
+        assert(!aggregate_weather_texture_pixel(2,x,y,35));
+    assert(aggregate_weather_kind("100")==1);
+    assert(aggregate_weather_kind("150")==0);
+    for(int code=300;code<=399;++code) {
+        char text[4]; std::snprintf(text,sizeof(text),"%d",code);
+        const bool rain=code<=318 || code==350 || code==351 || code==399;
+        assert(aggregate_weather_kind(text)==(rain?2:0));
+    }
+    for(const char *code:{"101","102","103","151","152","153"})
+        assert(aggregate_weather_kind(code)==4);
+    assert(aggregate_weather_kind("104")==5);
+    int cloud_pixels=0,overcast_pixels=0;
+    for(int y=0;y<120;++y) for(int x=0;x<222;++x) {
+        const bool cloudy=aggregate_weather_texture_pixel(4,x,y,40,215);
+        const bool overcast=aggregate_weather_texture_pixel(5,x,y,40,215);
+        cloud_pixels+=cloudy;overcast_pixels+=overcast;
+        if(x>=86 && x<=217 && y>=44 && y<=88)assert(!cloudy && !overcast);
+        if(x>=7 && x<=215 && y>=99 && y<=117)assert(!cloudy && !overcast);
+    }
+    assert(cloud_pixels>100 && overcast_pixels>cloud_pixels);
+    for(int y=28;y<44;++y)for(int x=63;x<175;++x)
+        assert(!aggregate_weather_texture_pixel(4,x,y,40,215));
+    for(int code=500;code<=599;++code) {
+        char text[4]; std::snprintf(text,sizeof(text),"%d",code);
+        const bool fog=code==500 || code==501 || code==509 || code==510 || code==514 || code==515;
+        assert(aggregate_weather_kind(text)==(fog?6:0));
+    }
+    int fog_pixels=0;
+    for(int y=-1;y<=120;++y)for(int x=-1;x<=222;++x) {
+        const bool pixel=aggregate_weather_texture_pixel(6,x,y,40,198,16,208);
+        fog_pixels+=pixel;
+        if(x<2 || x>219 || y<28 || y>98)assert(!pixel);
+        if(x>=86 && x<=200 && y>=44 && y<=82)assert(!pixel);
+        for(const auto &bar:aggregate_fog_paths::icon_bars)
+            if(x>=13+bar[0] && x<=13+bar[1] && y>=41+bar[2] && y<=43+bar[2])assert(!pixel);
+        if(x>=8 && x<=28 && y>=79 && y<=98)assert(!pixel);
+    }
+    assert(fog_pixels>400);
+    assert(aggregate_weather_kind("9999")==0);
+    assert(aggregate_weather_kind(nullptr)==0);
+    assert(aggregate_weather_kind("30x")==0);
+    assert(aggregate_weather_kind("305")==2);
+    for(int code=400;code<=499;++code) {
+        char text[4]; std::snprintf(text,sizeof(text),"%d",code);
+        assert(aggregate_weather_kind(text)==((code<=410 || code==456 || code==457 || code==499)?3:0));
+    }
+    assert(aggregate_weather_kind("999")==0);
+    lv_init();
+    lv_font_glyph_dsc_t weather_glyph;
+    assert(lv_font_get_glyph_dsc(&qweather_icons_36,&weather_glyph,0xF106,0));
+    assert(weather_glyph.box_w>0 && weather_glyph.box_h>0);
+    static lv_color_t display_pixels[400*300];
+    static lv_disp_draw_buf_t draw;
+    lv_disp_draw_buf_init(&draw,display_pixels,nullptr,400*300);
+    static lv_disp_drv_t driver; lv_disp_drv_init(&driver);
+    driver.hor_res=400;driver.ver_res=300;driver.draw_buf=&draw;driver.flush_cb=flush;
+    lv_disp_drv_register(&driver);
+    static lv_color_t pixels[3][104*80];
+    lv_color_t *buffers[3]={pixels[0],pixels[1],pixels[2]};
+    AggregateClockView view;
+    aggregate_clock_view_build(lv_scr_act(),view,buffers);
+    lv_obj_update_layout(lv_scr_act());
+    assert(lv_obj_get_y(view.icon)>174+40);
+    assert(lv_obj_get_height(view.icon)>=lv_obj_get_style_text_font(view.icon,0)->line_height);
+    for(int day=1;day<=31;++day) {
+        char text[3]; std::snprintf(text,sizeof(text),"%d",day);
+        aggregate_clock_set_text(view.day,text);
+        lv_point_t size;
+        lv_txt_get_size(&size,text,lv_obj_get_style_text_font(view.day,0),0,0,400,LV_TEXT_FLAG_NONE);
+        assert(size.x<=lv_obj_get_width(view.day));
+        assert(size.y<=lv_obj_get_height(view.day));
+    }
+    assert(aggregate_clock_view_time(view,14,36,0));
+    assert(aggregate_clock_weather_theme(view,1));
+    lv_refr_now(nullptr);
+    std::vector<lv_color_t> hour(pixels[0],pixels[0]+104*80);
+    std::vector<lv_color_t> minute(pixels[1],pixels[1]+104*80);
+    std::vector<lv_color_t> second_zero(pixels[2],pixels[2]+104*80);
+    areas.clear();
+    assert(!aggregate_clock_view_time(view,14,36,0));
+    lv_refr_now(nullptr); assert(areas.empty());
+    assert(aggregate_clock_weather_theme(view,aggregate_weather_kind("150")));
+    assert(view.weather_kind==0);
+    aggregate_clock_set_text(view.temperature,"-40 C");
+    assert(!aggregate_clock_weather_theme(view,0));
+    assert(!aggregate_clock_weather_theme(view,99));
+    lv_refr_now(nullptr); areas.clear();
+    assert(aggregate_clock_view_time(view,14,36,1));
+    lv_refr_now(nullptr); assert(!areas.empty());
+    for(const auto &area:areas) {
+        std::fprintf(stderr,"second flush: %d,%d-%d,%d\n",area.x1,area.y1,area.x2,area.y2);
+        // 00 -> 01 changes only the right digit. LVGL reserves five pixels
+        // of transform draw margin around the invalidated half-card.
+        assert(area.x1>=319 && area.x2<=380);
+        assert(area.y1>=71 && area.y2<=160);
+    }
+    assert(std::memcmp(hour.data(),pixels[0],sizeof(pixels[0]))==0);
+    assert(std::memcmp(minute.data(),pixels[1],sizeof(pixels[1]))==0);
+    for(int y=0;y<80;++y)
+        assert(std::memcmp(second_zero.data()+y*104,
+                           pixels[2]+y*104,
+                           52*sizeof(lv_color_t))==0);
+    areas.clear();
+    assert(aggregate_clock_view_time(view,14,36,9));
+    lv_refr_now(nullptr); areas.clear();
+    assert(aggregate_clock_view_time(view,14,36,10));
+    lv_refr_now(nullptr); assert(!areas.empty());
+    bool tens_covered=false,ones_covered=false;
+    for(const auto &area:areas) {
+        tens_covered |= area.x1<=277 && area.x2>=318;
+        ones_covered |= area.x1<=329 && area.x2>=370;
+    }
+    assert(tens_covered && ones_covered);
+    std::vector<lv_color_t> transitioned_ten(pixels[2],pixels[2]+104*80);
+    view.values[2]=-1;
+    assert(aggregate_clock_view_time(view,14,36,10));
+    assert(std::memcmp(transitioned_ten.data(),pixels[2],sizeof(pixels[2]))==0);
+    assert(aggregate_clock_view_time(view,23,59,59));
+    assert(aggregate_clock_view_time(view,0,0,0));
+    assert(!aggregate_clock_view_time(view,0,0,0));
+    // Simulate repeated hourly weather commits and second ticks on one long-lived page.
+    lv_mem_monitor_t before,after;
+    lv_mem_monitor(&before);
+    for(int i=0;i<5000;++i) {
+        aggregate_clock_set_text(view.temperature,i%2?"-2 C":"26 C");
+        aggregate_clock_set_text(view.weather,i%2?"晴":"小雨");
+        aggregate_clock_weather_theme(view,i%7);
+        aggregate_clock_view_time(view,(i/3600)%24,(i/60)%60,i%60);
+    }
+    lv_refr_now(nullptr);
+    lv_mem_monitor(&after);
+    assert(after.free_size+1024>=before.free_size);
+    assert(lv_mem_test()==LV_RES_OK);
+    areas.clear();
+    lv_refr_now(nullptr); areas.clear();
+    assert(aggregate_clock_weather_theme(view,2));
+    lv_refr_now(nullptr);
+    for(const auto &area:areas) {std::fprintf(stderr,"theme flush: %d,%d-%d,%d\n",area.x1,area.y1,area.x2,area.y2);assert(area.y1>=169 && area.x1>=13 && area.x2<=253);}
+    areas.clear();
+    assert(!aggregate_clock_weather_theme(view,2));
+    lv_refr_now(nullptr); assert(areas.empty());
+    areas.clear();
+    assert(aggregate_clock_weather_theme(view,6));
+    assert(lv_obj_get_style_text_opa(view.icon,0)==LV_OPA_TRANSP);
+    lv_refr_now(nullptr);
+    for(const auto &area:areas)assert(area.y1>=169 && area.x1>=13 && area.x2<=253);
+    areas.clear();
+    assert(!aggregate_clock_weather_theme(view,6));
+    lv_refr_now(nullptr); assert(areas.empty());
+    assert(aggregate_clock_view_time(view,12,34,56));
+    lv_refr_now(nullptr); areas.clear();
+    int fog_draws=0;
+    lv_obj_add_event_cb(view.weather_panel,[](lv_event_t *e) {
+        ++*static_cast<int *>(lv_event_get_user_data(e));
+    },LV_EVENT_DRAW_MAIN,&fog_draws);
+    assert(aggregate_clock_view_time(view,12,34,57));
+    lv_refr_now(nullptr);
+    assert(!areas.empty() && fog_draws==0);
+    for(const auto &area:areas)assert(area.y1>=71 && area.y2<=160 && area.x1>=319);
+    assert(aggregate_clock_weather_theme(view,1));
+    assert(lv_obj_get_style_text_opa(view.icon,0)==LV_OPA_COVER);
+    // Canvas allocation failure must leave recoverable objects, not missing slots.
+    aggregate_clock_set_text(view.temperature,"26 C");
+    aggregate_clock_set_text(view.range,"最高 29 C  最低 22 C");
+    aggregate_clock_weather_theme(view,4);
+    assert(view.texture_read_width>90);
+    assert(view.texture_range_width>150);
+    aggregate_clock_weather_theme(view,1);
+    lv_obj_clean(lv_scr_act());
+    lv_color_t *missing[3]={nullptr,nullptr,nullptr};
+    aggregate_clock_view_build(lv_scr_act(),view,missing);
+    assert(!aggregate_clock_view_time(view,12,34,56));
+    for(int i=0;i<3;++i) {
+        assert(view.digits[i]);
+        lv_canvas_set_buffer(view.digits[i],buffers[i],104,80,LV_IMG_CF_TRUE_COLOR);
+    }
+    assert(aggregate_clock_view_time(view,12,34,56));
+    // Retain a conservative eight-page object load then add settings controls.
+    lv_obj_clean(lv_scr_act());
+    for(int page=0;page<8;++page) {
+        lv_obj_t *root=lv_obj_create(lv_scr_act());
+        for(int item=0;item<60;++item) {
+            lv_obj_t *text=lv_label_create(root);
+            lv_label_set_text(text,"clock status 12:34:56");
+        }
+    }
+    lv_mem_monitor_t memory; lv_mem_monitor(&memory);
+    std::fprintf(stderr,"8-page object pressure: free=%u largest=%u\n",
+                 (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
+    assert(memory.free_biggest_size>=32768);
+    lv_obj_t *settings=lv_obj_create(lv_scr_act());
+    for(int i=0;i<32;++i) assert(lv_obj_create(settings));
+    assert(lv_mem_test()==LV_RES_OK);
+}

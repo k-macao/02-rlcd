@@ -1,0 +1,62 @@
+# 章鱼 AI 简报页（v1.7.0）
+
+设备新增的辅助页面，用一块 400×300 的单色图，把 [k-macao/05](https://github.com/k-macao/05)「章鱼 AI 全景分析」的结论直接显示在 RLCD 上。
+
+## 打开与退出
+
+1. 按 **KEY** 进入「设置」。
+2. 选择「网络」，在列表最下方选择「**章鱼AI 简报**」。
+3. 页面首次打开时会自动请求一次联网刷新；已有缓存时立即显示旧图。
+4. **长按 KEY** 返回「设置 → 网络」，并回到该菜单项。
+
+## 页面内容
+
+简报图由服务器端排版，固定 400×300、1 位单色：
+
+- **AI 每日总结**：市场倾向、多空比例、关键信号。
+- **AI 看盘**：上证 / 深证 / 创业板 / 科创 50 的涨跌与成交、领涨领跌板块。
+- **AI 板块机会**：当日三张主题卡片。
+- **全网快讯**：三条头条。
+
+## 刷新策略
+
+- 打开页面时，如果缓存时间超过 **6 小时**（或从未成功获取），自动发起一次刷新。
+- 每次刷新最多尝试 **2 次**：主源为 `raw.githubusercontent.com`，失败后回退到 jsDelivr 镜像。
+- 下载与解析失败时保留上一版图像，只在串口日志中记录原因，不影响其它页面。
+- **离线模式**与**低电量模式**下不会发起请求。
+- 缓存保存在 PSRAM，重启后保留；首次开机、尚未获取时显示「章鱼AI 简报尚未获取 / 长按 KEY 返回」。
+
+## 数据与图像来源
+
+仓库根目录的 `aibrief/latest.bin` 即设备拉取的负载：
+
+```
+偏移  长度    含义
+0     4       魔数 "AIB1"
+4     2       宽度（小端，固定 400）
+6     2       高度（小端，固定 300）
+8     15000   1bpp 位图，逐行 MSB 优先，bit=1 表示黑
+```
+
+`aibrief/meta.json` 记录生成时间、多空比例、实时源数量、头条与校验值，便于排查。图像由 `device_brief/render_brief.py` 生成，用法见 `device_brief/README.md`。
+
+## 固件接口
+
+| 文件 | 作用 |
+| --- | --- |
+| `main/network/aibrief_contract.h` | 负载尺寸、魔数、解析与刷新窗口 |
+| `main/network/aibrief_state.*` | 位图缓存、版本号、页面请求状态 |
+| `main/network/aibrief_service.*` | HTTPS 二进制下载、校验、发布 |
+| `main/ui/ui_aibrief_page.*` | canvas 逐像素绘制与占位提示 |
+| `main/ui/ui_views.cpp` | 页面轮询与返回逻辑 |
+
+同步使用独立事件位 `kAibriefSyncBit`，与天气、说说的窗口互不阻塞；请求在离线、低电量、上下文变化时会立即取消。
+
+## 首次把设备升级到本仓库固件
+
+1. 打开[在线上位机](https://wickenzh.github.io/ESP32-S3-RLCD-4.2/)，用 Web Serial 连接设备。
+2. 在「自定义资源」中新增 `type=4` 文本，内容填 `https://raw.githubusercontent.com/k-macao/04-rlcd/main`（会自动规范化为 `/firmware/latest.json`）。
+3. 写入资源后重启设备。
+4. 设备进入「设置 → 系统 → 检查更新」，选择 v1.7.0 安装；安装完成会自动重启。
+
+备用清单为 `https://cdn.jsdelivr.net/gh/k-macao/04-rlcd@main/firmware/latest.json`，主源不可达时可改填该地址。

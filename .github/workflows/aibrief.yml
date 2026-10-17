@@ -1,0 +1,84 @@
+name: 生成章鱼AI 简报设备图
+
+on:
+  schedule:
+    # UTC 23:10 = 北京时间 07:10，设备和用户早上都能看到当天简报
+    - cron: "10 23 * * *"
+  push:
+    branches: ["**"]
+    # 仅在自身变更时触发一次自检；日常靠定时任务与手动触发，避免和 OTA 清单提交抢写 main。
+    paths:
+      - ".github/workflows/aibrief.yml"
+  workflow_dispatch:
+    inputs:
+      min_live_sources:
+        description: "至少多少个数据源抓到实时内容才更新设备图"
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aibrief-device-image
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: 渲染 400x300 单色图并提交
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装渲染依赖
+        run: python3 -m pip install --disable-pip-version-check pillow
+
+      - name: 抓取 05 数据并渲染
+        env:
+          MIN_LIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_live_sources || '20' }}
+          BRIEF_FETCH_WORKERS: "16"
+        run: |
+          set -euo pipefail
+          python3 device_brief/render_brief.py \
+            --out-dir aibrief \
+            --require-live \
+            --min-live-sources "$MIN_LIVE"
+          python3 - <<'PY'
+          import json
+          meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
+          print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · 生成 {meta['generated_at']}")
+          PY
+
+      - name: 提交设备图
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- aibrief; then
+            echo "设备图无变化"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add aibrief
+          git commit -m "Update AI brief device image [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: 保存产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: aibrief-device-image
+          path: |
+            aibrief/latest.bin
+            aibrief/latest.png
+            aibrief/meta.json
+          if-no-files-found: error
+          retention-days: 14
