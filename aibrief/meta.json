@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-10-17 14:56:51",
+  "generated_at": "2026-10-17 15:05:08",
   "bias": "中性",
   "bull": 45,
   "bear": 55,
-  "signals": 104,
+  "signals": 103,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
-  "market_source": "eastmoney",
+  "market_source": "tencent",
   "headlines": [
     "Yemeni armed forces said they destroyed 190 Houthi armored and combat vehicles in the past 24 hours.",
     "Saudi-led coalition said it intercepted and destroyed four drones over Riyadh and the eastern and southern regions.",
@@ -20,6 +20,6 @@
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "1cc8fde784ac8a4c3979a34269ed897fe5b873338f26f10e9b175c8eaf90039f",
-  "crc32_bitmap": "9411c4dc"
+  "sha256": "386ae40c2d8bcc7de768d632d8e82040274400c7d3fa7b1501c23153515adeab",
+  "crc32_bitmap": "9c9ff738"
 }
