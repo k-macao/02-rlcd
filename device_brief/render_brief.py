@@ -38,6 +38,19 @@ MAGIC = b"AIB1"
 FONT_PATH = ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf"
 BLACK, WHITE = 0, 255
 
+# 字号下限：面板为 4.2" 400×300（约 120dpi），1px ≈ 0.21mm。
+# 旧版正文 9~10px、页脚 7px，汉字只有约 2mm 高，1bpp 阈值化后笔画粘连看不清。
+# 新版正文 13px、次要信息 12px、页眉元信息最低 10px，不再使用更小的字号；
+# 版面放不下时删内容（见 draw_sheet 的取舍），不许靠缩小字号硬塞。
+MARGIN = 10
+CONTENT_W = WIDTH - MARGIN * 2
+FONT_TITLE = 18
+FONT_SECTION = 14
+FONT_BODY = 13
+FONT_SMALL = 12
+FONT_META = 11
+FONT_MIN = 10
+
 
 # ---------------------------------------------------------------- 数据收集
 def collect_brief(limit: int = 12) -> tuple[dict, dict, dict | None, dict | None]:
@@ -106,6 +119,9 @@ class Sheet:
 
     def text(self, x: int, y: int, text: str, size: int = 11, bold: bool = False,
              fill: int = BLACK) -> int:
+        # bold 只是调用点的语义标记：仓库只带 MiSans-Medium 一款字重，
+        # 层级靠字号与反白标题条区分。不要用 stroke_width 合成粗体——
+        # 13px 左右描边 1px 经 1bpp 阈值化后笔画粘连，反而比不加粗更难认（试过）。
         self.draw.text((x, y), text, font=self.font(size, bold), fill=fill)
         return self.measure(text, size, bold)
 
@@ -147,19 +163,21 @@ class Sheet:
         self.draw.rectangle((x1, y, x2, y2), fill=fill)
 
     def inverted(self, x: int, y: int, text: str, size: int = 11, bold: bool = True,
-                 pad_x: int = 4, pad_y: int = 1) -> int:
+                 pad_x: int = 5, pad_y: int = 2) -> int:
         width = self.measure(text, size, bold)
         height = size + 3
         self.box(x, y, x + width + pad_x * 2 - 1, y + height + pad_y * 2 - 1)
         self.text(x + pad_x, y + pad_y - 1, text, size, bold, WHITE)
         return width + pad_x * 2
 
-    def section(self, y: int, title: str, right: str = "") -> int:
-        self.inverted(12, y, title, 11, True)
+    def section(self, y: int, title: str, right: str = "",
+                right_size: int = 12) -> int:
+        self.inverted(MARGIN, y, title, FONT_SECTION, True)
         if right:
-            width = self.measure(right, 9)
-            self.text(WIDTH - 12 - width, y + 2, right, 9, False)
-        return y + 19
+            width = self.measure(right, right_size)
+            self.text(WIDTH - MARGIN - width, y + 4, right, right_size, False)
+        # 反白标题条高 = 字号 + 3 + 上下各 2px 内边距，再留 3px 与正文分隔。
+        return y + FONT_SECTION + 10
 
     def save(self, out_dir: Path, meta: dict) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -205,9 +223,47 @@ def fmt_amount(value) -> str:
     return f"{amount / 10000:.2f}万亿" if amount >= 10000 else f"{amount:,.0f}亿"
 
 
-def short(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: max(1, limit - 1)] + "…"
+def sector_line(sheet: Sheet, summary: dict, max_width: int) -> str:
+    """板块方向一行：优先「名称±净信号·源数」，放不下逐级降为净信号、纯名称。
+
+    旧版这里另有「AI 板块机会」三张卡片，与板块方向行内容重复；
+    大字版把卡片的净信号/源数并进本行，删掉整个卡片区换字号。
+    """
+    opp = [i for i in (summary.get("opportunity_sectors") or [])[:2] if i.get("tag")]
+    press = [i for i in (summary.get("pressure_sectors") or [])[:1] if i.get("tag")]
+
+    def build(with_sources: bool, with_net: bool) -> str:
+        def fmt(item: dict) -> str:
+            text = str(item["tag"])
+            if with_net:
+                text += f"{int(item.get('net') or 0):+d}"
+            if with_sources:
+                text += f"·{int(item.get('sources') or 0)}源"
+            return text
+
+        parts = []
+        if opp:
+            parts.append("利好 " + " ".join(fmt(i) for i in opp))
+        if press:
+            parts.append("承压 " + " ".join(fmt(i) for i in press))
+        return "｜".join(parts)
+
+    if opp or press:
+        for with_sources, with_net in ((True, True), (False, True), (False, False)):
+            line = build(with_sources, with_net)
+            if sheet.measure(line, FONT_BODY) <= max_width:
+                return line
+        return sheet.wrap(build(False, False), FONT_BODY, max_width, 1)[0]
+    up = " / ".join(summary.get("sectors_up") or [])
+    down = " / ".join(summary.get("sectors_down") or [])
+    parts = []
+    if up:
+        parts.append(f"利好 {up}")
+    if down:
+        parts.append(f"承压 {down}")
+    if not parts:
+        return "暂无明确方向"
+    return sheet.wrap("｜".join(parts), FONT_BODY, max_width, 1)[0]
 
 
 # ---------------------------------------------------------------- 页面
@@ -230,67 +286,77 @@ MARKET_SOURCE_LABELS = {
     "snapshot": "快照",
 }
 
-FOOTER_Y = 288
-
-
 def draw_sheet(summary: dict, market: dict | None, review: dict | None,
                headlines: list[str], now: datetime, live: int, total: int,
                demo: bool) -> Sheet:
+    """大字版排版：正文 13px 起步，放不下的内容按下面取舍删，而不是缩字号。
+
+    与旧版（正文 9~10px）的取舍：
+    - 「多空博弈」整行删除：与本区标题右侧的多空比例/信号数完全重复；
+    - 「资金流向」整行删除：源头 _compose_flow 由利好/承压板块拼成，
+      与「板块方向」行重复（网页版与推送仍保留四行全文）；
+    - 「AI 板块机会」三张卡片区删除：净信号/源数并进「板块方向」行；
+    - 页脚 7px 小字删除：实时源数移入页眉黑条，免责声明移到
+      「全网快讯」标题右侧（11px），位置变了但全页可见。
+    快讯改按像素宽折行截断：英文标题实际能显示的字数反而多于旧版按字数截 38。
+    """
     sheet = Sheet(FONT_PATH)
+    right_edge = WIDTH - MARGIN
 
     # ---------------------------------------------------------- 顶部黑条
-    sheet.box(0, 0, WIDTH - 1, 30)
-    sheet.text(12, 6, "章鱼 AI · 全景分析", 16, True, WHITE)
+    sheet.box(0, 0, WIDTH - 1, 33)
+    sheet.text(MARGIN, 6, "章鱼 AI · 全景分析", FONT_TITLE, True, WHITE)
     date_text = now.strftime("%m月%d日 %H:%M")
-    sheet.text(WIDTH - 14 - sheet.measure(date_text, 9), 4, date_text, 9, False, WHITE)
-    sheet.text(WIDTH - 14 - sheet.measure("每日更新", 8), 17, "每日更新", 8, False, WHITE)
+    sheet.text(right_edge - sheet.measure(date_text, FONT_META), 3,
+               date_text, FONT_META, False, WHITE)
+    live_text = "离线演示数据" if demo else f"实时源 {live}/{total}"
+    sheet.text(right_edge - sheet.measure(live_text, FONT_MIN), 18,
+               live_text, FONT_MIN, False, WHITE)
 
     bias = str(summary.get("bias") or "中性")
     bull = int(summary.get("bull") or 50)
     bear = 100 - bull
     signals = int(summary.get("signals") or 0)
-    sectors_up = " / ".join(summary.get("sectors_up") or []) or "暂无"
-    sectors_down = " / ".join(summary.get("sectors_down") or []) or "暂无"
-    flow = str(summary.get("flow") or "").split("；")[0]
     sentiment = str(summary.get("headline") or "")
 
     # ---------------------------------------------------------- AI 每日总结
-    y = sheet.section(33, "AI 每日总结", f"{bias}  {bull}% : {bear}%  ·  {signals} 信号")
-    summary_rows = [
-        ("市场情绪", sentiment),
-        ("多空博弈", f"多方 {bull}% · 空方 {bear}% · 信号 {signals} 条"),
-        ("板块方向", f"利好 {sectors_up}｜承压 {sectors_down}"),
-        ("资金流向", flow),
-    ]
-    for label, body in summary_rows:
-        sheet.text(12, y, label, 10, True)
-        line = sheet.wrap(body, 10, 310, 1)
-        if line:
-            sheet.text(72, y, line[0], 10)
-        y += 13
-    assert y <= 106, "summary block overflow"
+    y = sheet.section(37, "AI 每日总结",
+                      f"{bias} 多{bull}% 空{bear}% · {signals}信号")
+    # 总结句给两行整宽：旧版单行必然截断到「…」，结论（后半句）从来显示不全。
+    for line in sheet.wrap(sentiment or "暂无市场总结", FONT_BODY, CONTENT_W, 2):
+        sheet.text(MARGIN, y, line, FONT_BODY)
+        y += 18
+    sheet.text(MARGIN, y, "板块", FONT_BODY, True)
+    body_x = MARGIN + sheet.measure("板块", FONT_BODY, True) + 6
+    sheet.text(body_x, y, sector_line(sheet, summary, right_edge - body_x),
+               FONT_BODY)
+    y += 18
+    assert y <= 124, "summary block overflow"
 
     # ---------------------------------------------------------- AI 看盘 · A股
-    sheet.rule(12, 105, WIDTH - 13, 1)
+    sheet.rule(MARGIN, y + 1, right_edge - 1, 1)
     review_date = str((review or {}).get("date") or (market or {}).get("date") or "--")
     src = str((review or {}).get("source") or (market or {}).get("source") or "")
     tag = MARKET_SOURCE_LABELS.get(src, src or "快照")
-    y = sheet.section(107, "AI 看盘 · A股", f"复盘日 {review_date} · {tag}")
+    y = sheet.section(y + 4, "AI 看盘 · A股", f"{review_date} · {tag}")
     indices = (review or {}).get("indices") or []
     if indices:
-        for i, item in enumerate(indices[:4]):
-            x = 12 + (i % 2) * 190
-            yy = y + (i // 2) * 15
+        shown = indices[:4]
+        for i, item in enumerate(shown):
+            # 两栏各宽 184、栏间留 12px，否则左栏涨跌幅与右栏名称会连成一片。
+            x = MARGIN + (i % 2) * 196
+            yy = y + (i // 2) * 19
             raw_name = str(item.get("name") or "")
             name = INDEX_SHORT_NAMES.get(raw_name, raw_name)
             close = item.get("close")
             pct = fmt_pct(item.get("pct"))
             close_text = f"{float(close):,.2f}" if isinstance(close, (int, float)) else "--"
-            sheet.text(x, yy, name, 10, True)
-            name_w = sheet.measure(name, 10, True)
-            sheet.text(x + name_w + 4, yy, close_text, 9)
-            sheet.text(x + 184 - sheet.measure(pct, 9, True), yy, pct, 9, True)
-        y += 32
+            sheet.text(x, yy, name, FONT_BODY, True)
+            name_w = sheet.measure(name, FONT_BODY, True)
+            sheet.text(x + name_w + 5, yy + 1, close_text, FONT_SMALL)
+            sheet.text(x + 184 - sheet.measure(pct, FONT_SMALL, True), yy + 1,
+                       pct, FONT_SMALL, True)
+        y += ((len(shown) + 1) // 2) * 19 + 2
         turnover = (review or {}).get("turnover") or {}
         breadth = (review or {}).get("breadth") or {}
         parts = []
@@ -301,7 +367,8 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
         if breadth.get("limit_down") is not None:
             parts.append(f"跌停 {breadth.get('limit_down')}")
         if parts:
-            sheet.text(12, y, " · ".join(parts), 9)
+            sheet.text(MARGIN, y, " · ".join(parts), FONT_SMALL)
+            y += 16
         leaders = [str(x.get("name") or "") for x in (review or {}).get("leaders") or []][:2]
         laggards = [str(x.get("name") or "") for x in (review or {}).get("laggards") or []][:1]
         sector_text = ""
@@ -310,55 +377,30 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
         if laggards:
             sector_text += ("　领跌 " if sector_text else "领跌 ") + "、".join(laggards)
         if sector_text:
-            line = sheet.wrap(sector_text, 9, 376, 1)
+            line = sheet.wrap(sector_text, FONT_SMALL, CONTENT_W, 1)
             if line:
-                sheet.text(12, y + 11, line[0], 9)
-        y += 23
+                sheet.text(MARGIN, y, line[0], FONT_SMALL)
+            y += 16
     else:
-        sheet.text(12, y, "今日未获取 A 股行情", 10)
-        y += 16
-    assert y <= 181, "market block overflow"
-
-    # ---------------------------------------------------------- AI 板块机会
-    sheet.rule(12, 182, WIDTH - 13, 1)
-    y = sheet.section(184, "AI 板块机会")
-    cards = []
-    for item in (summary.get("opportunity_sectors") or [])[:2]:
-        cards.append((str(item.get("tag") or ""), int(item.get("net") or 0),
-                      int(item.get("sources") or 0), "机会"))
-    for item in (summary.get("pressure_sectors") or [])[:1]:
-        cards.append((str(item.get("tag") or ""), int(item.get("net") or 0),
-                      int(item.get("sources") or 0), "承压"))
-    if cards:
-        card_width = 121
-        for i, (tag_text, net, src_count, kind) in enumerate(cards[:3]):
-            x = 12 + i * 125
-            y2 = y + 24
-            sheet.draw.rectangle((x, y, x + card_width, y2), outline=BLACK)
-            sheet.text(x + 6, y + 2, tag_text, 10, True)
-            net_text = f"净多 {net:+d}" if kind == "机会" else f"净空 {abs(net)}"
-            sheet.text(x + 6, y + 13, f"{net_text} · {src_count} 源", 9)
-        y += 27
-    else:
-        sheet.text(12, y, "暂无净多头信号占优的板块", 10)
-        y += 16
-    assert y <= 231, "sector block overflow"
+        sheet.text(MARGIN, y, "今日未获取 A 股行情", FONT_BODY)
+        y += 18
+    assert y <= 228, "market block overflow"
 
     # ---------------------------------------------------------- 全网快讯
-    sheet.rule(12, 232, WIDTH - 13, 1)
-    y = sheet.section(234, "全网快讯")
-    for title in headlines[:3]:
-        sheet.draw.rectangle((12, y + 4, 14, y + 6), fill=BLACK)
-        sheet.text(19, y, short(title, 38), 9)
-        y += 11
-    assert y <= FOOTER_Y - 2, "headline block overflow"
-
-    # ---------------------------------------------------------- 页脚
-    sheet.rule(12, FOOTER_Y, WIDTH - 13, 1)
-    left = "离线演示数据" if demo else f"实时源 {live}/{total}"
-    sheet.text(12, FOOTER_Y + 2, left, 7)
-    footer = "仅供参考 · 不构成投资建议"
-    sheet.text(WIDTH - 12 - sheet.measure(footer, 7), FOOTER_Y + 2, footer, 7)
+    sheet.rule(MARGIN, y + 1, right_edge - 1, 1)
+    y = sheet.section(y + 4, "全网快讯", "仅供参考 · 不构成投资建议",
+                      right_size=FONT_META)
+    if headlines:
+        for title in headlines[:3]:
+            sheet.draw.rectangle((MARGIN, y + 5, MARGIN + 3, y + 8), fill=BLACK)
+            line = sheet.wrap(title, FONT_SMALL, CONTENT_W - 10, 1)
+            if line:
+                sheet.text(MARGIN + 10, y, line[0], FONT_SMALL)
+            y += 16
+    else:
+        sheet.text(MARGIN, y, "暂无快讯", FONT_SMALL)
+        y += 16
+    assert y <= HEIGHT - 4, "headline block overflow"
     return sheet
 
 

@@ -6,9 +6,13 @@ on:
     - cron: "10 23 * * *"
   push:
     branches: ["**"]
-    # 仅在自身变更时触发一次自检；日常靠定时任务与手动触发，避免和 OTA 清单提交抢写 main。
+    # 仅在自身或渲染器变更时触发：排版改动（如字号）应立即换图，不等次日定时任务；
+    # 日常靠定时任务与手动触发，避免和 OTA 清单提交抢写 main。
     paths:
       - ".github/workflows/aibrief.yml"
+      - "device_brief/render_brief.py"
+      - "device_brief/test_render_brief.py"
+      - "device_brief/fonts/**"
   workflow_dispatch:
     inputs:
       min_live_sources:
