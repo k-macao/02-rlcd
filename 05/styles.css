@@ -23,7 +23,7 @@
   --up: #5f8f00;             /* 上涨：深柠檬绿（白底可读） */
   --down: #767676;           /* 下跌：中性灰（单色点缀体系） */
   --shadow: rgba(17, 17, 17, .10);
-  --body-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --body-font: "Microsoft YaHei", "微软雅黑", sans-serif;
   --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
 }
 
@@ -1157,4 +1157,13 @@ footer strong { display: block; color: var(--ink); text-align: center; font-size
   .pixel-hero { padding: 14px 2px 2px; }
   .pixel-section { padding: 13px 12px 14px; border-radius: 14px; }
   .pixel-section-head h2 { font-size: 16px; }
+}
+
+
+/* 全站统一使用微软雅黑，并关闭标题、标签及强调文本的粗体。 */
+*,
+*::before,
+*::after {
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif !important;
+  font-weight: 400 !important;
 }

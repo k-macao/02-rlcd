@@ -22,7 +22,7 @@
   --shadow-sm: none;
   --shadow-md: none;
   --focus-ring: 0 0 0 3px #488bcc;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
 }
 
 * {
@@ -1281,4 +1281,13 @@ progress::-moz-progress-bar { background: var(--accent); }
   .image-asset-card .control-edge-fade { grid-column: 1 / -1; }
   .device-key-help { font-size: 10px; }
   #portalSimulator { height: 620px; }
+}
+
+
+/* Keep every UI label regular-weight and use Microsoft YaHei consistently. */
+*,
+*::before,
+*::after {
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif !important;
+  font-weight: 400 !important;
 }
