@@ -1,0 +1,28 @@
+name: 每日推送 · 章鱼 AI·全景新闻
+
+on:
+  schedule:
+    # GitHub Actions 使用 UTC；北京时间 = UTC+8：
+    # 04:30 UTC = 12:30 午间简报，11:30 UTC = 19:30 晚间简报
+    - cron: "30 4,11 * * *"
+  workflow_dispatch: # 支持在 Actions 页面手动触发（github.io 静态托管下「立即运行一次」的替代方案）
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 执行推送
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: python push_brief.py

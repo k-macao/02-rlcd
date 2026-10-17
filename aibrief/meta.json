@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-10-17 11:06:06",
+  "bias": "偏多",
+  "bull": 61,
+  "bear": 39,
+  "signals": 75,
+  "live_sources": 0,
+  "total_sources": 69,
+  "demo": true,
+  "market_date": "2026-10-16",
+  "market_source": "snapshot",
+  "headlines": [
+    "TIMIRAOS: BESSENT policy reaction function shifts, no longer so dovish",
+    "Procter & Gamble (PG.N) +1% on report it will buy Thorne for $3.8B",
+    "Iran FM: talks aim to safeguard sovereign rights of Iran and Oman",
+    "Lockheed in talks to buy U.S. scandium / germanium from NioCorp, Teck, 5N Plus",
+    "EasyJet French cabin crew union filed strike notice (Aug 7 - Sep 2)",
+    "淡水河谷CEO：伊朗战争造成诸多项目的速度放缓"
+  ],
+  "width": 400,
+  "height": 300,
+  "bytes": 15008,
+  "sha256": "6faf174f284e6c6eb83874b72e7a7f2713dd2125e8a9b2fa8ca6197e68aede45",
+  "crc32_bitmap": "150c5ec4"
+}
