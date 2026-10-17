@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-17 15:11:14",
+  "generated_at": "2026-10-17 15:34:19",
   "bias": "中性",
   "bull": 45,
   "bear": 55,
-  "signals": 104,
+  "signals": 103,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
   "market_source": "tencent",
   "headlines": [
+    "Israeli Jewish settlers attack European diplomats' vehicles in West Bank 【Israeli Jewish settlers attack European diplomats' vehicles in West Bank】On the 17th Israeli authorities reported diplomats from France, Belgium and Poland taking part in an olive harvest in the West Bank were confronted by seven masked Israeli Jewish settlers who surrounded their vehicle, demanded identification and smashed the window of a car belonging to the Belgian consulate. Israeli police said they will investigate the incident.",
+    "Egypt's parliament to hold special session to review support for Saudi Arabia 【Egypt's parliament to hold special session to review support for Saudi Arabia】At the president's request, Egypt's parliament will hold a special session on Sunday to discuss the regional situation and Cairo's stance on safeguarding Saudi Arabia's security and stability.",
     "Yemeni armed forces said they destroyed 190 Houthi armored and combat vehicles in the past 24 hours.",
     "Saudi-led coalition said it intercepted and destroyed four drones over Riyadh and the eastern and southern regions.",
     "German media: applications to refuse military service nearly triple in 2026 【German media: applications to refuse military service nearly triple in 2026】German media, citing data from the Federal Office for Family and Civil Society Affairs, reported 14,977 applications to refuse military service received since January 2026, versus 3,879 such applications in all of 2025, a year-on-year rise described as nearly threefold.",
-    "Blue Origin aims for multiple New Glenn heavy launches per week by 2030 【Blue Origin aims for multiple New Glenn heavy launches per week by 2030】Blue Origin targets multiple weekly New Glenn heavy-launches by 2030 to challenge SpaceX's lead in the global launch market. The plan calls for large-scale expansion of manufacturing, launch infrastructure and operational reliability. The company has invested more than $3.0 billion at its Florida production and rocket-integration facility and plans an additional $330 million expansion to support a higher-capacity New Glenn variant.",
-    "UK research firm BMI says September 2026 European EV deliveries hit a record at nearly 600,000 units, up 10% MoM. North American EV sales fell 44% MoM in September, the largest single-month drop so far in 2026.",
-    "BMI Research: Jan-Sep global electric vehicle sales rose 3% year-to-date to 15.5 million units."
+    "Blue Origin aims for multiple New Glenn heavy launches per week by 2030 【Blue Origin aims for multiple New Glenn heavy launches per week by 2030】Blue Origin targets multiple weekly New Glenn heavy-launches by 2030 to challenge SpaceX's lead in the global launch market. The plan calls for large-scale expansion of manufacturing, launch infrastructure and operational reliability. The company has invested more than $3.0 billion at its Florida production and rocket-integration facility and plans an additional $330 million expansion to support a higher-capacity New Glenn variant."
   ],
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "c0238a63400c3dd34422156ea8f36293fb7f7ed1e81edab35e246bbaf8516db1",
-  "crc32_bitmap": "5f9dcc2d"
+  "sha256": "df2ed772c0ef01dc8645f0a5dec8a756364e16e3f7b2820bab85e636f3156547",
+  "crc32_bitmap": "850d0f4e"
 }
