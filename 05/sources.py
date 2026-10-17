@@ -5524,7 +5524,7 @@ f'<div class="ftr">近30日只统计已核验发文日的全球政策，已观�
         '<i class="on"></i>' if i in _mtx_on else '<i></i>' for i in range(24)) + '</div>')
 
     css = (
-        f'<style>body,td,div,span,a{{font-family:Arial,\'PingFang SC\',\'Microsoft YaHei\',\'Noto Sans SC\',sans-serif;box-sizing:border-box;}}'
+        f'<style>*{{font-family:\'Microsoft YaHei\',\'微软雅黑\',sans-serif!important;font-weight:400!important;box-sizing:border-box;}}'
         f'.bg{{width:100%;max-width:100%;margin:0;padding:10px;background:{paper};color:{ink};word-break:break-word;}}'
         f'.card{{margin:0 0 10px;background:{paper_lift};border:1px solid {rule};border-radius:10px;padding:9px 11px 7px;}}'
         f'.card-m{{margin:0 0 10px;background:{paper_lift};border:1px solid {rule};border-radius:10px;padding:11px 12px;color:{ink};}}'
