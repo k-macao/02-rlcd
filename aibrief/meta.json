@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-17 16:12:41",
-  "bias": "中性",
-  "bull": 45,
-  "bear": 55,
-  "signals": 100,
-  "live_sources": 50,
+  "generated_at": "2026-10-18 01:00:13",
+  "bias": "偏空",
+  "bull": 38,
+  "bear": 62,
+  "signals": 102,
+  "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
   "market_source": "eastmoney",
   "headlines": [
-    "Israeli Jewish settlers attack European diplomats' vehicles in West Bank 【Israeli Jewish settlers attack European diplomats' vehicles in West Bank】On the 17th Israeli authorities reported diplomats from France, Belgium and Poland taking part in an olive harvest in the West Bank were confronted by seven masked Israeli Jewish settlers who surrounded their vehicle, demanded identification and smashed the window of a car belonging to the Belgian consulate. Israeli police said they will investigate the incident.",
-    "Egypt's parliament to hold special session to review support for Saudi Arabia 【Egypt's parliament to hold special session to review support for Saudi Arabia】At the president's request, Egypt's parliament will hold a special session on Sunday to discuss the regional situation and Cairo's stance on safeguarding Saudi Arabia's security and stability.",
-    "Yemeni armed forces said they destroyed 190 Houthi armored and combat vehicles in the past 24 hours.",
-    "Saudi-led coalition said it intercepted and destroyed four drones over Riyadh and the eastern and southern regions.",
-    "German media: applications to refuse military service nearly triple in 2026 【German media: applications to refuse military service nearly triple in 2026】German media, citing data from the Federal Office for Family and Civil Society Affairs, reported 14,977 applications to refuse military service received since January 2026, versus 3,879 such applications in all of 2025, a year-on-year rise described as nearly threefold.",
-    "Blue Origin aims for multiple New Glenn heavy launches per week by 2030 【Blue Origin aims for multiple New Glenn heavy launches per week by 2030】Blue Origin targets multiple weekly New Glenn heavy-launches by 2030 to challenge SpaceX's lead in the global launch market. The plan calls for large-scale expansion of manufacturing, launch infrastructure and operational reliability. The company has invested more than $3.0 billion at its Florida production and rocket-integration facility and plans an additional $330 million expansion to support a higher-capacity New Glenn variant."
+    "Yemen parliamentary speaker urges Egypt to avoid involvement in war 【Yemen parliamentary speaker urges Egypt to avoid involvement in war】The speaker of Yemen’s parliament wrote to his Egyptian counterpart urging Cairo not to be drawn into a war he said contradicts Egypt’s values. He warned that Egyptian involvement would pose a serious threat to national security and internal stability, and urged Egypt to resist following Saudi government policy to avoid dragging the region into wider turmoil.",
+    "RIA quoted Russia's Interior Ministry saying the black market is flooded with weapons from the Ukrainian conflict zone.",
+    "Musk admits 'somewhat off track' in political affairs 【Musk admits 'somewhat off track' in political affairs】Foreign media report Tesla CEO Elon Musk said he had \"somewhat gone off track\" in political affairs, spending about four months at the White House—longer than the one-to-two months he said government involvement should have taken—and that he should have returned sooner to focus on AI.",
+    "Extremist group \"Islamic State\" claimed responsibility for a Tuesday attack on a Nigerian military camp that killed multiple people.",
+    "Iran FM Araghchi meets Turkey's Fidan in Baghdad to discuss Strait of Hormuz, regional tensions 【Iran FM Araghchi meets Turkey's Fidan in Baghdad to discuss Strait of Hormuz, regional tensions】Iranian foreign minister Araghchi met Turkish counterpart Hakan Fidan on Saturday in Baghdad during an OIC meeting to discuss developments in the Persian Gulf, the Strait of Hormuz and wider regional tensions. They discussed bilateral ties and the situations in Gaza and Yemen, both emphasized the importance of diplomatic de-escalation; Araghchi briefed Fidan on recent Persian Gulf/Hormuz developments and related diplomatic moves and urged OIC members to act to stop what he called Israeli genocide and to jointly address Islamophobia.",
+    "RIA quoted the Moscow mayor as saying 25 drones bound for Moscow were destroyed."
   ],
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "4c131f7151563759d5e624c1ab1d296858a357d0154d5f5d15d5cdcb1df17545",
-  "crc32_bitmap": "7d50155b"
+  "sha256": "be7d6013da94f5dbe85e0ff5f18432d104f4905b95e90f1d457f7b2409aa2e6e",
+  "crc32_bitmap": "9391ac37"
 }
