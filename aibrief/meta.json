@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-18 01:00:13",
+  "generated_at": "2026-10-19 01:12:23",
   "bias": "偏空",
-  "bull": 38,
-  "bear": 62,
-  "signals": 102,
+  "bull": 40,
+  "bear": 60,
+  "signals": 114,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-16",
   "market_source": "eastmoney",
   "headlines": [
-    "Yemen parliamentary speaker urges Egypt to avoid involvement in war 【Yemen parliamentary speaker urges Egypt to avoid involvement in war】The speaker of Yemen’s parliament wrote to his Egyptian counterpart urging Cairo not to be drawn into a war he said contradicts Egypt’s values. He warned that Egyptian involvement would pose a serious threat to national security and internal stability, and urged Egypt to resist following Saudi government policy to avoid dragging the region into wider turmoil.",
-    "RIA quoted Russia's Interior Ministry saying the black market is flooded with weapons from the Ukrainian conflict zone.",
-    "Musk admits 'somewhat off track' in political affairs 【Musk admits 'somewhat off track' in political affairs】Foreign media report Tesla CEO Elon Musk said he had \"somewhat gone off track\" in political affairs, spending about four months at the White House—longer than the one-to-two months he said government involvement should have taken—and that he should have returned sooner to focus on AI.",
-    "Extremist group \"Islamic State\" claimed responsibility for a Tuesday attack on a Nigerian military camp that killed multiple people.",
-    "Iran FM Araghchi meets Turkey's Fidan in Baghdad to discuss Strait of Hormuz, regional tensions 【Iran FM Araghchi meets Turkey's Fidan in Baghdad to discuss Strait of Hormuz, regional tensions】Iranian foreign minister Araghchi met Turkish counterpart Hakan Fidan on Saturday in Baghdad during an OIC meeting to discuss developments in the Persian Gulf, the Strait of Hormuz and wider regional tensions. They discussed bilateral ties and the situations in Gaza and Yemen, both emphasized the importance of diplomatic de-escalation; Araghchi briefed Fidan on recent Persian Gulf/Hormuz developments and related diplomatic moves and urged OIC members to act to stop what he called Israeli genocide and to jointly address Islamophobia.",
-    "RIA quoted the Moscow mayor as saying 25 drones bound for Moscow were destroyed."
+    "Bank of Japan Governor UEDA said if the BOJ fails to adjust policy rates in a timely manner, market concern about an inf overshoot could push up long-term yields.",
+    "Bank of Japan Governor UEDA said the BOJ will weigh market conditions—such as whether the pace of long-term yield increases is excessive or there are signs of impaired market functioning—when deciding whether to intervene.",
+    "BOJ Governor UEDA said appropriate implementation of monetary policy and achieving the 2% inflation target can help stabilize the Japan government bond market.",
+    "Bank of Japan Governor Ueda said if the central bank raises short-term policy rates, long-term yields may rise steadily alongside related policy measures.",
+    "Bank of Japan Governor UEDA said financial conditions remain accommodative.",
+    "China International Capital Co: Interpreting stronger rate-cut expectations 【China International Capital Co: Interpreting stronger rate-cut expectations】China International Capital Co says implied rate-cut bets in interest-rate derivatives surged after the October holiday to levels seen before prior PBOC easing. One reason: the rapid fall in government bond yields since late September did not trigger PBOC liquidity tightening. The report judges the PBOC is more likely to ease by shifting the policy-rate anchor—keeping the funding-rate center lower—rather than by blanket cuts to the 7-day reverse repo rate and the LPR. That approach would likely cap further declines in government yields; it probably would not affect outstanding loan rates, though new loan rates could fall modestly. Expectations for next year’s fiscal policy stance remain a key driver of government bond yield direction."
   ],
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "be7d6013da94f5dbe85e0ff5f18432d104f4905b95e90f1d457f7b2409aa2e6e",
-  "crc32_bitmap": "9391ac37"
+  "sha256": "fafae2beea79706e022db632314be306b8e85c6f9f2d43deaabb87aab5ec61de",
+  "crc32_bitmap": "c5983da2"
 }
