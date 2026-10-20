@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-19 01:12:23",
-  "bias": "偏空",
-  "bull": 40,
-  "bear": 60,
-  "signals": 114,
+  "generated_at": "2026-10-20 01:48:32",
+  "bias": "中性",
+  "bull": 44,
+  "bear": 56,
+  "signals": 103,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
-  "market_date": "2026-10-16",
+  "market_date": "2026-10-20",
   "market_source": "eastmoney",
   "headlines": [
-    "Bank of Japan Governor UEDA said if the BOJ fails to adjust policy rates in a timely manner, market concern about an inf overshoot could push up long-term yields.",
-    "Bank of Japan Governor UEDA said the BOJ will weigh market conditions—such as whether the pace of long-term yield increases is excessive or there are signs of impaired market functioning—when deciding whether to intervene.",
-    "BOJ Governor UEDA said appropriate implementation of monetary policy and achieving the 2% inflation target can help stabilize the Japan government bond market.",
-    "Bank of Japan Governor Ueda said if the central bank raises short-term policy rates, long-term yields may rise steadily alongside related policy measures.",
-    "Bank of Japan Governor UEDA said financial conditions remain accommodative.",
-    "China International Capital Co: Interpreting stronger rate-cut expectations 【China International Capital Co: Interpreting stronger rate-cut expectations】China International Capital Co says implied rate-cut bets in interest-rate derivatives surged after the October holiday to levels seen before prior PBOC easing. One reason: the rapid fall in government bond yields since late September did not trigger PBOC liquidity tightening. The report judges the PBOC is more likely to ease by shifting the policy-rate anchor—keeping the funding-rate center lower—rather than by blanket cuts to the 7-day reverse repo rate and the LPR. That approach would likely cap further declines in government yields; it probably would not affect outstanding loan rates, though new loan rates could fall modestly. Expectations for next year’s fiscal policy stance remain a key driver of government bond yield direction."
+    "Japan's finance minister Katayama said the government is discussing the defense budget.",
+    "Hang Seng Index futures opened the day session down 0.81% at 23,963, trading 224 points below the cash index.",
+    "Japan's finance minister Katayama said she will consider measures to secure stable funding sources while monitoring fiscal sustainability.",
+    "Japan's finance minister Katayama said no decision has been made on how to fund the expected increase in defense spending.",
+    "Spot silver fell 1.00% intraday to $56.52/oz.",
+    "Japan's Nikkei 225 fell below 64,000 points, down 1.42% intraday."
   ],
   "width": 400,
   "height": 300,
   "bytes": 15008,
-  "sha256": "fafae2beea79706e022db632314be306b8e85c6f9f2d43deaabb87aab5ec61de",
-  "crc32_bitmap": "c5983da2"
+  "sha256": "414e38814785f12bb0f9bbc0607f312a6e8c7e0a90a8b7640e75d8c21122a0e2",
+  "crc32_bitmap": "f542255b"
 }
