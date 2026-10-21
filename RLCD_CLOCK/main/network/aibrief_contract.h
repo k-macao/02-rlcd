@@ -17,7 +17,8 @@ inline constexpr size_t kEnvelopeBytes = 8;
 inline constexpr size_t kPayloadBytes = kEnvelopeBytes + kBitmapBytes;
 inline constexpr size_t kDownloadBufferBytes = kPayloadBytes + 1;
 inline constexpr uint8_t kMagic[4] = {'A', 'I', 'B', '1'};
-inline constexpr uint32_t kMaxRefreshAgeSeconds = 6 * 60 * 60;
+// 设备端简报页每 5 分钟拉取一次已推送的页面（开机即联网获取）。
+inline constexpr uint32_t kMaxRefreshAgeSeconds = 5 * 60;
 inline constexpr int kMaxRefreshAttempts = 2;
 inline constexpr uint32_t kRetrySettleMs = 150;
 

@@ -37,4 +37,4 @@ python3 device_brief/render_brief.py --out-dir aibrief
 | `--min-live-sources N` | 实时源阈值，默认 20 |
 | `--limit N` | 限制每个来源抓取的条目数 |
 
-> 渲染机需要能访问 05 的 69 个数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 07:10（北京时间）运行一次；本机运行后把 `aibrief/` 提交回仓库，设备即可在 6 小时内拿到新图。
+> 渲染机需要能访问 05 的 69 个数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 07:10（北京时间）运行一次；本机运行后把 `aibrief/` 提交回仓库，设备会在 5 分钟内拿到新图。设备固件开机即联网拉取该页并常驻显示（无时钟工作页），之后每 5 分钟重新拉取一次。
