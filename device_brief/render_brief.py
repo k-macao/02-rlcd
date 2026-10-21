@@ -193,7 +193,20 @@ class Sheet:
         key = (str(self.font_path), size)
         if key not in self._cache:
             try:
-                self._cache[key] = ImageFont.truetype(str(self.font_path), size)
+                font = ImageFont.truetype(str(self.font_path), size)
+                # SourceHanSansSC-Regular.ttf is a variable font whose default
+                # wght axis is Thin (100). On the 1bpp device bitmap, that
+                # weight loses many CJK strokes during thresholding. Select the
+                # actual Regular instance before measuring or drawing text.
+                set_variation = getattr(font, "set_variation_by_name", None)
+                if callable(set_variation):
+                    try:
+                        set_variation("Regular")
+                    except (OSError, ValueError):
+                        # Static fallback fonts (for example MiSans Medium) do
+                        # not expose named variable-font instances.
+                        pass
+                self._cache[key] = font
             except Exception:
                 # 回退到默认
                 self._cache[key] = ImageFont.load_default()

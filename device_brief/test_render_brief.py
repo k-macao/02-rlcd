@@ -105,6 +105,22 @@ class FontSizeFloorTest(unittest.TestCase):
 
 
 class TypographyTest(unittest.TestCase):
+    def test_variable_font_uses_regular_weight(self):
+        font = render_brief.Sheet(render_brief.FONT_PATH).font(13)
+        try:
+            instances = font.get_variation_names()
+        except (AttributeError, OSError):
+            self.skipTest("selected font is static or has no named variations")
+
+        regular_instance = next(
+            (name for name in instances
+             if name in (b"Regular", "Regular")),
+            None,
+        )
+        if regular_instance is None:
+            self.skipTest("selected variable font has no Regular instance")
+        self.assertEqual(font.getname()[1], "Regular")
+
     def test_all_text_uses_one_regular_font(self):
         sheet = render_brief.Sheet(render_brief.FONT_PATH)
         self.assertIs(sheet.font(13, bold=False), sheet.font(13, bold=True))

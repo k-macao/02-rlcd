@@ -6,7 +6,7 @@
 
 ## 字体与层级（v1.8.0 思源黑体）
 
-- **统一思源黑体、常规字重**：标题、正文、标签、数字和符号全部使用 Source Han Sans / Noto Sans SC，不加粗、不描边、不叠影。渲染机优先读取 `device_brief/fonts/SourceHanSansSC-Regular.ttf`（17MB 变量字体，Google Fonts 同款思源黑体），可通过 `SOURCE_HAN_SANS_FONT` 环境变量覆盖路径；若不存在则回退到 `MiSans-Medium.ttf`。
+- **统一思源黑体、常规字重**：标题、正文、标签、数字和符号全部使用 Source Han Sans / Noto Sans SC，不加粗、不描边、不叠影。渲染机优先读取 `device_brief/fonts/SourceHanSansSC-Regular.ttf`（17MB 变量字体，Google Fonts 同款思源黑体），并显式选择变量字体的 `Regular` 字重；该字体文件自身默认值是 `Thin`，若不切换字重，1bpp 二值化会让汉字笔画断裂。可通过 `SOURCE_HAN_SANS_FONT` 环境变量覆盖路径；若不存在则回退到 `MiSans-Medium.ttf`。排版测试会检查变量字体确实使用 `Regular` 实例。
 - **字号层级**：标题 `18px` → 分栏 `14px` → 正文 `13px` → 次要 `12px` → 页眉 `11px` → 最小 `10px`，通过字号和留白建立层级，不使用粗体。
 - 全部内容完整显示：旧版放不下删行，新版改为分页，单文件最多 30 页（450KB），设备每 60 秒自动切下一页。
 
