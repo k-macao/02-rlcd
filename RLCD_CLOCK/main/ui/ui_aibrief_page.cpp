@@ -167,7 +167,7 @@ bool build_aibrief_page()
     if (s_aibrief_page_label) {
         lv_obj_set_pos(s_aibrief_page_label, kAibriefPageIndicatorX, kAibriefPageIndicatorY);
         lv_obj_set_size(s_aibrief_page_label, kAibriefPageIndicatorW, kAibriefPageIndicatorH);
-        lv_obj_set_style_text_font(s_aibrief_page_label, &zh_font_12, 0);
+        lv_obj_set_style_text_font(s_aibrief_page_label, &zh_font_16, 0);
         lv_obj_set_style_text_align(s_aibrief_page_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(s_aibrief_page_label, lv_color_black(), 0);
         lv_label_set_text(s_aibrief_page_label, "");
