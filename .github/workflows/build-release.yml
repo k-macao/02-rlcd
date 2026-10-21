@@ -89,8 +89,21 @@ jobs:
           path: RLCD_CLOCK
           command: bash -c "bash ../.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }} 2>&1 | tee $GITHUB_WORKSPACE/build.log; exit ${PIPESTATUS[0]}"
 
-      - name: 上传编译日志（失败时）
-        if: failure()
+      - name: 列出构建产物（调试）
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwd
+          ls -lh
+          ls -lh RLCD_CLOCK/build/*.bin 2>&1 | head -20
+          ls -lh build.log 2>&1 || echo "no build.log in root"
+          cat build.log | tail -100 || true
+          echo "--- RLCD_CLOCK/build dir ---"
+          ls -lh RLCD_CLOCK/build/ | head -50
+
+      - name: 上传编译日志
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ steps.version.outputs.version }}
@@ -108,6 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          ls -lh
           test -s "weather_clock_${VERSION}.bin"
           test -s "weather_clock_${VERSION}_merged.bin"
           sha256sum "weather_clock_${VERSION}.bin" "weather_clock_${VERSION}_merged.bin"
