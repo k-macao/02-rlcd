@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-10-21 01:34:42",
+  "generated_at": "2026-10-21 02:07:53",
   "bias": "中性",
-  "bull": 56,
-  "bear": 44,
-  "signals": 118,
-  "live_sources": 51,
+  "bull": 51,
+  "bear": 49,
+  "signals": 116,
+  "live_sources": 52,
   "total_sources": 69,
   "demo": false,
   "market_date": "2026-10-21",
-  "market_source": "tencent",
+  "market_source": "eastmoney",
   "font": "SourceHanSansSC-Regular.ttf",
   "source_repo": "002",
   "width": 400,
@@ -16,6 +16,6 @@
   "pages": 30,
   "bytes": 450008,
   "page_bytes": 450000,
-  "sha256": "cb9bd4bfb2bf7a2dee741cb70b78ea38e0ce4f8e7940093352edcd3df5128837",
-  "crc32_bitmap": "79d1be86"
+  "sha256": "cf9eb0fef18186c37719782f9751307bb3c1a798b0874d72098bef94593b08ed",
+  "crc32_bitmap": "0c61dbb3"
 }
