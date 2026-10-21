@@ -3,6 +3,10 @@ name: 调试固件编译
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   debug-build:
     runs-on: ubuntu-latest
@@ -23,15 +27,15 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: |
-            set -o pipefail
-            idf.py build 2>&1 | tee /tmp/build.log; status=${PIPESTATUS[0]}; echo "BUILD_STATUS=$status" >> $GITHUB_ENV; exit $status
+          command: bash -c "idf.py build 2>&1 | tee $GITHUB_WORKSPACE/build.log; exit ${PIPESTATUS[0]}"
 
       - name: 上传编译日志
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: /tmp/build.log
+          path: |
+            build.log
+            RLCD_CLOCK/build/build.log
           if-no-files-found: warn
           retention-days: 7
