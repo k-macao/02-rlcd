@@ -87,9 +87,22 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: idf.py build
+          command: bash -c "idf.py build 2>&1 | tee build.log; echo \"=== BUILD LOG TAIL ===\"; tail -200 build.log; exit ${PIPESTATUS[0]}"
+
+      - name: 上传编译日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ steps.version.outputs.version }}
+          path: |
+            RLCD_CLOCK/build.log
+            RLCD_CLOCK/build/build.log
+            RLCD_CLOCK/build/CMakeFiles/*.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: 生成双固件
+        if: success()
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -105,7 +118,6 @@ jobs:
           cp RLCD_CLOCK/build/weather_clock.bin weather_clock_${VERSION}.bin
           echo "=== 合并固件 ==="
           cd RLCD_CLOCK/build
-          # 尝试多种 esptool 调用方式
           if command -v esptool.py >/dev/null 2>&1; then
             esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args || python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
           else
@@ -116,6 +128,7 @@ jobs:
           sha256sum weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
 
       - name: 校验构建产物
+        if: success()
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
