@@ -34,8 +34,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # 输入框/标签里常混入空格、换行或零宽字符，先清理再校验，避免 v1.7.1 被误判无效。
-          # 注意：此步骤在 checkout 之前执行，不能依赖仓库内的 .github/scripts/ 文件，故内联实现。
           version="$(python3 -c '
           import os, re, sys
           raw = os.environ.get("REQUESTED_VERSION", "")
@@ -63,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          project_version="$(sed -n 's/.*PROJECT_VER "\(v[^"]*\)".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+          project_version="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
           if [[ "$project_version" != "$EXPECTED_VERSION" ]]; then
             echo "标签版本 $EXPECTED_VERSION 与工程版本 $project_version 不一致" >&2
             exit 1
@@ -87,87 +85,32 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: bash -c "idf.py build 2>&1 | tee build.log; rc=${PIPESTATUS[0]}; echo \"=== BUILD LOG TAIL ===\"; tail -n 200 build.log; exit $rc"
-
-      - name: 上传编译日志
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-${{ steps.version.outputs.version }}
-          path: |
-            RLCD_CLOCK/build.log
-            RLCD_CLOCK/build/build.log
-            RLCD_CLOCK/build/CMakeFiles/*.log
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: 保存日志到分支（便于无外网下载）
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/logbranch
-          cp RLCD_CLOCK/build.log /tmp/logbranch/build-${{ steps.version.outputs.version }}.log 2>/dev/null || echo "no RLCD_CLOCK/build.log"
-          if [ -f RLCD_CLOCK/build/build.log ]; then cp RLCD_CLOCK/build/build.log /tmp/logbranch/; fi
-          ls -lh /tmp/logbranch/ || true
-          # 将日志前500行和后500行打印到 summary，尝试绕过网络限制获取错误
-          echo "### 编译日志尾部" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 500 RLCD_CLOCK/build.log >> $GITHUB_STEP_SUMMARY 2>&1 || echo "no log" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          # 推送日志到 logs 分支
-          git config user.name "log-bot"
-          git config user.email "log@bot"
-          git fetch origin logs || true
-          git checkout --orphan logs 2>/dev/null || git checkout -B logs
-          cp /tmp/logbranch/*.log . 2>/dev/null || true
-          git add -f *.log 2>/dev/null || true
-          git commit -m "log ${{ steps.version.outputs.version }} ${{ github.run_id }}" || true
-          git push origin logs --force 2>&1 | tail -20 || true
+          command: idf.py build
 
       - name: 生成双固件
-        if: success()
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== 列出 RLCD_CLOCK/build ==="
-          ls -lh RLCD_CLOCK/build/*.bin 2>&1 | head -30
-          ls -lh RLCD_CLOCK/build/ | head -80
-          echo "=== 当前根目录 ==="
-          ls -lh | head -30
           echo "=== 复制 app bin ==="
           test -f RLCD_CLOCK/build/weather_clock.bin
           cp RLCD_CLOCK/build/weather_clock.bin weather_clock_${VERSION}.bin
           echo "=== 合并固件 ==="
           pip install esptool -q
           cd RLCD_CLOCK/build
-          echo "flash_args content:"
-          cat flash_args || true
-          echo "--- try merge_bin ---"
-          set +e
-          esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args 2>&1 | tee /tmp/merge.log
-          rc1=${PIPESTATUS[0]}
-          echo "rc1=$rc1"
-          if [ $rc1 -ne 0 ]; then
-            echo "try merge-bin with python -m esptool"
-            python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args 2>&1 | tee /tmp/merge.log
-            rc2=${PIPESTATUS[0]}
-            echo "rc2=$rc2"
-            if [ $rc2 -ne 0 ]; then
-              echo "merge failed"
-              cat /tmp/merge.log
-              exit $rc2
-            fi
+          # esptool v4 使用 merge_bin，v5 使用 merge-bin，兼容两者
+          if esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args; then
+            echo "merge_bin 成功"
+          else
+            echo "merge_bin 失败，尝试 merge-bin"
+            python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
           fi
-          set -e
           cd ../..
           ls -lh weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
           sha256sum weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
 
       - name: 校验构建产物
-        if: success()
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -241,7 +184,6 @@ jobs:
           set -euo pipefail
           git fetch origin main
           git checkout -B version-bump origin/main
-          # 校验当前 main 的版本是否等于刚发布的版本，相等才递增，避免重复 bump
           current_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
           echo "main 当前版本: $current_ver, 刚发布版本: $VERSION"
           if [[ "$current_ver" != "$VERSION" ]]; then
