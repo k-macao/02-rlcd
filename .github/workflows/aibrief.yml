@@ -13,6 +13,8 @@ on:
       - "device_brief/render_brief.py"
       - "device_brief/test_render_brief.py"
       - "device_brief/fonts/**"
+      - "002/**"
+      - "05/**"
   workflow_dispatch:
     inputs:
       min_live_sources:
@@ -47,7 +49,7 @@ jobs:
       - name: 安装渲染依赖
         run: python3 -m pip install --disable-pip-version-check pillow
 
-      - name: 抓取 05 数据并渲染
+      - name: 抓取 002 数据并渲染多页
         env:
           MIN_LIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_live_sources || '20' }}
           BRIEF_FETCH_WORKERS: "16"
@@ -60,8 +62,10 @@ jobs:
           python3 - <<'PY'
           import json
           meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
-          print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · 生成 {meta['generated_at']}")
+          print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · {meta['pages']}页 · 字体 {meta.get('font','')} · 生成 {meta['generated_at']}")
+          print(f"文件大小 {meta['bytes']} bytes")
           PY
+          ls -lh aibrief/
 
       - name: 提交设备图
         run: |
@@ -83,6 +87,8 @@ jobs:
           path: |
             aibrief/latest.bin
             aibrief/latest.png
+            aibrief/latest_combined.png
+            aibrief/page_*.png
             aibrief/meta.json
           if-no-files-found: error
           retention-days: 14

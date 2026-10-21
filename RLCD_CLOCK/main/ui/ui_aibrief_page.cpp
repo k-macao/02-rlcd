@@ -1,4 +1,4 @@
-// 构建章鱼 AI 简报辅助页：把 1bpp 位图解码到全屏 LVGL canvas。
+// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每分钟自动翻页。
 #include "ui_aibrief_page.h"
 
 #include "aibrief_contract.h"
@@ -12,6 +12,7 @@
 
 #include <esp_attr.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 
 #include <stdint.h>
 
@@ -30,14 +31,21 @@ constexpr int kAibriefHintLabelX = 40;
 constexpr int kAibriefHintLabelY = 152;
 constexpr int kAibriefHintLabelW = 320;
 constexpr int kAibriefHintLabelH = 20;
+constexpr int kAibriefPageIndicatorX = 0;
+constexpr int kAibriefPageIndicatorY = 282;
+constexpr int kAibriefPageIndicatorW = 400;
+constexpr int kAibriefPageIndicatorH = 18;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
-constexpr const char *kAibriefHintText = "长按 KEY 返回";
+constexpr const char *kAibriefHintText = "长按 KEY 返回 · 自动每分钟翻页";
 
 lv_obj_t *s_aibrief_canvas;
 lv_color_t *s_aibrief_canvas_buffer;
 lv_obj_t *s_aibrief_empty_label;
 lv_obj_t *s_aibrief_hint_label;
+lv_obj_t *s_aibrief_page_label;
 uint32_t s_aibrief_drawn_version;
+uint8_t s_aibrief_drawn_page;
+int64_t s_aibrief_last_page_switch_us;
 EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmap[aibrief::kBitmapBytes];
 
 static_assert(aibrief::kWidth == 400 && aibrief::kHeight == 300,
@@ -49,6 +57,9 @@ void show_placeholder(bool visible)
 {
     set_obj_visible(s_aibrief_empty_label, visible);
     set_obj_visible(s_aibrief_hint_label, visible);
+    if (s_aibrief_page_label) {
+        set_obj_visible(s_aibrief_page_label, !visible);
+    }
 }
 
 bool draw_bitmap_to_canvas()
@@ -56,7 +67,7 @@ bool draw_bitmap_to_canvas()
     if (!s_aibrief_canvas) {
         return false;
     }
-    if (!aibrief_bitmap_copy(s_aibrief_bitmap, sizeof(s_aibrief_bitmap))) {
+    if (!aibrief_bitmap_copy_current(s_aibrief_bitmap, sizeof(s_aibrief_bitmap))) {
         return false;
     }
     lv_img_dsc_t *image = lv_canvas_get_img(s_aibrief_canvas);
@@ -77,6 +88,23 @@ bool draw_bitmap_to_canvas()
     }
     lv_obj_invalidate(s_aibrief_canvas);
     return true;
+}
+
+void update_page_indicator()
+{
+    if (!s_aibrief_page_label) {
+        return;
+    }
+    const AibriefSnapshot snap = aibrief_snapshot_load();
+    if (!snap.available || snap.page_count <= 1) {
+        lv_label_set_text(s_aibrief_page_label, "");
+        return;
+    }
+    // 显示当前页码，例如 "1/12 · 60s自动翻页"
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u/%u", static_cast<unsigned>(snap.current_page + 1),
+             static_cast<unsigned>(snap.page_count));
+    lv_label_set_text(s_aibrief_page_label, buf);
 }
 
 void clear_canvas()
@@ -133,7 +161,19 @@ bool build_aibrief_page()
                                                          kAibriefHintText,
                                                          &zh_font_16,
                                                          AIBRIEF_LABEL_CREATE_FAILED_LOG);
+    // 页码指示器：底部居中，小字体
+    s_aibrief_page_label = lv_label_create(root);
+    if (s_aibrief_page_label) {
+        lv_obj_set_pos(s_aibrief_page_label, kAibriefPageIndicatorX, kAibriefPageIndicatorY);
+        lv_obj_set_size(s_aibrief_page_label, kAibriefPageIndicatorW, kAibriefPageIndicatorH);
+        lv_obj_set_style_text_font(s_aibrief_page_label, &zh_font_12, 0);
+        lv_obj_set_style_text_align(s_aibrief_page_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(s_aibrief_page_label, lv_color_black(), 0);
+        lv_label_set_text(s_aibrief_page_label, "");
+    }
     s_aibrief_drawn_version = UINT32_MAX;
+    s_aibrief_drawn_page = 0xFF;
+    s_aibrief_last_page_switch_us = esp_timer_get_time();
     return true;
 }
 
@@ -141,15 +181,35 @@ bool update_aibrief_page()
 {
     const AibriefSnapshot snapshot = aibrief_snapshot_load();
     const uint32_t drawn_version = snapshot.available ? snapshot.version : 0;
-    if (drawn_version == s_aibrief_drawn_version) {
+    const uint8_t current_page = snapshot.available ? snapshot.current_page : 0;
+
+    // 检查是否需要自动翻页：每 60 秒切下一页
+    if (snapshot.available && snapshot.page_count > 1) {
+        const int64_t now_us = esp_timer_get_time();
+        const int64_t elapsed_us = now_us - s_aibrief_last_page_switch_us;
+        if (elapsed_us >= static_cast<int64_t>(aibrief::kPageRotateSeconds) * 1000000LL) {
+            if (aibrief_advance_page()) {
+                s_aibrief_last_page_switch_us = now_us;
+                // 版本号已在 advance 中递增，下一轮会触发重绘
+                return true;
+            }
+        }
+    }
+
+    // 版本或页码变化才重绘
+    if (drawn_version == s_aibrief_drawn_version && current_page == s_aibrief_drawn_page) {
         return false;
     }
     s_aibrief_drawn_version = drawn_version;
+    s_aibrief_drawn_page = current_page;
+
     if (snapshot.available) {
         if (!draw_bitmap_to_canvas()) {
             return false;
         }
         show_placeholder(false);
+        update_page_indicator();
+        s_aibrief_last_page_switch_us = esp_timer_get_time();
         return true;
     }
     clear_canvas();
@@ -163,5 +223,8 @@ void clear_aibrief_page_refs()
     s_aibrief_canvas_buffer = nullptr;
     s_aibrief_empty_label = nullptr;
     s_aibrief_hint_label = nullptr;
+    s_aibrief_page_label = nullptr;
     s_aibrief_drawn_version = UINT32_MAX;
+    s_aibrief_drawn_page = 0xFF;
+    s_aibrief_last_page_switch_us = 0;
 }

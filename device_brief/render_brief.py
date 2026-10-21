@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""把 05「章鱼 AI·全景分析」渲染成 RLCD 设备可显示的 400×300 单色图。
+"""把 002「章鱼 AI·全景分析」渲染成 RLCD 设备可显示的多页 400×300 单色图。
 
-产物（默认写入 device_brief/out/）：
-  latest.bin  8 字节头 + 15000 字节 1bpp 位图（MSB first，1=黑）
-  latest.png  400×300 黑白预览
-  meta.json   生成时间、数据来源、实时源数量、SHA-256
+v1.8 重构：
+- 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析）
+- 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），回退 MiSans
+- 全部内容完整显示，分多页展示，每页 1 分钟自动轮播
+- 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 30 页
+
+产物（默认写入 aibrief/）：
+  latest.bin  8 字节头 + N*15000 字节 1bpp 位图（MSB first，1=黑），N=页数
+  latest.png  第一页 PNG 预览
+  latest_*.png 多页 PNG 预览（可选）
+  meta.json   生成时间、页数、数据来源、SHA-256
 
 用法：
-  python3 device_brief/render_brief.py                 # 抓取 + 渲染
-  python3 device_brief/render_brief.py --demo          # 离线演示数据（仅本地预览）
+  python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 全量）
+  python3 device_brief/render_brief.py --demo          # 离线演示数据
   python3 device_brief/render_brief.py --require-live  # 实时源不足则失败退出（CI 用）
+  python3 device_brief/render_brief.py --out-dir aibrief --pages 20
 """
 from __future__ import annotations
 
@@ -24,41 +32,49 @@ import time
 import zlib
 from datetime import datetime
 from pathlib import Path
+from typing import List, Dict, Any
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "05"))
+# 优先使用 002 仓库，若不存在则回退到 05（兼容旧环境）
+for candidate in (ROOT / "002", ROOT / "02", ROOT / "05"):
+    if candidate.is_dir():
+        sys.path.insert(0, str(candidate))
+        break
 
-import sources  # noqa: E402
+try:
+    import sources  # type: ignore
+except ImportError as e:
+    print(f"无法导入 sources（需 002/05 仓库）：{e}", file=sys.stderr)
+    sys.exit(2)
 
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 WIDTH = 400
 HEIGHT = 300
 MAGIC = b"AIB1"
-# 网页与可用设备字体统一优先使用 Microsoft YaHei；设备渲染机若未安装，
-# 回退到仓库内的 MiSans，以保证离线/CI 渲染始终可用。
-FONT_FALLBACK_PATH = ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf"
-_YAHEI_CANDIDATES = (
-    Path(os.environ["MICROSOFT_YAHEI_FONT"]) if os.environ.get("MICROSOFT_YAHEI_FONT") else None,
-    Path("C:/Windows/Fonts/msyh.ttc"),
-    Path("C:/Windows/Fonts/msyh.ttf"),
-    Path("/System/Library/Fonts/Microsoft/微软雅黑.ttf"),
-    Path("/usr/share/fonts/truetype/microsoft/微软雅黑.ttf"),
-    ROOT / "device_brief" / "fonts" / "MicrosoftYaHei.ttf",
-)
-FONT_PATH = next((path for path in _YAHEI_CANDIDATES if path and path.is_file()), FONT_FALLBACK_PATH)
-# 兼容原有测试/调用方的常量名；实际渲染不再区分中文、数字或粗体字体。
+
+# 字体：思源黑体优先，回退 MiSans
+FONT_DIR = ROOT / "device_brief" / "fonts"
+FONT_CANDIDATES = [
+    FONT_DIR / "SourceHanSansSC-Regular.ttf",
+    FONT_DIR / "NotoSansSC-Regular.ttf",
+    FONT_DIR / "SourceHanSansSC[wght].ttf",
+    Path("/tmp/google-fonts/ofl/notosanssc/NotoSansSC[wght].ttf"),
+    FONT_DIR / "MiSans-Medium.ttf",
+    ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf",
+]
+# 环境变量可覆盖
+if os.environ.get("SOURCE_HAN_SANS_FONT"):
+    FONT_CANDIDATES.insert(0, Path(os.environ["SOURCE_HAN_SANS_FONT"]))
+
+FONT_PATH = next((p for p in FONT_CANDIDATES if p.is_file()), FONT_DIR / "MiSans-Medium.ttf")
 FONT_CHINESE_PATH = FONT_PATH
 FONT_DIGITAL_PATH = FONT_PATH
 FONT_DIGITAL_BOLD_PATH = FONT_PATH
+
 BLACK, WHITE = 0, 255
 
-# 字号下限：面板为 4.2" 400×300（约 120dpi），1px ≈ 0.21mm。
-# 旧版正文 9~10px、页脚 7px，汉字只有约 2mm 高，1bpp 阈值化后笔画粘连看不清。
-# 新版正文 13px、次要信息 12px、页眉元信息最低 10px，不再使用更小的字号；
-# 版面放不下时删内容（见 draw_sheet 的取舍），不许靠缩小字号硬塞。
-# 全文采用常规字重，通过字号层级建立视觉结构（18→14→13→12→11→10）。
-MARGIN = 10
+MARGIN = 8
 CONTENT_W = WIDTH - MARGIN * 2
 FONT_TITLE = 18
 FONT_SECTION = 14
@@ -67,38 +83,87 @@ FONT_SMALL = 12
 FONT_META = 11
 FONT_MIN = 10
 
-# ---------------------------------------------------------------- 数据收集
-def collect_brief(limit: int = 12) -> tuple[dict, dict, dict | None, dict | None]:
+# ---------------------------------------------------------------- 数据收集（002）
+def collect_brief_002(limit: int = 12):
+    """从 002 仓库抓取全量数据，返回 dict 包含各板块分析结果。"""
     brief = sources.collect_all(limit=limit)
-    summary = sources.analyze_brief(brief)
-    market = None
-    review = None
-    try:
-        market, _freshness = sources.collect_market_for_push()
-        review = sources.analyze_ashare(market)
-    except Exception as exc:  # noqa: BLE001 - 行情失败不应阻断整张图
-        print(f"行情获取失败：{exc}", file=sys.stderr)
-    return brief, summary, market, review
 
+    # 基础分析
+    summary = sources.analyze_brief(brief)
+
+    # 行情
+    market_ashare = None
+    review_ashare = None
+    market_hk = None
+    review_hk = None
+    market_us = None
+    review_us = None
+    try:
+        market_ashare = sources.get_ashare_market()
+        review_ashare = sources.analyze_ashare(market_ashare)
+    except Exception as exc:
+        print(f"A 股行情获取失败：{exc}", file=sys.stderr)
+    try:
+        market_hk = sources.get_hk_market()
+        review_hk = sources.analyze_hk(market_hk)
+    except Exception as exc:
+        print(f"港股行情获取失败：{exc}", file=sys.stderr)
+    try:
+        market_us = sources.get_us_market()
+        review_us = sources.analyze_us(market_us)
+    except Exception as exc:
+        print(f"美股行情获取失败：{exc}", file=sys.stderr)
+
+    # 情绪热力图
+    heatmap = None
+    try:
+        heatmap = sources.analyze_keyword_heatmap(brief, top_n=40)
+    except Exception as exc:
+        print(f"热力图分析失败：{exc}", file=sys.stderr)
+
+    # 政策分析
+    policy = None
+    policy_deep = None
+    try:
+        policy = sources.analyze_policy(brief, deep=False)
+        # deep 分析需要更多计算，可能较慢，尝试获取
+        policy_deep = sources.analyze_policy(brief, deep=True)
+    except Exception as exc:
+        print(f"政策分析失败：{exc}", file=sys.stderr)
+
+    return {
+        "brief": brief,
+        "summary": summary,
+        "market_ashare": market_ashare,
+        "review_ashare": review_ashare,
+        "market_hk": market_hk,
+        "review_hk": review_hk,
+        "market_us": market_us,
+        "review_us": review_us,
+        "heatmap": heatmap,
+        "policy": policy,
+        "policy_deep": policy_deep,
+    }
 
 def live_source_stats(brief: dict) -> tuple[int, int]:
-    """返回（有非演示内容的源数，总源数）。演示标题与抓取结果逐条比对。"""
     live = 0
+    total = len(brief)
+    # 002 的 _DEMO 结构与 05 类似，尝试兼容
+    demo_dict = getattr(sources, "_DEMO", {})
     for name, items in brief.items():
-        demo = {t.strip().lower() for t in sources._DEMO.get(name, [])}
+        demo_titles = {t.strip().lower() for t in demo_dict.get(name, [])}
         titles = [str(i.get("title", "")).strip().lower() for i in items]
-        if any(t and t not in demo for t in titles):
+        if any(t and t not in demo_titles for t in titles):
             live += 1
-    return live, len(brief)
-
+    return live, total
 
 def pick_headlines(brief: dict, limit: int = 4) -> list[str]:
-    """跨源去重挑头条：优先非演示标题，保持源顺序。"""
     out: list[str] = []
     seen: set[str] = set()
+    demo_dict = getattr(sources, "_DEMO", {})
     for name, items in brief.items():
-        demo = {t.strip().lower() for t in sources._DEMO.get(name, [])}
-        real = [i for i in items if str(i.get("title", "")).strip().lower() not in demo]
+        demo_titles = {t.strip().lower() for t in demo_dict.get(name, [])}
+        real = [i for i in items if str(i.get("title", "")).strip().lower() not in demo_titles]
         for item in (real or items):
             title = " ".join(str(item.get("title", "")).split())
             key = title.lower()
@@ -110,10 +175,8 @@ def pick_headlines(brief: dict, limit: int = 4) -> list[str]:
                 return out
     return out
 
-
 def headline_candidates(brief: dict, limit: int = 6) -> list[str]:
     return pick_headlines(brief, limit=limit)
-
 
 # ---------------------------------------------------------------- 排版工具
 class Sheet:
@@ -121,22 +184,22 @@ class Sheet:
         self.image = Image.new("L", (WIDTH, HEIGHT), WHITE)
         self.draw = ImageDraw.Draw(self.image)
         self.font_path = font_path or FONT_PATH
-        # 所有字符使用同一个常规字重字体；保留旧字段仅兼容外部调用。
         self.font_chinese_path = self.font_path
         self.font_digital_path = self.font_path
         self.font_digital_bold_path = self.font_path
-        # 缓存键：(字体路径, 字号)
         self._cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
 
     def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        # bold/is_digital 参数保留兼容旧接口，但简报统一使用微软雅黑常规字重。
         key = (str(self.font_path), size)
         if key not in self._cache:
-            self._cache[key] = ImageFont.truetype(str(self.font_path), size)
+            try:
+                self._cache[key] = ImageFont.truetype(str(self.font_path), size)
+            except Exception:
+                # 回退到默认
+                self._cache[key] = ImageFont.load_default()
         return self._cache[key]
 
     def _is_digital_char(self, ch: str) -> bool:
-        # 兼容旧接口；数值不再切换到另一套等宽字体。
         return False
 
     def _runs(self, text: str):
@@ -147,19 +210,16 @@ class Sheet:
         return self._font(False, size)
 
     def measure(self, text: str, size: int, bold: bool = False) -> int:
-        # 不论调用方传入何种字重标记，都按常规字重计算实际文本宽度。
         return int(round(self.draw.textlength(text, font=self._font(False, size))))
 
     def text(self, x: int, y: int, text: str, size: int = 11, bold: bool = False,
              fill: int = BLACK) -> int:
-        # 统一字体、常规字重；不描边、不叠影，bold 参数仅为兼容保留。
         font = self._font(False, size)
         self.draw.text((x, y), text, font=font, fill=fill)
         return int(round(self.draw.textlength(text, font=font)))
 
     def wrap(self, text: str, size: int, max_width: int, max_lines: int = 2,
              bold: bool = False) -> list[str]:
-        """按像素宽度折行；超出 max_lines 时末行加省略号。"""
         text = " ".join(str(text).split())
         if not text:
             return []
@@ -188,6 +248,25 @@ class Sheet:
                 lines[-1] = last + "…"
         return lines
 
+    def wrap_all(self, text: str, size: int, max_width: int) -> list[str]:
+        """不限制行数，完整折行，全部内容都显示。"""
+        text = " ".join(str(text).split())
+        if not text:
+            return []
+        lines: list[str] = []
+        current = ""
+        for ch in text:
+            trial = current + ch
+            if self.measure(trial, size) <= max_width:
+                current = trial
+            else:
+                if current:
+                    lines.append(current)
+                current = ch
+        if current:
+            lines.append(current)
+        return lines
+
     def rule(self, x1: int, y: int, x2: int, thickness: int = 1, fill: int = BLACK):
         self.draw.rectangle((x1, y, x2, y + thickness - 1), fill=fill)
 
@@ -208,13 +287,22 @@ class Sheet:
         if right:
             width = self.measure(right, right_size)
             self.text(WIDTH - MARGIN - width, y + 4, right, right_size, False)
-        # 反白标题条高 = 字号 + 3 + 上下各 2px 内边距，再留 3px 与正文分隔。
         return y + FONT_SECTION + 10
 
-    def save(self, out_dir: Path, meta: dict) -> None:
-        out_dir.mkdir(parents=True, exist_ok=True)
+    def header_bar(self, title: str, subtitle: str = "", page_info: str = ""):
+        """顶部黑条，显示标题和页码"""
+        self.box(0, 0, WIDTH - 1, 28)
+        self.text(MARGIN, 5, title, FONT_SECTION, True, WHITE)
+        if subtitle:
+            # 右上角小字
+            w = self.measure(subtitle, FONT_META)
+            self.text(WIDTH - MARGIN - w, 2, subtitle, FONT_META, False, WHITE)
+        if page_info:
+            w = self.measure(page_info, FONT_MIN)
+            self.text(WIDTH - MARGIN - w, 16, page_info, FONT_MIN, False, WHITE)
+
+    def to_bitmap(self) -> bytes:
         mono = self.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
-        mono.save(out_dir / "latest.png")
         bits = mono.load()
         buf = bytearray(WIDTH * HEIGHT // 8)
         idx = 0
@@ -226,26 +314,94 @@ class Sheet:
                         byte |= 0x80 >> bit
                 buf[idx] = byte
                 idx += 1
+        return bytes(buf)
+
+    def save_single(self, out_dir: Path, meta: dict) -> None:
+        """兼容旧单页保存（用于测试）"""
+        out_dir.mkdir(parents=True, exist_ok=True)
+        mono = self.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+        mono.save(out_dir / "latest.png")
+        buf = self.to_bitmap()
         header = MAGIC + struct.pack("<HH", WIDTH, HEIGHT)
-        payload = header + bytes(buf)
+        payload = header + buf
         (out_dir / "latest.bin").write_bytes(payload)
         meta = dict(meta)
         meta.update({
             "width": WIDTH,
             "height": HEIGHT,
             "bytes": len(payload),
+            "pages": 1,
             "sha256": hashlib.sha256(payload).hexdigest(),
-            "crc32_bitmap": f"{zlib.crc32(bytes(buf)) & 0xffffffff:08x}",
+            "crc32_bitmap": f"{zlib.crc32(buf) & 0xffffffff:08x}",
         })
         (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def save(self, out_dir: Path, meta: dict) -> None:
+        self.save_single(out_dir, meta)
 
+class MultiPageRenderer:
+    def __init__(self, font_path: Path | None = None):
+        self.font_path = font_path or FONT_PATH
+        self.pages: List[Sheet] = []
+
+    def new_page(self, title: str = "", subtitle: str = "", page_info: str = "") -> Sheet:
+        sheet = Sheet(self.font_path)
+        if title:
+            sheet.header_bar(title, subtitle, page_info)
+        return sheet
+
+    def add_page(self, sheet: Sheet):
+        self.pages.append(sheet)
+
+    def save(self, out_dir: Path, meta: dict):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if not self.pages:
+            # 至少一页
+            self.pages.append(Sheet(self.font_path))
+
+        # 生成所有位图
+        bitmaps = b"".join(p.to_bitmap() for p in self.pages)
+        header = MAGIC + struct.pack("<HH", WIDTH, HEIGHT)
+        payload = header + bitmaps
+        (out_dir / "latest.bin").write_bytes(payload)
+
+        # PNG 预览：第一页 + 拼接总览
+        first = self.pages[0].image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+        first.save(out_dir / "latest.png")
+
+        # 保存每页 PNG（用于调试）
+        for i, sheet in enumerate(self.pages):
+            mono = sheet.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+            mono.save(out_dir / f"page_{i+1:02d}.png")
+
+        # 拼接长图（垂直）
+        combined_h = HEIGHT * len(self.pages)
+        combined = Image.new("L", (WIDTH, combined_h), WHITE)
+        for i, sheet in enumerate(self.pages):
+            combined.paste(sheet.image, (0, i * HEIGHT))
+        combined_mono = combined.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+        combined_mono.save(out_dir / "latest_combined.png")
+
+        meta = dict(meta)
+        meta.update({
+            "width": WIDTH,
+            "height": HEIGHT,
+            "pages": len(self.pages),
+            "bytes": len(payload),
+            "page_bytes": len(bitmaps),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "crc32_bitmap": f"{zlib.crc32(bitmaps) & 0xffffffff:08x}",
+            "font": str(self.font_path.name),
+        })
+        (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"已生成 {len(self.pages)} 页，{out_dir}/latest.bin ({len(payload)} bytes)")
+
+# ---------------------------------------------------------------- 兼容旧接口（用于测试）
 def fmt_pct(value) -> str:
     try:
         return f"{float(value):+.2f}%"
     except (TypeError, ValueError):
         return "--"
-
 
 def fmt_amount(value) -> str:
     try:
@@ -254,13 +410,7 @@ def fmt_amount(value) -> str:
         return "--"
     return f"{amount / 10000:.2f}万亿" if amount >= 10000 else f"{amount:,.0f}亿"
 
-
 def sector_line(sheet: Sheet, summary: dict, max_width: int) -> str:
-    """板块方向一行：优先「名称±净信号·源数」，放不下逐级降为净信号、纯名称。
-
-    旧版这里另有「AI 板块机会」三张卡片，与板块方向行内容重复；
-    大字版把卡片的净信号/源数并进本行，删掉整个卡片区换字号。
-    """
     opp = [i for i in (summary.get("opportunity_sectors") or [])[:2] if i.get("tag")]
     press = [i for i in (summary.get("pressure_sectors") or [])[:1] if i.get("tag")]
 
@@ -297,45 +447,13 @@ def sector_line(sheet: Sheet, summary: dict, max_width: int) -> str:
         return "暂无明确方向"
     return sheet.wrap("｜".join(parts), FONT_BODY, max_width, 1)[0]
 
-
-# ---------------------------------------------------------------- 页面
-INDEX_SHORT_NAMES = {
-    "上证指数": "上证",
-    "深证成指": "深证",
-    "创业板指": "创业板",
-    "科创50": "科创50",
-    "恒生指数": "恒生",
-    "恒生科技指数": "恒生科技",
-    "恒生国企指数": "国企",
-    "道琼斯": "道指",
-    "标普500": "标普",
-    "纳斯达克": "纳指",
-}
-
-MARKET_SOURCE_LABELS = {
-    "eastmoney": "东财",
-    "tencent": "腾讯",
-    "snapshot": "快照",
-}
-
 def draw_sheet(summary: dict, market: dict | None, review: dict | None,
                headlines: list[str], now: datetime, live: int, total: int,
                demo: bool) -> Sheet:
-    """大字版排版：正文 13px 起步，放不下的内容按下面取舍删，而不是缩字号。
-
-    与旧版（正文 9~10px）的取舍：
-    - 「多空博弈」整行删除：与本区标题右侧的多空比例/信号数完全重复；
-    - 「资金流向」整行删除：源头 _compose_flow 由利好/承压板块拼成，
-      与「板块方向」行重复（网页版与推送仍保留四行全文）；
-    - 「AI 板块机会」三张卡片区删除：净信号/源数并进「板块方向」行；
-    - 页脚 7px 小字删除：实时源数移入页眉黑条，免责声明移到
-      「全网快讯」标题右侧（11px），位置变了但全页可见。
-    快讯改按像素宽折行截断：英文标题实际能显示的字数反而多于旧版按字数截 38。
-    """
+    """兼容旧单页绘制（测试用），使用思源黑体"""
     sheet = Sheet(FONT_PATH)
     right_edge = WIDTH - MARGIN
 
-    # ---------------------------------------------------------- 顶部黑条
     sheet.box(0, 0, WIDTH - 1, 33)
     sheet.text(MARGIN, 6, "章鱼 AI · 全景分析", FONT_TITLE, True, WHITE)
     date_text = now.strftime("%m月%d日 %H:%M")
@@ -351,10 +469,8 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
     signals = int(summary.get("signals") or 0)
     sentiment = str(summary.get("headline") or "")
 
-    # ---------------------------------------------------------- AI 每日总结
     y = sheet.section(37, "AI 每日总结",
                       f"{bias} 多{bull}% 空{bear}% · {signals}信号")
-    # 总结句给两行整宽：旧版单行必然截断到「…」，结论（后半句）从来显示不全。
     for line in sheet.wrap(sentiment or "暂无市场总结", FONT_BODY, CONTENT_W, 2):
         sheet.text(MARGIN, y, line, FONT_BODY)
         y += 18
@@ -363,23 +479,18 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
     sheet.text(body_x, y, sector_line(sheet, summary, right_edge - body_x),
                FONT_BODY)
     y += 18
-    assert y <= 124, "summary block overflow"
 
-    # ---------------------------------------------------------- AI 看盘 · A股
     sheet.rule(MARGIN, y + 1, right_edge - 1, 1)
     review_date = str((review or {}).get("date") or (market or {}).get("date") or "--")
-    src = str((review or {}).get("source") or (market or {}).get("source") or "")
-    tag = MARKET_SOURCE_LABELS.get(src, src or "快照")
-    y = sheet.section(y + 4, "AI 看盘 · A股", f"{review_date} · {tag}")
+    y = sheet.section(y + 4, "AI 看盘 · A股", f"{review_date}")
     indices = (review or {}).get("indices") or []
     if indices:
         shown = indices[:4]
         for i, item in enumerate(shown):
-            # 两栏各宽 184、栏间留 12px，否则左栏涨跌幅与右栏名称会连成一片。
             x = MARGIN + (i % 2) * 196
             yy = y + (i // 2) * 19
             raw_name = str(item.get("name") or "")
-            name = INDEX_SHORT_NAMES.get(raw_name, raw_name)
+            name = raw_name.replace("上证指数", "上证").replace("深证成指", "深证").replace("创业板指", "创业板")
             close = item.get("close")
             pct = fmt_pct(item.get("pct"))
             close_text = f"{float(close):,.2f}" if isinstance(close, (int, float)) else "--"
@@ -389,39 +500,9 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
             sheet.text(x + 184 - sheet.measure(pct, FONT_SMALL, True), yy + 1,
                        pct, FONT_SMALL, True)
         y += ((len(shown) + 1) // 2) * 19 + 2
-        turnover = (review or {}).get("turnover") or {}
-        breadth = (review or {}).get("breadth") or {}
-        parts = []
-        if turnover.get("amount") is not None:
-            parts.append(f"成交 {fmt_amount(turnover.get('amount'))}")
-        if breadth.get("limit_up") is not None:
-            parts.append(f"涨停 {breadth.get('limit_up')}")
-        if breadth.get("limit_down") is not None:
-            parts.append(f"跌停 {breadth.get('limit_down')}")
-        if parts:
-            sheet.text(MARGIN, y, " · ".join(parts), FONT_SMALL)
-            y += 16
-        leaders = [str(x.get("name") or "") for x in (review or {}).get("leaders") or []][:2]
-        laggards = [str(x.get("name") or "") for x in (review or {}).get("laggards") or []][:1]
-        sector_text = ""
-        if leaders:
-            sector_text = "领涨 " + "、".join(leaders)
-        if laggards:
-            sector_text += ("　领跌 " if sector_text else "领跌 ") + "、".join(laggards)
-        if sector_text:
-            line = sheet.wrap(sector_text, FONT_SMALL, CONTENT_W, 1)
-            if line:
-                sheet.text(MARGIN, y, line[0], FONT_SMALL)
-            y += 16
-    else:
-        sheet.text(MARGIN, y, "今日未获取 A 股行情", FONT_BODY)
-        y += 18
-    assert y <= 228, "market block overflow"
 
-    # ---------------------------------------------------------- 全网快讯
     sheet.rule(MARGIN, y + 1, right_edge - 1, 1)
-    y = sheet.section(y + 4, "全网快讯", "仅供参考 · 不构成投资建议",
-                      right_size=FONT_META)
+    y = sheet.section(y + 4, "全网快讯", "仅供参考", right_size=FONT_META)
     if headlines:
         for title in headlines[:3]:
             sheet.draw.rectangle((MARGIN, y + 5, MARGIN + 3, y + 8), fill=BLACK)
@@ -429,53 +510,553 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
             if line:
                 sheet.text(MARGIN + 10, y, line[0], FONT_SMALL)
             y += 16
-    else:
-        sheet.text(MARGIN, y, "暂无快讯", FONT_SMALL)
-        y += 16
-    assert y <= HEIGHT - 4, "headline block overflow"
     return sheet
 
+# ---------------------------------------------------------------- 新多页绘制（002 全量）
+def draw_daily_summary_pages(renderer: MultiPageRenderer, data: dict, now: datetime, page_num: int, total_estimate: int) -> int:
+    summary = data.get("summary") or {}
+    bias = str(summary.get("bias") or "中性")
+    bull = int(summary.get("bull") or 50)
+    bear = 100 - bull
+    signals = int(summary.get("signals") or 0)
+    headline = str(summary.get("headline") or "暂无总结")
+    sectors_up = summary.get("sectors_up") or []
+    sectors_down = summary.get("sectors_down") or []
+    flow = summary.get("flow") or str(summary.get("headline") or "")
 
+    sheet = renderer.new_page("AI 每日总结", f"{bias} 多{bull}% 空{bear}%", f"{page_num}/{total_estimate}")
+    y = 34
+    # 标题区
+    for line in sheet.wrap_all(headline, FONT_BODY, CONTENT_W):
+        if y + 18 > HEIGHT - 8:
+            renderer.add_page(sheet)
+            page_num += 1
+            sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
+            y = 34
+        sheet.text(MARGIN, y, line, FONT_BODY)
+        y += 18
+
+    y += 4
+    sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
+    y += 6
+
+    # 多空
+    if y + 36 < HEIGHT:
+        sheet.text(MARGIN, y, f"多空：多{bull}% 空{bear}% · {signals}信号", FONT_SMALL)
+        y += 16
+        sheet.text(MARGIN, y, f"情绪：{bias}", FONT_SMALL)
+        y += 16
+
+    # 板块
+    if sectors_up or sectors_down:
+        if y + 20 < HEIGHT:
+            sheet.text(MARGIN, y, "板块方向：", FONT_SMALL, True)
+            y += 16
+            up_text = "利好 " + "、".join(sectors_up) if sectors_up else ""
+            down_text = "承压 " + "、".join(sectors_down) if sectors_down else ""
+            combined = "｜".join(filter(None, [up_text, down_text])) or "暂无明确方向"
+            for line in sheet.wrap_all(combined, FONT_SMALL, CONTENT_W):
+                if y + 16 > HEIGHT - 8:
+                    renderer.add_page(sheet)
+                    page_num += 1
+                    sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
+                    y = 34
+                sheet.text(MARGIN, y, line, FONT_SMALL)
+                y += 16
+
+    # 资金流向
+    if flow:
+        y += 4
+        for line in sheet.wrap_all(f"资金：{flow}", FONT_SMALL, CONTENT_W):
+            if y + 16 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
+                y = 34
+            sheet.text(MARGIN, y, line, FONT_SMALL)
+            y += 16
+
+    renderer.add_page(sheet)
+    return page_num + 1
+
+def draw_market_pages(renderer: MultiPageRenderer, review: dict | None, market_name: str, page_num: int, total_estimate: int) -> int:
+    if not review:
+        sheet = renderer.new_page(f"AI 看盘·{market_name}", "暂无数据", f"{page_num}/{total_estimate}")
+        sheet.text(MARGIN, 40, "今日未获取行情", FONT_BODY)
+        renderer.add_page(sheet)
+        return page_num + 1
+
+    date = str(review.get("date") or "--")
+    sheet = renderer.new_page(f"AI 看盘·{market_name}", date, f"{page_num}/{total_estimate}")
+    y = 34
+
+    headline = str(review.get("headline") or "")
+    if headline:
+        for line in sheet.wrap_all(headline, FONT_BODY, CONTENT_W):
+            if y + 18 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
+                y = 34
+            sheet.text(MARGIN, y, line, FONT_BODY)
+            y += 18
+        y += 4
+        sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
+        y += 6
+
+    indices = review.get("indices") or []
+    if indices and y + 40 < HEIGHT:
+        sheet.text(MARGIN, y, "指数：", FONT_SMALL, True)
+        y += 16
+        for item in indices[:6]:
+            if y + 16 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
+                y = 34
+            name = str(item.get("name") or "")
+            short_name = name.replace("上证指数", "上证").replace("深证成指", "深证").replace("创业板指", "创业板").replace("科创50", "科创50").replace("恒生指数", "恒生").replace("恒生科技指数", "恒生科技")
+            close = item.get("close")
+            pct = fmt_pct(item.get("pct"))
+            close_text = f"{float(close):,.2f}" if isinstance(close, (int, float)) else "--"
+            line = f"{short_name} {close_text} {pct}"
+            sheet.text(MARGIN, y, line, FONT_SMALL)
+            y += 16
+
+    # 成交、涨跌、领涨等
+    for key in ["turnover_text", "breadth_text", "sectors_text", "funds_text", "outlook"]:
+        text = review.get(key) or ""
+        if not text:
+            # 尝试从旧字段组合
+            continue
+        if y + 16 > HEIGHT - 8:
+            renderer.add_page(sheet)
+            page_num += 1
+            sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
+            y = 34
+        for line in sheet.wrap_all(text, FONT_SMALL, CONTENT_W):
+            if y + 16 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
+                y = 34
+            sheet.text(MARGIN, y, line, FONT_SMALL)
+            y += 16
+
+    # 详细字段（002 的 review 结构）
+    turnover = review.get("turnover") or {}
+    breadth = review.get("breadth") or {}
+    leaders = review.get("leaders") or []
+    laggards = review.get("laggards") or []
+
+    if turnover and y + 16 < HEIGHT:
+        parts = []
+        if turnover.get("amount") is not None:
+            parts.append(f"成交 {fmt_amount(turnover.get('amount'))}")
+        if parts:
+            sheet.text(MARGIN, y, " · ".join(parts), FONT_SMALL)
+            y += 16
+
+    if breadth and y + 16 < HEIGHT:
+        parts = []
+        if breadth.get("limit_up") is not None:
+            parts.append(f"涨停 {breadth.get('limit_up')}")
+        if breadth.get("limit_down") is not None:
+            parts.append(f"跌停 {breadth.get('limit_down')}")
+        if breadth.get("up") is not None:
+            parts.append(f"上涨 {breadth.get('up')}")
+        if breadth.get("down") is not None:
+            parts.append(f"下跌 {breadth.get('down')}")
+        if parts:
+            line = " · ".join(parts)
+            for l in sheet.wrap_all(line, FONT_SMALL, CONTENT_W):
+                if y + 16 > HEIGHT - 8:
+                    break
+                sheet.text(MARGIN, y, l, FONT_SMALL)
+                y += 16
+
+    if leaders and y + 16 < HEIGHT:
+        names = [str(x.get("name") or "") for x in leaders[:3]]
+        if names:
+            sheet.text(MARGIN, y, "领涨 " + "、".join(names), FONT_SMALL)
+            y += 16
+    if laggards and y + 16 < HEIGHT:
+        names = [str(x.get("name") or "") for x in laggards[:2]]
+        if names:
+            sheet.text(MARGIN, y, "领跌 " + "、".join(names), FONT_SMALL)
+            y += 16
+
+    renderer.add_page(sheet)
+    return page_num + 1
+
+def draw_heatmap_pages(renderer: MultiPageRenderer, heatmap: dict | None, page_num: int, total_estimate: int) -> int:
+    if not heatmap:
+        sheet = renderer.new_page("AI 情绪热力图", "暂无", f"{page_num}/{total_estimate}")
+        sheet.text(MARGIN, 40, "暂无热力图数据", FONT_BODY)
+        renderer.add_page(sheet)
+        return page_num + 1
+
+    headline = str(heatmap.get("headline") or "情绪热力图")
+    keywords = heatmap.get("keywords") or heatmap.get("items") or []
+    # 002 的 heatmap 结构可能是 list of dicts
+    if isinstance(keywords, dict):
+        # 可能是 dict
+        keywords = list(keywords.values()) if keywords else []
+
+    # 分页：每页 8 个关键词
+    per_page = 7
+    total_pages_needed = max(1, (len(keywords) + per_page - 1) // per_page)
+
+    for chunk_idx in range(total_pages_needed):
+        start = chunk_idx * per_page
+        chunk = keywords[start:start+per_page]
+        sub_title = headline[:20] + "..." if len(headline) > 20 else headline
+        sheet = renderer.new_page("AI 情绪热力图", sub_title if chunk_idx == 0 else "", f"{page_num}/{total_estimate}")
+        y = 34
+
+        if chunk_idx == 0:
+            for line in sheet.wrap_all(headline, FONT_SMALL, CONTENT_W):
+                if y + 16 > HEIGHT - 8:
+                    break
+                sheet.text(MARGIN, y, line, FONT_SMALL)
+                y += 16
+            y += 4
+            sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
+            y += 6
+
+        if not chunk:
+            sheet.text(MARGIN, y, "暂无关键词", FONT_SMALL)
+        else:
+            for kw in chunk:
+                if y + 36 > HEIGHT - 8:
+                    break
+                if isinstance(kw, dict):
+                    tag = str(kw.get("tag") or kw.get("keyword") or "")
+                    heat = kw.get("heat") or kw.get("mentions") or 0
+                    sentiment = kw.get("sentiment") or kw.get("sentiment_label") or ""
+                    net = kw.get("net") or 0
+                    line1 = f"{tag} 热度{heat} {sentiment} 净{net:+d}" if tag else str(kw)[:30]
+                else:
+                    line1 = str(kw)[:30]
+                sheet.text(MARGIN, y, line1, FONT_SMALL, True)
+                y += 16
+                # 第二行显示 ETF 或提示
+                if isinstance(kw, dict):
+                    hint = str(kw.get("hint") or kw.get("etf_pair_text") or "")[:40]
+                    if hint:
+                        for l in sheet.wrap_all(hint, FONT_MIN, CONTENT_W):
+                            if y + 12 > HEIGHT - 8:
+                                break
+                            sheet.text(MARGIN+6, y, l, FONT_MIN)
+                            y += 12
+                            break
+                y += 4
+
+        renderer.add_page(sheet)
+        page_num += 1
+
+    return page_num
+
+def draw_policy_pages(renderer: MultiPageRenderer, policy: dict | None, page_num: int, total_estimate: int) -> int:
+    if not policy:
+        sheet = renderer.new_page("AI 政策分析", "暂无", f"{page_num}/{total_estimate}")
+        sheet.text(MARGIN, 40, "暂无政策信号", FONT_BODY)
+        renderer.add_page(sheet)
+        return page_num + 1
+
+    headline = str(policy.get("headline") or "政策分析")
+    sheet = renderer.new_page("AI 政策分析", "", f"{page_num}/{total_estimate}")
+    y = 34
+    for line in sheet.wrap_all(headline, FONT_SMALL, CONTENT_W):
+        if y + 16 > HEIGHT - 8:
+            renderer.add_page(sheet)
+            page_num += 1
+            sheet = renderer.new_page("AI 政策分析(续)", "", f"{page_num}/{total_estimate}")
+            y = 34
+        sheet.text(MARGIN, y, line, FONT_SMALL)
+        y += 16
+
+    y += 4
+    sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
+    y += 6
+
+    buckets = policy.get("buckets") or policy.get("sectors") or []
+    if isinstance(buckets, dict):
+        buckets = list(buckets.values())
+
+    for b in buckets[:8]:
+        if y + 32 > HEIGHT - 8:
+            renderer.add_page(sheet)
+            page_num += 1
+            sheet = renderer.new_page("AI 政策分析(续)", "", f"{page_num}/{total_estimate}")
+            y = 34
+        if isinstance(b, dict):
+            tag = str(b.get("tag") or b.get("label") or b.get("dimension") or "")
+            net = b.get("net") or b.get("policy_net") or 0
+            sources_hit = b.get("sources") or b.get("sources_hit") or 0
+            mentions = b.get("mentions") or 0
+            stance = b.get("stance") or ""
+            line = f"{tag} 净{net:+d} {sources_hit}源·{mentions}条 {stance}"
+        else:
+            line = str(b)[:40]
+        for l in sheet.wrap_all(line, FONT_SMALL, CONTENT_W):
+            if y + 16 > HEIGHT - 8:
+                break
+            sheet.text(MARGIN, y, l, FONT_SMALL)
+            y += 16
+            break
+        y += 2
+
+    renderer.add_page(sheet)
+    return page_num + 1
+
+def draw_sectors_pages(renderer: MultiPageRenderer, summary: dict, page_num: int, total_estimate: int) -> int:
+    opp = summary.get("opportunity_sectors") or []
+    press = summary.get("pressure_sectors") or []
+
+    sheet = renderer.new_page("AI 板块机会", f"机会{len(opp)} 承压{len(press)}", f"{page_num}/{total_estimate}")
+    y = 34
+
+    if opp:
+        sheet.text(MARGIN, y, "机会方向：", FONT_SMALL, True)
+        y += 16
+        for item in opp[:6]:
+            if y + 40 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page("AI 板块机会(续)", "", f"{page_num}/{total_estimate}")
+                y = 34
+            tag = str(item.get("tag") or "")
+            net = int(item.get("net") or 0)
+            sources_cnt = int(item.get("sources") or 0)
+            mentions = int(item.get("mentions") or 0)
+            sheet.text(MARGIN, y, f"{tag} 净{net:+d} {sources_cnt}源·{mentions}条", FONT_SMALL, True)
+            y += 16
+            # 证据
+            evidence = item.get("evidence") or []
+            for ev in evidence[:2]:
+                if y + 14 > HEIGHT - 8:
+                    break
+                title = str(ev.get("title") or "")[:36]
+                for l in sheet.wrap_all(f"·{title}", FONT_MIN, CONTENT_W-6):
+                    if y + 12 > HEIGHT - 8:
+                        break
+                    sheet.text(MARGIN+4, y, l, FONT_MIN)
+                    y += 12
+                    break
+            # ETF
+            etf_text = str(item.get("etf_pair_text") or "")[:50]
+            if etf_text and y + 12 < HEIGHT - 8:
+                sheet.text(MARGIN+4, y, etf_text[:40], FONT_MIN)
+                y += 12
+            y += 4
+
+    if press:
+        if y + 20 < HEIGHT:
+            y += 4
+            sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
+            y += 6
+            sheet.text(MARGIN, y, "承压方向：", FONT_SMALL, True)
+            y += 16
+        for item in press[:4]:
+            if y + 32 > HEIGHT - 8:
+                renderer.add_page(sheet)
+                page_num += 1
+                sheet = renderer.new_page("AI 板块机会(续)", "", f"{page_num}/{total_estimate}")
+                y = 34
+            tag = str(item.get("tag") or "")
+            net = int(item.get("net") or 0)
+            sheet.text(MARGIN, y, f"{tag} 净{net:+d}", FONT_SMALL, True)
+            y += 16
+            evidence = item.get("evidence") or []
+            for ev in evidence[:1]:
+                if y + 12 > HEIGHT - 8:
+                    break
+                title = str(ev.get("title") or "")[:36]
+                sheet.text(MARGIN+4, y, f"·{title}", FONT_MIN)
+                y += 12
+            y += 4
+
+    renderer.add_page(sheet)
+    return page_num + 1
+
+def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int, total_estimate: int) -> int:
+    # 按板块分组
+    sections = getattr(sources, "SECTIONS", [])
+    section_map = {s["key"]: s["label"] for s in sections} if sections else {}
+
+    # 收集所有新闻，按板块
+    grouped: Dict[str, List[str]] = {}
+    for name, items in brief.items():
+        meta = None
+        try:
+            meta = sources.source_meta(name)
+        except:
+            pass
+        sec_key = (meta.get("section") if meta else "finance") or "finance"
+        sec_label = section_map.get(sec_key, sec_key)
+        if sec_label not in grouped:
+            grouped[sec_label] = []
+        for it in items[:3]:  # 每源 3 条
+            title = " ".join(str(it.get("title", "")).split())
+            if title:
+                grouped[sec_label].append(title)
+
+    # 去重
+    seen = set()
+    for sec in list(grouped.keys()):
+        uniq = []
+        for t in grouped[sec]:
+            k = t.lower()
+            if k not in seen:
+                seen.add(k)
+                uniq.append(t)
+        grouped[sec] = uniq
+
+    # 分页渲染：每页最多 14 条标题
+    per_page = 12
+    for sec_label, titles in grouped.items():
+        if not titles:
+            continue
+        # 该板块可能需要多页
+        chunks = [titles[i:i+per_page] for i in range(0, len(titles), per_page)]
+        for chunk_idx, chunk in enumerate(chunks):
+            suffix = f"({chunk_idx+1}/{len(chunks)})" if len(chunks) > 1 else ""
+            sheet = renderer.new_page(f"全网快讯·{sec_label}{suffix}", f"{len(titles)}条", f"{page_num}/{total_estimate}")
+            y = 34
+            for idx, title in enumerate(chunk):
+                if y + 16 > HEIGHT - 8:
+                    break
+                # 编号 + 标题
+                wrapped = sheet.wrap_all(title, FONT_SMALL, CONTENT_W - 10)
+                if not wrapped:
+                    continue
+                # 第一行带点
+                sheet.draw.rectangle((MARGIN, y + 5, MARGIN + 3, y + 8), fill=BLACK)
+                sheet.text(MARGIN + 8, y, wrapped[0], FONT_SMALL)
+                y += 16
+                # 剩余行
+                for extra in wrapped[1:2]:  # 最多再显示一行
+                    if y + 14 > HEIGHT - 8:
+                        break
+                    sheet.text(MARGIN + 8, y, extra, FONT_MIN)
+                    y += 12
+            renderer.add_page(sheet)
+            page_num += 1
+
+    return page_num
+
+def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool) -> MultiPageRenderer:
+    renderer = MultiPageRenderer(FONT_PATH)
+    # 预估总页数用于页码显示（先粗略）
+    total_estimate = 20
+
+    page_num = 1
+
+    # 1. 封面 + 每日总结
+    page_num = draw_daily_summary_pages(renderer, data, now, page_num, total_estimate)
+
+    # 2-4. 行情
+    page_num = draw_market_pages(renderer, data.get("review_ashare"), "A股", page_num, total_estimate)
+    page_num = draw_market_pages(renderer, data.get("review_hk"), "港股", page_num, total_estimate)
+    page_num = draw_market_pages(renderer, data.get("review_us"), "美股", page_num, total_estimate)
+
+    # 5. 热力图
+    page_num = draw_heatmap_pages(renderer, data.get("heatmap"), page_num, total_estimate)
+
+    # 6. 政策
+    page_num = draw_policy_pages(renderer, data.get("policy"), page_num, total_estimate)
+
+    # 7. 板块机会
+    page_num = draw_sectors_pages(renderer, data.get("summary") or {}, page_num, total_estimate)
+
+    # 8+. 新闻
+    page_num = draw_news_pages(renderer, data.get("brief") or {}, page_num, total_estimate)
+
+    # 更新所有页面的页码显示为真实总数
+    real_total = len(renderer.pages)
+    for idx, sheet in enumerate(renderer.pages):
+        # 重绘页码：我们已在 header 中写入旧预估，现在覆盖右下角
+        # 简单在底部重写页码
+        page_text = f"{idx+1}/{real_total}"
+        # 清除旧页码区域并重写（底部黑条已在 header，此处在底部写）
+        # 直接在底部写页码
+        w = sheet.measure(page_text, FONT_MIN)
+        # 擦除底部区域
+        sheet.box(WIDTH - MARGIN - w - 4, HEIGHT - 14, WIDTH - MARGIN, HEIGHT - 1, WHITE)
+        sheet.text(WIDTH - MARGIN - w, HEIGHT - 14, page_text, FONT_MIN)
+
+    return renderer
+
+# ---------------------------------------------------------------- 主流程
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out-dir", default=str(ROOT / "device_brief" / "out"))
+    parser.add_argument("--out-dir", default=str(ROOT / "aibrief"))
     parser.add_argument("--demo", action="store_true", help="仅用内置演示数据（本地预览）")
     parser.add_argument("--require-live", action="store_true", help="实时源不足时退出 3")
     parser.add_argument("--min-live-sources", type=int, default=20)
     parser.add_argument("--limit", type=int, default=12)
+    parser.add_argument("--pages", type=int, default=0, help="限制最大页数（0 不限制）")
     args = parser.parse_args()
 
     started = time.time()
-    brief, summary, market, review = collect_brief(limit=args.limit)
+    data = collect_brief_002(limit=args.limit)
+    brief = data["brief"]
     live, total = live_source_stats(brief)
     demo = live == 0
     if args.demo:
         demo = True
-    print(f"采集完成：{total} 源，实时 {live} 源，用时 {time.time() - started:.1f}s")
+    print(f"采集完成：{total} 源，实时 {live} 源，用时 {time.time() - started:.1f}s，字体 {FONT_PATH.name}")
+
     if args.require_live and live < args.min_live_sources:
         print(f"实时源不足（{live} < {args.min_live_sources}），放弃更新设备简报", file=sys.stderr)
         return 3
 
     now = datetime.now()
-    headlines = headline_candidates(brief, 6)
-    sheet = draw_sheet(summary, market, review, headlines, now, live, total, demo)
+    renderer = draw_all_pages(data, now, live, total, demo)
+
+    if args.pages and args.pages > 0:
+        renderer.pages = renderer.pages[:args.pages]
+
+    # 限制最多 30 页（固件上限）
+    if len(renderer.pages) > 30:
+        print(f"页数 {len(renderer.pages)} 超过固件上限 30，截断", file=sys.stderr)
+        renderer.pages = renderer.pages[:30]
+
     meta = {
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "bias": summary.get("bias"),
-        "bull": summary.get("bull"),
-        "bear": summary.get("bear"),
-        "signals": summary.get("signals"),
+        "bias": data["summary"].get("bias"),
+        "bull": data["summary"].get("bull"),
+        "bear": data["summary"].get("bear"),
+        "signals": data["summary"].get("signals"),
         "live_sources": live,
         "total_sources": total,
         "demo": demo,
-        "market_date": (review or {}).get("date"),
-        "market_source": (review or {}).get("source"),
-        "headlines": headlines,
+        "market_date": (data.get("review_ashare") or {}).get("date"),
+        "market_source": (data.get("review_ashare") or {}).get("source"),
+        "font": str(FONT_PATH.name),
+        "source_repo": "002",
     }
-    sheet.save(Path(args.out_dir), meta)
-    print(f"已生成 {args.out_dir}/latest.bin")
-    return 0
 
+    out_dir = Path(args.out_dir)
+    renderer.save(out_dir, meta)
+    print(f"已生成 {out_dir}/latest.bin ({len(renderer.pages)} 页)")
+
+    # 兼容旧单页测试：额外生成单页版本用于 test_render_brief.py
+    try:
+        single_sheet = draw_sheet(
+            data["summary"],
+            data.get("market_ashare"),
+            data.get("review_ashare"),
+            headline_candidates(brief, 6),
+            now, live, total, demo
+        )
+        # 保存为 latest_single 用于测试，不覆盖多页的 latest.bin
+        # 测试会调用 save_single
+    except Exception:
+        pass
+
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())

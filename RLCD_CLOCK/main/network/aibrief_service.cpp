@@ -1,4 +1,5 @@
 // 下载、校验并发布章鱼 AI 简报页位图（二进制安全，不经文本解码）。
+// v1.8+ 支持多页：单文件包含多张 400x300 位图，设备每分钟轮播。
 #include "aibrief_service.h"
 
 #include "aibrief_contract.h"
@@ -20,14 +21,14 @@
 namespace {
 #define AIBRIEF_HTTP_OPEN_FAILED_FORMAT "aibrief http failed err=%s attempt=%d"
 #define AIBRIEF_HTTP_STATUS_FORMAT "aibrief http status=%d bytes=%u"
-#define AIBRIEF_PARSE_FAILED_FORMAT "aibrief parse failed status=%d bytes=%u"
-#define AIBRIEF_UPDATED_LOG "aibrief bitmap updated"
+#define AIBRIEF_PARSE_FAILED_FORMAT "aibrief parse failed status=%d bytes=%u pages=%u"
+#define AIBRIEF_UPDATED_LOG "aibrief bitmap updated pages=%u"
 #define AIBRIEF_BUFFER_ALLOC_FAILED_LOG "aibrief download buffer alloc failed"
 #define AIBRIEF_LOCK_FAILED_LOG "aibrief http lock unavailable"
 #define AIBRIEF_CLIENT_INIT_FAILED_LOG "aibrief http client init failed"
 
 constexpr const char *kAibriefRejectedLog = "aibrief bitmap rejected";
-constexpr int kAibriefHttpTimeoutMs = 15 * 1000;
+constexpr int kAibriefHttpTimeoutMs = 30 * 1000; // 多页文件更大，超时放宽到 30s
 
 struct DownloadContext {
     uint8_t *data = nullptr;
@@ -103,11 +104,21 @@ esp_err_t http_get_binary(const char *url,
     return result;
 }
 
-aibrief::ParseResult parse_download(const uint8_t *body,
-                                    size_t body_len,
-                                    uint8_t *bitmap)
+struct ParsedAibrief {
+    aibrief::ParseResult result = aibrief::ParseResult::kShortPayload;
+    size_t pages = 0;
+};
+
+ParsedAibrief parse_download(const uint8_t *body,
+                             size_t body_len,
+                             uint8_t *bitmaps,
+                             size_t bitmaps_capacity,
+                             size_t *out_pages)
 {
-    return aibrief::parse_payload(body, body_len, bitmap);
+    ParsedAibrief out;
+    out.result = aibrief::parse_payload_multi(body, body_len, bitmaps, bitmaps_capacity, out_pages);
+    out.pages = out_pages ? *out_pages : 0;
+    return out;
 }
 
 bool settle_before_retry()
@@ -120,13 +131,13 @@ bool perform_aibrief_update()
 {
     time_t now = 0;
     time(&now);
-    ScopedHeapBuffer<uint8_t> body(aibrief::kPayloadBytes,
+    ScopedHeapBuffer<uint8_t> body(aibrief::kMaxPayloadBytes,
                                    HeapBufferInit::kZeroed,
                                    HeapBufferStorage::kPsramPreferred);
-    ScopedHeapBuffer<uint8_t> bitmap(aibrief::kBitmapBytes,
-                                     HeapBufferInit::kZeroed,
-                                     HeapBufferStorage::kPsramPreferred);
-    if (!body || !bitmap) {
+    ScopedHeapBuffer<uint8_t> bitmaps(aibrief::kMaxBitmapBytes,
+                                      HeapBufferInit::kZeroed,
+                                      HeapBufferStorage::kPsramPreferred);
+    if (!body || !bitmaps) {
         ESP_LOGW(TAG, "%s", AIBRIEF_BUFFER_ALLOC_FAILED_LOG);
         aibrief_publish_failure(now);
         return false;
@@ -142,21 +153,25 @@ bool perform_aibrief_update()
                 kAibriefBackupUrl, body.get(), body.size(), &received);
         }
         const bool downloaded = download_err == ESP_OK;
-        const aibrief::ParseResult parsed =
-            downloaded ? parse_download(body.get(), received, bitmap.get())
-                       : aibrief::ParseResult::kShortPayload;
-        if (downloaded && parsed == aibrief::ParseResult::kOk) {
-            if (!aibrief_publish_bitmap(bitmap.get(), bitmap.size(), true, now)) {
+        size_t pages = 0;
+        const ParsedAibrief parsed =
+            downloaded ? parse_download(body.get(), received, bitmaps.get(), bitmaps.size(), &pages)
+                       : ParsedAibrief{};
+        if (downloaded && parsed.result == aibrief::ParseResult::kOk && pages > 0) {
+            const uint8_t page_count = static_cast<uint8_t>(pages);
+            const size_t bitmap_len = pages * aibrief::kBitmapBytes;
+            if (!aibrief_publish_bitmaps(bitmaps.get(), bitmap_len, page_count, true, now)) {
                 ESP_LOGW(TAG, "%s", kAibriefRejectedLog);
                 return false;
             }
-            ESP_LOGI(TAG, "%s", AIBRIEF_UPDATED_LOG);
+            ESP_LOGI(TAG, AIBRIEF_UPDATED_LOG, static_cast<unsigned>(pages));
             return true;
         }
         if (downloaded) {
             ESP_LOGW(TAG, AIBRIEF_PARSE_FAILED_FORMAT,
-                     static_cast<int>(parsed),
-                     static_cast<unsigned>(received));
+                     static_cast<int>(parsed.result),
+                     static_cast<unsigned>(received),
+                     static_cast<unsigned>(parsed.pages));
         } else {
             ESP_LOGW(TAG, AIBRIEF_HTTP_OPEN_FAILED_FORMAT,
                      esp_err_to_name(download_err), attempt);

@@ -1,4 +1,4 @@
-// 校验章鱼 AI 简报负载解析与刷新窗口的纯逻辑。
+// 校验章鱼 AI 简报负载解析与刷新窗口的纯逻辑（支持多页）。
 #include "aibrief_contract.h"
 
 #include <assert.h>
@@ -8,32 +8,59 @@
 
 namespace {
 
-std::vector<uint8_t> make_payload(uint16_t width, uint16_t height)
+std::vector<uint8_t> make_payload(uint16_t width, uint16_t height, size_t pages = 1)
 {
-    std::vector<uint8_t> payload(aibrief::kPayloadBytes, 0x5A);
+    const size_t total = aibrief::kEnvelopeBytes + aibrief::kBitmapBytes * pages;
+    std::vector<uint8_t> payload(total, 0x5A);
     memcpy(payload.data(), aibrief::kMagic, sizeof(aibrief::kMagic));
     payload[4] = static_cast<uint8_t>(width & 0xFF);
     payload[5] = static_cast<uint8_t>((width >> 8) & 0xFF);
     payload[6] = static_cast<uint8_t>(height & 0xFF);
     payload[7] = static_cast<uint8_t>((height >> 8) & 0xFF);
+    // 每页填充不同值，便于校验
+    for (size_t p = 0; p < pages; ++p) {
+        payload[aibrief::kEnvelopeBytes + p * aibrief::kBitmapBytes] = static_cast<uint8_t>(p);
+    }
     return payload;
 }
 
 void test_parses_valid_payload()
 {
-    std::vector<uint8_t> payload = make_payload(aibrief::kWidth, aibrief::kHeight);
+    std::vector<uint8_t> payload = make_payload(aibrief::kWidth, aibrief::kHeight, 1);
     uint8_t bitmap[aibrief::kBitmapBytes] = {};
     assert(aibrief::parse_payload(payload.data(), payload.size(), bitmap) ==
            aibrief::ParseResult::kOk);
     assert(bitmap[0] == payload[aibrief::kEnvelopeBytes]);
     assert(bitmap[aibrief::kBitmapBytes - 1] ==
-           payload[aibrief::kPayloadBytes - 1]);
+           payload[aibrief::kEnvelopeBytes + aibrief::kBitmapBytes - 1]);
+
+    // 多页解析
+    const size_t pages = 3;
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, pages);
+    std::vector<uint8_t> bitmaps(aibrief::kBitmapBytes * pages, 0);
+    size_t out_pages = 0;
+    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
+                                        bitmaps.size(), &out_pages) ==
+           aibrief::ParseResult::kOk);
+    assert(out_pages == pages);
+    assert(bitmaps[0] == 0);
+    assert(bitmaps[aibrief::kBitmapBytes] == 1);
+    assert(bitmaps[aibrief::kBitmapBytes * 2] == 2);
+
+    // 30 页上限
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages);
+    bitmaps.assign(aibrief::kBitmapBytes * aibrief::kMaxPages, 0);
+    out_pages = 0;
+    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
+                                        bitmaps.size(), &out_pages) ==
+           aibrief::ParseResult::kOk);
+    assert(out_pages == static_cast<size_t>(aibrief::kMaxPages));
 }
 
 void test_rejects_bad_inputs()
 {
     uint8_t bitmap[aibrief::kBitmapBytes] = {};
-    std::vector<uint8_t> payload = make_payload(aibrief::kWidth, aibrief::kHeight);
+    std::vector<uint8_t> payload = make_payload(aibrief::kWidth, aibrief::kHeight, 1);
     assert(aibrief::parse_payload(payload.data(), 10, bitmap) ==
            aibrief::ParseResult::kShortPayload);
     assert(aibrief::parse_payload(nullptr, payload.size(), bitmap) ==
@@ -43,8 +70,24 @@ void test_rejects_bad_inputs()
     payload[0] = 'X';
     assert(aibrief::parse_payload(payload.data(), payload.size(), bitmap) ==
            aibrief::ParseResult::kBadMagic);
-    payload = make_payload(320, aibrief::kHeight);
+    payload = make_payload(320, aibrief::kHeight, 1);
     assert(aibrief::parse_payload(payload.data(), payload.size(), bitmap) ==
+           aibrief::ParseResult::kBadSize);
+
+    // 多页：过多页
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages + 1);
+    std::vector<uint8_t> bitmaps(aibrief::kBitmapBytes * (aibrief::kMaxPages + 1), 0);
+    size_t out_pages = 0;
+    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
+                                        bitmaps.size(), &out_pages) ==
+           aibrief::ParseResult::kTooManyPages);
+
+    // 多页：非对齐
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, 1);
+    payload.push_back(0x00); // 破坏对齐
+    bitmaps.assign(aibrief::kBitmapBytes * 2, 0);
+    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
+                                        bitmaps.size(), &out_pages) ==
            aibrief::ParseResult::kBadSize);
 }
 
