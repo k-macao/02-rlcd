@@ -34,17 +34,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${REQUESTED_VERSION#refs/tags/}"
-          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "版本格式无效：$version" >&2
-            exit 1
-          fi
+          # 输入框/标签里常混入空格、换行或零宽字符，先清理再校验，避免 v1.7.1 被误判无效。
+          version="$(python3 .github/scripts/normalize_version.py "$REQUESTED_VERSION")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: 检出待发布源码
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
           submodules: recursive
 

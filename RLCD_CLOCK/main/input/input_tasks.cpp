@@ -312,7 +312,8 @@ void button_task(void *)
                        aibrief_page_requested() &&
                        !settings_page_requested() &&
                        button_press_is_long(now - key_pressed_since)) {
-                aibrief_page_clear();
+                // 简报页常驻：长按 KEY 打开设置但不退出简报页，
+                // 设置关闭后仍回到简报页，不再落回时钟工作页。
                 return_to_system_settings_item(kNetworkSettingsAibriefItem, now);
                 key_long_handled = true;
                 notify_ui_task();

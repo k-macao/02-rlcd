@@ -174,6 +174,29 @@ void request_aibrief_refresh()
     app_event_group_set_bits(kAibriefSyncBit);
 }
 
+void request_aibrief_refresh_if_due()
+{
+    if (!aibrief_cache_refresh_due()) {
+        return;
+    }
+    time_t now = 0;
+    time(&now);
+    const AibriefSnapshot snapshot = aibrief_snapshot_load();
+    if (!snapshot.available || snapshot.last_sync <= 0) {
+        // 尚无可用缓存时按刷新周期节流重试，掉线也不会每轮都踢网络任务。
+        static time_t s_last_cacheless_request = 0;
+        const bool throttled = s_last_cacheless_request != 0 &&
+                               now >= s_last_cacheless_request &&
+                               static_cast<uint32_t>(now - s_last_cacheless_request) <
+                                   aibrief::kMaxRefreshAgeSeconds;
+        if (throttled) {
+            return;
+        }
+        s_last_cacheless_request = now;
+    }
+    request_aibrief_refresh();
+}
+
 bool aibrief_cache_refresh_due()
 {
     const AibriefSnapshot snapshot = aibrief_snapshot_load();

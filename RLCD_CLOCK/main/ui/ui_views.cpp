@@ -56,6 +56,7 @@ constexpr int kUiNetworkDiagRunningFallbackMs = 1000;
 constexpr int kUiNetworkDiagIdleFallbackMs = 500;
 constexpr int kUiPostPageSwitchPollMs = 250;
 constexpr int kUiAibriefPollMs = 500;
+constexpr int kUiAibriefLowBatteryPollMs = 60 * 1000;
 constexpr int kUiLvglLockTimeoutMs = 80;
 constexpr EventBits_t kUiWeatherNetworkStatusBits =
     kWifiConnectedBit | kWeatherReadyBit;
@@ -78,6 +79,8 @@ static_assert(kUiNetworkDiagRunningFallbackMs > 0,
 static_assert(kUiNetworkDiagIdleFallbackMs > 0,
               "network diagnostics idle fallback interval must be positive");
 static_assert(kUiPostPageSwitchPollMs > 0, "post page switch poll interval must be positive");
+static_assert(kUiAibriefLowBatteryPollMs > 0,
+              "low battery aibrief poll interval must be positive");
 static_assert(kUiLvglLockTimeoutMs > 0, "UI LVGL lock timeout must be positive");
 static_assert(kUiWeatherNetworkStatusBits != 0,
               "weather network status bits must be nonzero");
@@ -173,6 +176,10 @@ void ui_task(void *)
     int low_battery_resume_page = kWorkPageWeatherClock;
     bool low_battery_resume_pending = false;
     uint8_t lvgl_lock_failures = 0;
+    // 简报页是固件的常驻主页：开机即请求联网拉取并显示已有的 AI 简报页，
+    // 不再进入天气时钟等时钟工作页（长按 KEY 可进入设置）。
+    aibrief_page_request();
+    request_aibrief_refresh();
     regular_app_task_mark_ready(RegularAppTaskId::kUi);
 
     for (;;) {
@@ -338,21 +345,23 @@ void ui_task(void *)
                       : ota_flow_active()) &&
                 (info_requested ||
                  network_diag_requested ||
-                 aibrief_requested ||
                  settings_requested ||
+                 !aibrief_page_requested() ||
                  active_page != kWorkPageWeatherClock)) {
+                // 低电量只保留常驻的简报页（静态图最省电），清掉其余辅助页；
+                // 中间帧不会被刷新，简报分支随后接管显示，时钟工作页不出现。
                 info_page_clear();
                 network_diag_page_clear();
-                aibrief_page_clear();
                 settings_page_clear();
                 reset_settings_navigation_state();
+                aibrief_page_request();
                 info_requested = false;
                 network_diag_requested = false;
-                aibrief_requested = false;
+                aibrief_requested = true;
                 settings_requested = false;
                 runtime_surfaces.info_requested = false;
                 runtime_surfaces.network_diag_requested = false;
-                runtime_surfaces.aibrief_requested = false;
+                runtime_surfaces.aibrief_requested = true;
                 runtime_surfaces.settings_requested = false;
                 visible_auxiliary_page = VisibleAuxiliaryPage::kNone;
                 active_work_page_store(kWorkPageWeatherClock);
@@ -468,7 +477,12 @@ void ui_task(void *)
             if (!aibrief_requested) {
                 runtime_surfaces.aibrief_requested = false;
             }
-            if (aibrief_requested && !settings_requested) {
+            if (aibrief_requested && !settings_requested &&
+                !runtime_surfaces.setup_portal_active) {
+                if (!battery.low_battery_mode) {
+                    // 简报页常驻：缓存过期即自动重新拉取，每 5 分钟推送一次页面。
+                    request_aibrief_refresh_if_due();
+                }
                 bool aibrief_changed = false;
                 if (visible_auxiliary_page != VisibleAuxiliaryPage::kAibrief) {
                     show_aibrief_aux_page(visible_auxiliary_page);
@@ -479,10 +493,15 @@ void ui_task(void *)
                     lv_refr_now(nullptr);
                 }
                 Lvgl_unlock();
-                (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kUiAibriefPollMs));
+                (void)ulTaskNotifyTake(
+                    pdTRUE,
+                    pdMS_TO_TICKS(battery.low_battery_mode
+                                      ? kUiAibriefLowBatteryPollMs
+                                      : kUiAibriefPollMs));
                 continue;
             }
-            if (visible_auxiliary_page == VisibleAuxiliaryPage::kAibrief) {
+            if (visible_auxiliary_page == VisibleAuxiliaryPage::kAibrief &&
+                !aibrief_requested) {
                 visible_auxiliary_page = VisibleAuxiliaryPage::kNone;
                 restore_active_work_page_after_aux(false);
             }
@@ -586,6 +605,17 @@ void ui_task(void *)
             if (visible_auxiliary_page == VisibleAuxiliaryPage::kSettings) {
                 visible_auxiliary_page = VisibleAuxiliaryPage::kNone;
                 restore_active_work_page_after_aux(false);
+            }
+
+            // 简报页是常驻主页：辅助页（设置等）退出后不落回时钟工作页。
+            // restore_active_work_page_after_aux 只是切了根对象、尚未刷新，
+            // 这里直接丢弃中间帧，回到事件循环由简报分支重新接管显示。
+            if (aibrief_page_requested() && !settings_requested &&
+                !runtime_surfaces.setup_portal_active) {
+                Lvgl_unlock();
+                (void)ulTaskNotifyTake(pdTRUE,
+                                       pdMS_TO_TICKS(kUiPostPageSwitchPollMs));
+                continue;
             }
 
             if (low_battery_resume_pending &&
