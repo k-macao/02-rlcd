@@ -1,6 +1,20 @@
 {
-  "latest": "v1.7.0",
+  "latest": "v1.7.1",
   "items": [
+    {
+      "version": "v1.7.1",
+      "notes": "v1.7.1：固件改为常驻「章鱼AI 简报」推送页，开机即联网，每 5 分钟自动刷新。\n1. 开机直接全屏显示已有的 AI 简报页（aibrief/latest.bin，400×300 单色），不再进入时钟/天气工作页；长按 KEY 进入设置，退出后回到简报页。\n2. 联网逻辑：开机立即请求简报，之后每 5 分钟刷新一次（低电量时 60 秒轮询检查），失败按 5 分钟节流重试，不轰炸网络。\n3. 修复构建：workflow 版本号清理兼容空格/零宽字符/refs/tags/ 前缀，v1.7.1 可正常触发 Release 构建。\n完整说明见源码仓库同版本 Release。",
+      "app": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.1/weather_clock_v1.7.1.bin",
+        "sha256": "a776c10b385a9af239aedc0a13b71fa5cfa4c21d7202136dc43903823c0acfca",
+        "size": 6322064
+      },
+      "merged": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.1/weather_clock_v1.7.1_merged.bin",
+        "sha256": "4c002397149f5ae820582fbc90c0948ee6d689465d84dd87936e172745b2b364",
+        "size": 16509951
+      }
+    },
     {
       "version": "v1.7.0",
       "notes": "v1.7.0：新增「章鱼AI 简报」页。\n1. 设置 → 网络 → 「章鱼AI 简报」进入，设备联网拉取 400×300 单色简报图，覆盖 AI 每日总结、AI 看盘、板块机会与全网快讯。\n2. 简报图每天自动重建；打开页面时若缓存超过 6 小时会自动刷新，长按 KEY 返回设置页。\n3. 离线模式、低电量模式下不发请求；缓存在重启后保留，失败时继续显示上一版并保留提示。\n完整说明见源码仓库同版本 Release。",
@@ -124,20 +138,6 @@
       "merged": {
         "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.10/weather_clock_v1.6.10_merged.bin",
         "sha256": "a81e0258d4e472a4c55e167aaaca4cd391eb54e5a23926d0d6c316171eb5c784",
-        "size": 16509951
-      }
-    },
-    {
-      "version": "v1.6.9",
-      "notes": "v1.6.9：共 1 项更新。\n1. 优化天气自动定位：天气同步可复用最多 6 小时的定位结果；网络配置或手动城市变更后重新…\n完整说明见源码仓库同版本 Release。",
-      "app": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.9/weather_clock_v1.6.9.bin",
-        "sha256": "981766b25ca914654d92c44ce216463dbf6c82ac798b25a6ed75e069314eb3f4",
-        "size": 6304432
-      },
-      "merged": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.9/weather_clock_v1.6.9_merged.bin",
-        "sha256": "612108130a5412f88f448bf8751f4b99b6fbcec4b9df22083f8a5692e67cc4e0",
         "size": 16509951
       }
     }

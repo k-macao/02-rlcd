@@ -1,7 +1,7 @@
 {
-  "version": "v1.7.0",
-  "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.0/weather_clock_v1.7.0.bin",
-  "sha256": "90320f016be32ebea758176e8465f6a68bde9c738cd92f6f9ad07a5f6646ebb3",
-  "size": 6321520,
-  "notes": "v1.7.0：新增「章鱼AI 简报」页。\n1. 设置 → 网络 → 「章鱼AI 简报」进入，设备联网拉取 400×300 单色简报图，覆盖 AI 每日总结、AI 看盘、板块机会与全网快讯。\n2. 简报图每天自动重建；打开页面时若缓存超过 6 小时会自动刷新，长按 KEY 返回设置页。\n3. 离线模式、低电量模式下不发请求；缓存在重启后保留，失败时继续显示上一版并保留提示。\n完整说明见源码仓库同版本 Release。"
+  "version": "v1.7.1",
+  "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.7.1/weather_clock_v1.7.1.bin",
+  "sha256": "a776c10b385a9af239aedc0a13b71fa5cfa4c21d7202136dc43903823c0acfca",
+  "size": 6322064,
+  "notes": "v1.7.1：固件改为常驻「章鱼AI 简报」推送页，开机即联网，每 5 分钟自动刷新。\n1. 开机直接全屏显示已有的 AI 简报页（aibrief/latest.bin，400×300 单色），不再进入时钟/天气工作页；长按 KEY 进入设置，退出后回到简报页。\n2. 联网逻辑：开机立即请求简报，之后每 5 分钟刷新一次（低电量时 60 秒轮询检查），失败按 5 分钟节流重试，不轰炸网络。\n3. 修复构建：workflow 版本号清理兼容空格/零宽字符/refs/tags/ 前缀，v1.7.1 可正常触发 Release 构建。\n完整说明见源码仓库同版本 Release。"
 }
