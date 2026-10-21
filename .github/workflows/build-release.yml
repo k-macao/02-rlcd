@@ -141,12 +141,27 @@ jobs:
           test -f RLCD_CLOCK/build/weather_clock.bin
           cp RLCD_CLOCK/build/weather_clock.bin weather_clock_${VERSION}.bin
           echo "=== 合并固件 ==="
+          pip install esptool -q
           cd RLCD_CLOCK/build
-          if command -v esptool.py >/dev/null 2>&1; then
-            esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args || python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
-          else
-            python -m esptool --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args || python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
+          echo "flash_args content:"
+          cat flash_args || true
+          echo "--- try merge_bin ---"
+          set +e
+          esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args 2>&1 | tee /tmp/merge.log
+          rc1=${PIPESTATUS[0]}
+          echo "rc1=$rc1"
+          if [ $rc1 -ne 0 ]; then
+            echo "try merge-bin with python -m esptool"
+            python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args 2>&1 | tee /tmp/merge.log
+            rc2=${PIPESTATUS[0]}
+            echo "rc2=$rc2"
+            if [ $rc2 -ne 0 ]; then
+              echo "merge failed"
+              cat /tmp/merge.log
+              exit $rc2
+            fi
           fi
+          set -e
           cd ../..
           ls -lh weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
           sha256sum weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
