@@ -87,7 +87,20 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: bash ../.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }}
+          command: bash -c "bash ../.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }} 2>&1 | tee $GITHUB_WORKSPACE/build.log; exit ${PIPESTATUS[0]}"
+
+      - name: 上传编译日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ steps.version.outputs.version }}
+          path: |
+            build.log
+            RLCD_CLOCK/build/build.log
+            RLCD_CLOCK/build/CMakeFiles/CMakeOutput.log
+            RLCD_CLOCK/build/CMakeFiles/CMakeError.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: 校验构建产物
         env:
