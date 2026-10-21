@@ -101,6 +101,30 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: 保存日志到分支（便于无外网下载）
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/logbranch
+          cp RLCD_CLOCK/build.log /tmp/logbranch/build-${{ steps.version.outputs.version }}.log 2>/dev/null || echo "no RLCD_CLOCK/build.log"
+          if [ -f RLCD_CLOCK/build/build.log ]; then cp RLCD_CLOCK/build/build.log /tmp/logbranch/; fi
+          ls -lh /tmp/logbranch/ || true
+          # 将日志前500行和后500行打印到 summary，尝试绕过网络限制获取错误
+          echo "### 编译日志尾部" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 500 RLCD_CLOCK/build.log >> $GITHUB_STEP_SUMMARY 2>&1 || echo "no log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          # 推送日志到 logs 分支
+          git config user.name "log-bot"
+          git config user.email "log@bot"
+          git fetch origin logs || true
+          git checkout --orphan logs 2>/dev/null || git checkout -B logs
+          cp /tmp/logbranch/*.log . 2>/dev/null || true
+          git add -f *.log 2>/dev/null || true
+          git commit -m "log ${{ steps.version.outputs.version }} ${{ github.run_id }}" || true
+          git push origin logs --force 2>&1 | tail -20 || true
+
       - name: 生成双固件
         if: success()
         env:
