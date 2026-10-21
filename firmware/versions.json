@@ -1,6 +1,20 @@
 {
-  "latest": "v1.7.1",
+  "latest": "v1.8.0",
   "items": [
+    {
+      "version": "v1.8.0",
+      "notes": "v1.8.0：拉取 002 仓库作为 AI 简报页，思源黑体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），清晰度提升，回退 MiSans，保证离线渲染。\n3. 全部内容完整显示，分页展示：单文件包含最多 30 页 400×300 1bpp 位图（AIB1 格式，8字节头+N*15000），固件每 60 秒自动翻下一页，1 分钟轮播。\n4. 联网逻辑：开机即联网拉取多页简报，每 5 分钟刷新一次，失败按 5 分钟节流重试；支持…",
+      "app": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.8.0/weather_clock_v1.8.0.bin",
+        "sha256": "9e7257939e5a341d77acdfbcd2d7d7fcd3c2a8ef2f0ecbf0f16fa2d5a64b10c0",
+        "size": 6322736
+      },
+      "merged": {
+        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.8.0/weather_clock_v1.8.0_merged.bin",
+        "sha256": "7131e9d807f32aba8adf78cf556b9cef7f6b1645cae2975ae46b4f72c322caed",
+        "size": 16509951
+      }
+    },
     {
       "version": "v1.7.1",
       "notes": "v1.7.1：固件改为常驻「章鱼AI 简报」推送页，开机即联网，每 5 分钟自动刷新。\n1. 开机直接全屏显示已有的 AI 简报页（aibrief/latest.bin，400×300 单色），不再进入时钟/天气工作页；长按 KEY 进入设置，退出后回到简报页。\n2. 联网逻辑：开机立即请求简报，之后每 5 分钟刷新一次（低电量时 60 秒轮询检查），失败按 5 分钟节流重试，不轰炸网络。\n3. 修复构建：workflow 版本号清理兼容空格/零宽字符/refs/tags/ 前缀，v1.7.1 可正常触发 Release 构建。\n完整说明见源码仓库同版本 Release。",
@@ -124,20 +138,6 @@
       "merged": {
         "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.11/weather_clock_v1.6.11_merged.bin",
         "sha256": "c39254004cf19bdd351eb35496ff714c18970f4b5adee137c898fd40299c41fa",
-        "size": 16509951
-      }
-    },
-    {
-      "version": "v1.6.10",
-      "notes": "v1.6.10：共 3 项更新。\n1. 优化自动天气同步在主、备 Wi-Fi 均不可用时的连接等待：本轮最多等待 30 秒后进…\n2. 优化整点提醒开启时的联网错峰：自动天气同步在整点第 8 秒后启动，降低报时、Wi-Fi…\n3. 优化聚合时钟秒牌：普通秒跳仅重绘变化数字，降低秒级绘制与 RLCD 局部传输量；显示效…\n完整说明见源码仓库同版本 Release。",
-      "app": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.10/weather_clock_v1.6.10.bin",
-        "sha256": "78f9930da268b078ca1c72094ac02d162d39ed573cfcd6a6ea759dd99c91b10a",
-        "size": 6305104
-      },
-      "merged": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.10/weather_clock_v1.6.10_merged.bin",
-        "sha256": "a81e0258d4e472a4c55e167aaaca4cd391eb54e5a23926d0d6c316171eb5c784",
         "size": 16509951
       }
     }
