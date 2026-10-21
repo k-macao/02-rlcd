@@ -81,39 +81,39 @@ jobs:
           test -s RLCD_CLOCK/main/core/ota_endpoint_local.h
           echo "OTA 端点已注入"
 
-      - name: 编译并生成双固件
+      - name: 编译固件
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: bash -c "bash ../.github/scripts/build_firmware.sh ${{ steps.version.outputs.version }} 2>&1 | tee $GITHUB_WORKSPACE/build.log; exit ${PIPESTATUS[0]}"
+          command: idf.py build
 
-      - name: 列出构建产物（调试）
-        if: always()
+      - name: 生成双固件
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          pwd
-          ls -lh
-          ls -lh RLCD_CLOCK/build/*.bin 2>&1 | head -20
-          ls -lh build.log 2>&1 || echo "no build.log in root"
-          cat build.log | tail -100 || true
-          echo "--- RLCD_CLOCK/build dir ---"
-          ls -lh RLCD_CLOCK/build/ | head -50
-
-      - name: 上传编译日志
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-${{ steps.version.outputs.version }}
-          path: |
-            build.log
-            RLCD_CLOCK/build/build.log
-            RLCD_CLOCK/build/CMakeFiles/CMakeOutput.log
-            RLCD_CLOCK/build/CMakeFiles/CMakeError.log
-          if-no-files-found: warn
-          retention-days: 7
+          echo "=== 列出 RLCD_CLOCK/build ==="
+          ls -lh RLCD_CLOCK/build/*.bin 2>&1 | head -30
+          ls -lh RLCD_CLOCK/build/ | head -80
+          echo "=== 当前根目录 ==="
+          ls -lh | head -30
+          echo "=== 复制 app bin ==="
+          test -f RLCD_CLOCK/build/weather_clock.bin
+          cp RLCD_CLOCK/build/weather_clock.bin weather_clock_${VERSION}.bin
+          echo "=== 合并固件 ==="
+          cd RLCD_CLOCK/build
+          # 尝试多种 esptool 调用方式
+          if command -v esptool.py >/dev/null 2>&1; then
+            esptool.py --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args || python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
+          else
+            python -m esptool --chip esp32s3 merge_bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args || python -m esptool --chip esp32s3 merge-bin -o ../../weather_clock_${VERSION}_merged.bin @flash_args
+          fi
+          cd ../..
+          ls -lh weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
+          sha256sum weather_clock_${VERSION}.bin weather_clock_${VERSION}_merged.bin
 
       - name: 校验构建产物
         env:
@@ -121,10 +121,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ls -lh
           test -s "weather_clock_${VERSION}.bin"
           test -s "weather_clock_${VERSION}_merged.bin"
-          sha256sum "weather_clock_${VERSION}.bin" "weather_clock_${VERSION}_merged.bin"
 
       - name: 生成 OTA 清单
         env:
