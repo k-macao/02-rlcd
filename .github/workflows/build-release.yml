@@ -155,6 +155,32 @@ jobs:
           git commit -m "Update ${VERSION} OTA manifests [skip ci]"
           git push origin HEAD:main
 
+      - name: 自动递增版本号（为下一次发布准备）
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B version-bump origin/main
+          # 校验当前 main 的版本是否等于刚发布的版本，相等才递增，避免重复 bump
+          current_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+          echo "main 当前版本: $current_ver, 刚发布版本: $VERSION"
+          if [[ "$current_ver" != "$VERSION" ]]; then
+            echo "main 版本已不是 $VERSION（可能是已 bump），跳过自动递增"
+            exit 0
+          fi
+          python3 .github/scripts/bump_version.py
+          new_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+          echo "新版本: $new_ver"
+          git config user.name "GitHub Actions Firmware Builder"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add RLCD_CLOCK/CMakeLists.txt firmware/OTA_RELEASE_NOTES.md
+          git commit -m "chore: bump version ${VERSION} -> ${new_ver} [skip ci]"
+          git push origin HEAD:main
+          echo "已自动递增版本号到 $new_ver"
+
       - name: 保存 Actions 构建产物
         uses: actions/upload-artifact@v4
         with:

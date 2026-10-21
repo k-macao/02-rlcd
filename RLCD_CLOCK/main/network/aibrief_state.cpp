@@ -1,4 +1,5 @@
 // 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
+// v1.8+ 支持多页：最多 kMaxPages 页，每页 1 分钟轮播。
 #include "aibrief_state.h"
 
 #include "app_constexpr.h"
@@ -15,7 +16,7 @@ StaticTaskMutex s_aibrief_mutex;
 AibriefSnapshot s_aibrief_state;
 AibriefPageRequestSnapshot s_aibrief_page_state;
 std::atomic<bool> s_aibrief_page_requested{false};
-EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmap[aibrief::kBitmapBytes];
+EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmaps[aibrief::kMaxPages][aibrief::kBitmapBytes];
 
 void advance_page_revision()
 {
@@ -42,6 +43,11 @@ AibriefSnapshot aibrief_snapshot_load()
 
 bool aibrief_bitmap_copy(uint8_t *out, size_t out_len)
 {
+    return aibrief_bitmap_copy_current(out, out_len);
+}
+
+bool aibrief_bitmap_copy_page(uint8_t *out, size_t out_len, uint8_t page_index)
+{
     if (!out || out_len < aibrief::kBitmapBytes) {
         return false;
     }
@@ -49,7 +55,26 @@ bool aibrief_bitmap_copy(uint8_t *out, size_t out_len)
     if (!lock || !s_aibrief_state.available) {
         return false;
     }
-    memcpy(out, s_aibrief_bitmap, aibrief::kBitmapBytes);
+    if (page_index >= s_aibrief_state.page_count) {
+        return false;
+    }
+    memcpy(out, s_aibrief_bitmaps[page_index], aibrief::kBitmapBytes);
+    return true;
+}
+
+bool aibrief_bitmap_copy_current(uint8_t *out, size_t out_len)
+{
+    if (!out || out_len < aibrief::kBitmapBytes) {
+        return false;
+    }
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock || !s_aibrief_state.available) {
+        return false;
+    }
+    const uint8_t idx = s_aibrief_state.current_page < s_aibrief_state.page_count
+                            ? s_aibrief_state.current_page
+                            : 0;
+    memcpy(out, s_aibrief_bitmaps[idx], aibrief::kBitmapBytes);
     return true;
 }
 
@@ -61,15 +86,41 @@ bool aibrief_publish_bitmap(const uint8_t *bitmap,
     if (!bitmap || bitmap_len != aibrief::kBitmapBytes) {
         return false;
     }
+    return aibrief_publish_bitmaps(bitmap, bitmap_len, 1, live_source, sync_time);
+}
+
+bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
+                             size_t bitmaps_len,
+                             uint8_t page_count,
+                             bool live_source,
+                             time_t sync_time)
+{
+    if (!bitmaps || page_count == 0 || page_count > aibrief::kMaxPages) {
+        return false;
+    }
+    const size_t expected = static_cast<size_t>(page_count) * aibrief::kBitmapBytes;
+    if (bitmaps_len != expected) {
+        return false;
+    }
     {
         ScopedSemaphoreLock lock(s_aibrief_mutex);
         if (!lock) {
             return false;
         }
-        memcpy(s_aibrief_bitmap, bitmap, aibrief::kBitmapBytes);
+        for (uint8_t i = 0; i < page_count; ++i) {
+            memcpy(s_aibrief_bitmaps[i],
+                   bitmaps + static_cast<size_t>(i) * aibrief::kBitmapBytes,
+                   aibrief::kBitmapBytes);
+        }
+        // 清理未使用的页
+        for (uint8_t i = page_count; i < aibrief::kMaxPages; ++i) {
+            memset(s_aibrief_bitmaps[i], 0, aibrief::kBitmapBytes);
+        }
         s_aibrief_state.available = true;
         s_aibrief_state.live_source = live_source;
         s_aibrief_state.last_sync = sync_time;
+        s_aibrief_state.page_count = page_count;
+        s_aibrief_state.current_page = 0;
         ++s_aibrief_state.version;
         if (s_aibrief_state.version == 0) {
             ++s_aibrief_state.version;
@@ -99,8 +150,63 @@ bool aibrief_clear_cache()
         return false;
     }
     s_aibrief_state = AibriefSnapshot{};
-    memset(s_aibrief_bitmap, 0, sizeof(s_aibrief_bitmap));
+    for (auto &page : s_aibrief_bitmaps) {
+        memset(page, 0, sizeof(page));
+    }
     return true;
+}
+
+bool aibrief_advance_page()
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock || !s_aibrief_state.available || s_aibrief_state.page_count <= 1) {
+        return false;
+    }
+    s_aibrief_state.current_page =
+        (s_aibrief_state.current_page + 1) % s_aibrief_state.page_count;
+    ++s_aibrief_state.version;
+    if (s_aibrief_state.version == 0) {
+        ++s_aibrief_state.version;
+    }
+    return true;
+}
+
+bool aibrief_set_current_page(uint8_t page_index)
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock || !s_aibrief_state.available) {
+        return false;
+    }
+    if (page_index >= s_aibrief_state.page_count) {
+        return false;
+    }
+    if (s_aibrief_state.current_page == page_index) {
+        return false;
+    }
+    s_aibrief_state.current_page = page_index;
+    ++s_aibrief_state.version;
+    if (s_aibrief_state.version == 0) {
+        ++s_aibrief_state.version;
+    }
+    return true;
+}
+
+uint8_t aibrief_page_count()
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock) {
+        return 0;
+    }
+    return s_aibrief_state.page_count;
+}
+
+uint8_t aibrief_current_page_index()
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock) {
+        return 0;
+    }
+    return s_aibrief_state.current_page;
 }
 
 bool aibrief_page_requested()
