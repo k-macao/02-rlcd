@@ -2,6 +2,12 @@ name: 调试固件编译
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "RLCD_CLOCK/main/network/aibrief_state.cpp"
+      - "RLCD_CLOCK/main/ui/ui_aibrief_page.cpp"
+      - ".github/workflows/debug-build.yml"
 
 permissions:
   contents: read
