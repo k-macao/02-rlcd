@@ -1,0 +1,37 @@
+name: 调试固件编译
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: 准备 OTA 端点
+        run: |
+          python3 .github/scripts/prepare_ota_endpoint.py --output RLCD_CLOCK/main/core/ota_endpoint_local.h
+
+      - name: 编译固件（捕获日志）
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.3
+          target: esp32s3
+          path: RLCD_CLOCK
+          command: |
+            set -o pipefail
+            idf.py build 2>&1 | tee /tmp/build.log; status=${PIPESTATUS[0]}; echo "BUILD_STATUS=$status" >> $GITHUB_ENV; exit $status
+
+      - name: 上传编译日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/build.log
+          if-no-files-found: warn
+          retention-days: 7
