@@ -35,8 +35,20 @@ jobs:
         run: |
           set -euo pipefail
           # 输入框/标签里常混入空格、换行或零宽字符，先清理再校验，避免 v1.7.1 被误判无效。
-          version="$(python3 .github/scripts/normalize_version.py "$REQUESTED_VERSION")"
+          # 注意：此步骤在 checkout 之前执行，不能依赖仓库内的 .github/scripts/ 文件，故内联实现。
+          version="$(python3 -c '
+          import os, re, sys
+          raw = os.environ.get("REQUESTED_VERSION", "")
+          if raw.startswith("refs/tags/"):
+              raw = raw[len("refs/tags/"):]
+          cleaned = re.sub(r"[\s\u00a0\u200b-\u200d\u2060\ufeff]", "", raw)
+          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", cleaned):
+              print(f"版本格式无效：{raw}", file=sys.stderr)
+              sys.exit(1)
+          print(cleaned)
+          ')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "构建版本: $version (原始输入: $REQUESTED_VERSION)"
 
       - name: 检出待发布源码
         uses: actions/checkout@v4
