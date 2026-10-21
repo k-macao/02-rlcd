@@ -1,5 +1,6 @@
 // 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
 // v1.8+ 支持多页：最多 kMaxPages 页，每页 1 分钟轮播。
+// 修复：大数组改堆分配（PSRAM），避免 EXT_RAM_BSS 链接段溢出。
 #include "aibrief_state.h"
 
 #include "app_constexpr.h"
@@ -7,6 +8,7 @@
 #include "ui_task_notify.h"
 
 #include <esp_attr.h>
+#include <esp_heap_caps.h>
 
 #include <atomic>
 #include <string.h>
@@ -16,11 +18,12 @@ StaticTaskMutex s_aibrief_mutex;
 AibriefSnapshot s_aibrief_state;
 AibriefPageRequestSnapshot s_aibrief_page_state;
 std::atomic<bool> s_aibrief_page_requested{false};
-// 使用一维数组避免 2D 数组的 range-for 兼容性问题，450KB 放在 PSRAM BSS
-EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmaps[aibrief::kMaxPages * aibrief::kBitmapBytes];
+// 堆分配：450KB，放在 PSRAM，避免 BSS 段过大导致链接失败
+uint8_t* s_aibrief_bitmaps = nullptr;
 
 inline uint8_t* bitmap_at(uint8_t index)
 {
+    if (!s_aibrief_bitmaps) return nullptr;
     return s_aibrief_bitmaps + static_cast<size_t>(index) * aibrief::kBitmapBytes;
 }
 
@@ -35,7 +38,25 @@ void advance_page_revision()
 
 bool aibrief_state_init()
 {
-    return s_aibrief_mutex.init();
+    if (!s_aibrief_mutex.init()) {
+        return false;
+    }
+    // 分配多页位图缓存，优先 PSRAM
+    if (!s_aibrief_bitmaps) {
+        s_aibrief_bitmaps = static_cast<uint8_t*>(
+            heap_caps_malloc(aibrief::kMaxPages * aibrief::kBitmapBytes,
+                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!s_aibrief_bitmaps) {
+            // 回退到普通堆（可能不足，但尝试）
+            s_aibrief_bitmaps = static_cast<uint8_t*>(
+                heap_caps_malloc(aibrief::kMaxPages * aibrief::kBitmapBytes,
+                                 MALLOC_CAP_8BIT));
+        }
+        if (s_aibrief_bitmaps) {
+            memset(s_aibrief_bitmaps, 0, aibrief::kMaxPages * aibrief::kBitmapBytes);
+        }
+    }
+    return s_aibrief_bitmaps != nullptr;
 }
 
 AibriefSnapshot aibrief_snapshot_load()
@@ -58,7 +79,7 @@ bool aibrief_bitmap_copy_page(uint8_t *out, size_t out_len, uint8_t page_index)
         return false;
     }
     ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available) {
+    if (!lock || !s_aibrief_state.available || !s_aibrief_bitmaps) {
         return false;
     }
     if (page_index >= s_aibrief_state.page_count) {
@@ -74,7 +95,7 @@ bool aibrief_bitmap_copy_current(uint8_t *out, size_t out_len)
         return false;
     }
     ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available) {
+    if (!lock || !s_aibrief_state.available || !s_aibrief_bitmaps) {
         return false;
     }
     const uint8_t idx = s_aibrief_state.current_page < s_aibrief_state.page_count
@@ -101,7 +122,7 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
                              bool live_source,
                              time_t sync_time)
 {
-    if (!bitmaps || page_count == 0 || page_count > aibrief::kMaxPages) {
+    if (!bitmaps || page_count == 0 || page_count > aibrief::kMaxPages || !s_aibrief_bitmaps) {
         return false;
     }
     const size_t expected = static_cast<size_t>(page_count) * aibrief::kBitmapBytes;
@@ -156,7 +177,9 @@ bool aibrief_clear_cache()
         return false;
     }
     s_aibrief_state = AibriefSnapshot{};
-    memset(s_aibrief_bitmaps, 0, sizeof(s_aibrief_bitmaps));
+    if (s_aibrief_bitmaps) {
+        memset(s_aibrief_bitmaps, 0, aibrief::kMaxPages * aibrief::kBitmapBytes);
+    }
     return true;
 }
 
