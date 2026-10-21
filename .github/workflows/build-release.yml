@@ -87,7 +87,7 @@ jobs:
           esp_idf_version: v5.5.3
           target: esp32s3
           path: RLCD_CLOCK
-          command: bash -c "idf.py build 2>&1 | tee build.log; echo \"=== BUILD LOG TAIL ===\"; tail -200 build.log; exit ${PIPESTATUS[0]}"
+          command: bash -c "idf.py build 2>&1 | tee build.log; rc=${PIPESTATUS[0]}; echo \"=== BUILD LOG TAIL ===\"; tail -n 200 build.log; exit $rc"
 
       - name: 上传编译日志
         if: always()
