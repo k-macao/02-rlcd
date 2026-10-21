@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-21 01:02:10",
+  "generated_at": "2026-10-21 01:34:42",
   "bias": "中性",
-  "bull": 51,
-  "bear": 49,
-  "signals": 100,
+  "bull": 56,
+  "bear": 44,
+  "signals": 118,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
-  "market_date": "2026-10-20",
+  "market_date": "2026-10-21",
   "market_source": "tencent",
   "font": "SourceHanSansSC-Regular.ttf",
   "source_repo": "002",
@@ -16,6 +16,6 @@
   "pages": 30,
   "bytes": 450008,
   "page_bytes": 450000,
-  "sha256": "a65a9dd6f9023902f1f40c454b1f6326f7f752f7a87ae032fa6ef8c5b60db137",
-  "crc32_bitmap": "7a006259"
+  "sha256": "cb9bd4bfb2bf7a2dee741cb70b78ea38e0ce4f8e7940093352edcd3df5128837",
+  "crc32_bitmap": "79d1be86"
 }
