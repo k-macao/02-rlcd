@@ -14,7 +14,8 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 
-#include <stdint.h>
+#include <cstdint>
+#include <cstdio>
 
 namespace {
 #define AIBRIEF_CANVAS_CREATE_FAILED_LOG "aibrief canvas create failed"
