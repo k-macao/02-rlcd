@@ -16,7 +16,13 @@ StaticTaskMutex s_aibrief_mutex;
 AibriefSnapshot s_aibrief_state;
 AibriefPageRequestSnapshot s_aibrief_page_state;
 std::atomic<bool> s_aibrief_page_requested{false};
-EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmaps[aibrief::kMaxPages][aibrief::kBitmapBytes];
+// 使用一维数组避免 2D 数组的 range-for 兼容性问题，450KB 放在 PSRAM BSS
+EXT_RAM_BSS_ATTR uint8_t s_aibrief_bitmaps[aibrief::kMaxPages * aibrief::kBitmapBytes];
+
+inline uint8_t* bitmap_at(uint8_t index)
+{
+    return s_aibrief_bitmaps + static_cast<size_t>(index) * aibrief::kBitmapBytes;
+}
 
 void advance_page_revision()
 {
@@ -58,7 +64,7 @@ bool aibrief_bitmap_copy_page(uint8_t *out, size_t out_len, uint8_t page_index)
     if (page_index >= s_aibrief_state.page_count) {
         return false;
     }
-    memcpy(out, s_aibrief_bitmaps[page_index], aibrief::kBitmapBytes);
+    memcpy(out, bitmap_at(page_index), aibrief::kBitmapBytes);
     return true;
 }
 
@@ -74,7 +80,7 @@ bool aibrief_bitmap_copy_current(uint8_t *out, size_t out_len)
     const uint8_t idx = s_aibrief_state.current_page < s_aibrief_state.page_count
                             ? s_aibrief_state.current_page
                             : 0;
-    memcpy(out, s_aibrief_bitmaps[idx], aibrief::kBitmapBytes);
+    memcpy(out, bitmap_at(idx), aibrief::kBitmapBytes);
     return true;
 }
 
@@ -108,13 +114,13 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
             return false;
         }
         for (uint8_t i = 0; i < page_count; ++i) {
-            memcpy(s_aibrief_bitmaps[i],
+            memcpy(bitmap_at(i),
                    bitmaps + static_cast<size_t>(i) * aibrief::kBitmapBytes,
                    aibrief::kBitmapBytes);
         }
         // 清理未使用的页
         for (uint8_t i = page_count; i < aibrief::kMaxPages; ++i) {
-            memset(s_aibrief_bitmaps[i], 0, aibrief::kBitmapBytes);
+            memset(bitmap_at(i), 0, aibrief::kBitmapBytes);
         }
         s_aibrief_state.available = true;
         s_aibrief_state.live_source = live_source;
@@ -150,9 +156,7 @@ bool aibrief_clear_cache()
         return false;
     }
     s_aibrief_state = AibriefSnapshot{};
-    for (auto &page : s_aibrief_bitmaps) {
-        memset(page, 0, sizeof(page));
-    }
+    memset(s_aibrief_bitmaps, 0, sizeof(s_aibrief_bitmaps));
     return true;
 }
 
