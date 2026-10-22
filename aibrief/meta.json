@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-21 02:11:11",
+  "generated_at": "2026-10-22 01:29:03",
   "bias": "中性",
-  "bull": 48,
-  "bear": 52,
-  "signals": 114,
+  "bull": 41,
+  "bear": 59,
+  "signals": 111,
   "live_sources": 51,
   "total_sources": 69,
   "demo": false,
-  "market_date": "2026-10-21",
+  "market_date": "2026-10-22",
   "market_source": "eastmoney",
   "font": "SourceHanSansSC-Regular.ttf",
   "source_repo": "002",
@@ -16,6 +16,6 @@
   "pages": 30,
   "bytes": 450008,
   "page_bytes": 450000,
-  "sha256": "c2171fb15f6531e53829f072e124a02a6b26bcd519bb8ce304814c1f5d6c41a9",
-  "crc32_bitmap": "dbd8fe04"
+  "sha256": "0e11f7be308f7f9b64e77fc70b1e862a9371078eac2edb204652059567f900d1",
+  "crc32_bitmap": "15c4da49"
 }
