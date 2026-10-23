@@ -49,6 +49,9 @@ jobs:
       - name: 安装渲染依赖
         run: python3 -m pip install --disable-pip-version-check pillow
 
+      - name: 推送前运行逐页排版回归测试
+        run: python3 device_brief/test_render_brief.py
+
       - name: 抓取 002 数据并渲染多页
         env:
           MIN_LIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_live_sources || '20' }}
@@ -63,6 +66,7 @@ jobs:
           import json
           meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
           print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · {meta['pages']}页 · 字体 {meta.get('font','')} · 生成 {meta['generated_at']}")
+          print(f"版式 {meta.get('layout','')} · 预检 {meta.get('layout_validated')} · 快讯每源 {meta.get('news_per_source')} 条 · 收录 {meta.get('news_included')}/{meta.get('news_available')}")
           print(f"文件大小 {meta['bytes']} bytes")
           PY
           ls -lh aibrief/
@@ -88,6 +92,7 @@ jobs:
             aibrief/latest.bin
             aibrief/latest.png
             aibrief/latest_combined.png
+            aibrief/latest_contact_sheet.png
             aibrief/page_*.png
             aibrief/meta.json
           if-no-files-found: error
