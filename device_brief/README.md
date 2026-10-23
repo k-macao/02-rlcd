@@ -11,7 +11,7 @@
 - **画布先适配设备**：所有页面先按 400×300 排版，正文安全区为 `x=12..388`、`y=48..273`，页眉、正文、页脚分区固定，不使用图片缩放来迁就内容。
 - **统一思源黑体、常规字重**：标题、正文、标签、数字和符号全部使用 Source Han Sans / Noto Sans SC，不加粗、不描边、不叠影。渲染机优先读取 `device_brief/fonts/SourceHanSansSC-Regular.ttf`，并显式选择变量字体的 `Regular` 实例；可通过 `SOURCE_HAN_SANS_FONT` 环境变量覆盖路径，缺失时回退 MiSans。
 - **标准字号层级**：标题 `18px` → 分栏 `14px` → 正文 `13px` → 次要 `12px` → 页眉 `11px` → 最小 `10px`。4.2 英寸面板约 120dpi，不通过缩字塞内容。
-- **杂志式版面**：统一 running header/footer、真实页码与阅读进度线；总结页使用指标行，行情页使用指数数据网格，热力图使用双栏数据卡，快讯使用双栏流并对末页做左右栏高度均衡。
+- **杂志式版面**：统一 running header/footer、右下读取时间与真实页码、阅读进度线；总结页使用指标行，行情页使用指数数据网格，热力图使用双栏数据卡，快讯使用双栏流并对末页做左右栏高度均衡。
 - **完整折行而非截句**：超长中英文标题会跨栏或跨页续排，结尾不省略。页码在全部分页结束后统一绘制，不再显示预估总数。
 
 ## 推送前逐页预检
@@ -24,14 +24,14 @@
 4. 全部通过后才写入二进制和 PNG；页数减少时同步清理旧 `page_*.png`，避免残页混入。
 5. 同时生成 5 列校样墙，30 页恰好为 5×6，便于推送前逐页目检。
 
-运行 19 项离线回归测试：
+运行 23 项离线回归测试：
 
 ```bash
 python3 -m pip install pillow
 python3 device_brief/test_render_brief.py
 ```
 
-测试覆盖字体字重、字号下限、单页/多页协议、真实页码、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示和旧校样清理。
+测试覆盖字体字重、字号下限、单页/多页协议、右下读取时间与真实页码、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每日两次 schedule、北京时间及旧行情阻断发布。
 
 ## 用法
 
@@ -39,8 +39,8 @@ python3 device_brief/test_render_brief.py
 # 完全离线的排版校样，不请求新闻或行情接口
 python3 device_brief/render_brief.py --demo --out-dir /tmp/rlcd-brief
 
-# 实时数据；通过全部预检后才更新正式目录
-python3 device_brief/render_brief.py --out-dir aibrief --require-live
+# 实时数据；实时源、A 股新鲜度和全部排版预检通过后才更新正式目录
+python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-fresh-market
 ```
 
 输出：
@@ -50,7 +50,7 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live
 - `page_*.png`：每页原生 400×300 PNG。
 - `latest_combined.png`：垂直拼接总览。
 - `latest_contact_sheet.png`：5 列全页校样墙，供推送前审阅。
-- `meta.json`：生成时间、实际页数、字体、实时源、快讯精选口径、安全区、校验值及 `layout_validated=true`。
+- `meta.json`：北京时间生成时间、实际页数、字体、实时源、A 股新鲜度结果、快讯精选口径、安全区、校验值及 `layout_validated=true`。
 
 常用参数：
 
@@ -58,11 +58,12 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live
 | --- | --- |
 | `--demo` | 完全离线，使用 002 内置样例和行情快照 |
 | `--require-live` | 实时源少于阈值时退出 3，不更新设备图 |
+| `--require-fresh-market` | A 股不是最新可复盘交易日、接口不可用或回退旧快照时退出 3 |
 | `--min-live-sources N` | 实时源阈值，默认 20 |
 | `--limit N` | 限制每个来源抓取的条目数 |
 | `--pages N` | 本次最大页数；0 表示固件上限 30，不会直接裁掉超额页面 |
 
-退出码 `5` 表示排版预检未通过或分析内容本身超过页位，上一版文件保持不变。
+退出码 `3` 表示实时源不足或行情不新鲜；退出码 `5` 表示排版预检未通过或分析内容本身超过页位。两种情况都保留上一版文件。
 
 ## 内容分页与 30 页编辑预算
 
@@ -75,4 +76,4 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live
 
 设备协议最多 30 页，因此不能承诺把网页的全部长说明和每源 3 条快讯同时塞入一份负载。渲染器先完整排分析栏目，再按 **每源 3 → 2 → 1 条** 自动重排快讯；页眉明确标注“精选”，`meta.json` 记录 `news_available / news_included / news_omitted`。不会缩字、截句或直接删除第 31 页之后的内容；每源 1 条仍超限时退出 5，不推送半成品。
 
-> 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 07:10（北京时间）先跑排版测试，再抓取、逐页预检、生成校样并提交；设备会在 5 分钟内获取新图。设备固件开机联网拉取多页并常驻显示，每 60 秒自动翻页，之后每 5 分钟检查更新。
+> 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 **07:10、19:10（北京时间）各实时抓取一次**，先跑排版测试，再检查实时源和 A 股新鲜度，随后逐页预检、生成校样并提交；任何数据闸门失败都保留上一版。设备会在 5 分钟内获取新图，每 60 秒自动翻页，之后每 5 分钟检查更新。

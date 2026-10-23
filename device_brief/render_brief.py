@@ -19,7 +19,8 @@
 用法：
   python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 数据）
   python3 device_brief/render_brief.py --demo          # 离线演示数据
-  python3 device_brief/render_brief.py --require-live  # 实时源不足则失败退出（CI 用）
+  python3 device_brief/render_brief.py --require-live --require-fresh-market
+                                  # 实时源不足或行情不新鲜则失败退出（CI 用）
   python3 device_brief/render_brief.py --out-dir aibrief --pages 20
 """
 from __future__ import annotations
@@ -37,6 +38,7 @@ import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 # 优先使用 002 仓库，若不存在则回退到 05（兼容旧环境）
@@ -58,6 +60,13 @@ HEIGHT = 300
 MAX_PAGES = 30
 MAGIC = b"AIB1"
 LAYOUT_VERSION = "2.0-magazine"
+CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def china_now() -> datetime:
+    """服务器可能在 UTC 运行；页面与元数据统一使用北京时间。"""
+    return datetime.now(CN_TIMEZONE)
+
 
 # 字体：思源黑体优先，回退 MiSans
 FONT_DIR = ROOT / "device_brief" / "fonts"
@@ -126,6 +135,11 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
             "heatmap": summary.get("heatmap") or sources.analyze_keyword_heatmap(brief, top_n=40),
             "policy": summary.get("policy") or sources.analyze_policy(brief, deep=False),
             "policy_deep": None,
+            "market_freshness": {
+                "ok": False,
+                "source": "snapshot",
+                "reason": "离线演示数据，不参与实时新鲜度认证",
+            },
         }
 
     brief = sources.collect_all(limit=limit)
@@ -140,10 +154,13 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
     review_hk = None
     market_us = None
     review_us = None
+    market_freshness = {"ok": False, "source": "unknown", "reason": "尚未执行行情新鲜度检查"}
     try:
-        market_ashare = sources.get_ashare_market()
+        # 与 002 推送共用同一道闸门；日 K 只抓一次，同时生成行情和新鲜度结果。
+        market_ashare, market_freshness = sources.collect_market_for_push()
         review_ashare = sources.analyze_ashare(market_ashare)
     except Exception as exc:
+        market_freshness = {"ok": False, "source": "unknown", "reason": f"A 股行情获取失败：{exc}"}
         print(f"A 股行情获取失败：{exc}", file=sys.stderr)
     try:
         market_hk = sources.get_hk_market()
@@ -185,6 +202,7 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
         "heatmap": heatmap,
         "policy": policy,
         "policy_deep": policy_deep,
+        "market_freshness": market_freshness,
     }
 
 def live_source_stats(brief: dict) -> tuple[int, int]:
@@ -417,7 +435,7 @@ class MultiPageRenderer:
         self.page_limit = MAX_PAGES
         self.layout_meta: Dict[str, Any] = {}
         self._finalized = False
-        self._now = datetime.now()
+        self._now = china_now()
 
     def new_page(self, title: str = "", subtitle: str = "", page_info: str = "") -> Sheet:
         # page_info 仅为旧调用签名保留；页码只能在全部分页完成后绘制。
@@ -460,7 +478,7 @@ class MultiPageRenderer:
             progress_x = PAGE_MARGIN + round((right - PAGE_MARGIN) * index / total_pages)
             sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, progress_x, 2)
             sheet.text(PAGE_MARGIN, 284, f"章鱼 AI · {date_text}", FONT_MIN)
-            page_text = f"{index:02d} / {total_pages:02d}"
+            page_text = f"读取 {self._now.strftime('%H:%M')} · {index:02d} / {total_pages:02d}"
             sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(page_text, FONT_MIN),
                        284, page_text, FONT_MIN)
             sheet.region = "body"
@@ -1270,6 +1288,8 @@ def main() -> int:
     parser.add_argument("--out-dir", default=str(ROOT / "aibrief"))
     parser.add_argument("--demo", action="store_true", help="仅用内置演示数据（本地预览）")
     parser.add_argument("--require-live", action="store_true", help="实时源不足时退出 3")
+    parser.add_argument("--require-fresh-market", action="store_true",
+                        help="A 股不是最新交易日或回退快照时退出 3")
     parser.add_argument("--min-live-sources", type=int, default=20)
     parser.add_argument("--limit", type=int, default=12)
     parser.add_argument("--pages", type=int, default=0, help="最大页数（0=固件上限 30）")
@@ -1290,7 +1310,14 @@ def main() -> int:
         print(f"实时源不足（{live} < {args.min_live_sources}），放弃更新设备简报", file=sys.stderr)
         return 3
 
-    now = datetime.now()
+    freshness = data.get("market_freshness") or {}
+    if args.require_fresh_market:
+        print(f"大盘新鲜度检查：{freshness.get('reason') or '无检查结果'}")
+        if not freshness.get("ok"):
+            print("大盘数据不是最新，放弃更新设备简报并保留上一版", file=sys.stderr)
+            return 3
+
+    now = china_now()
     try:
         renderer = render_with_page_budget(
             data, now, live, total, demo, max_pages=args.pages or MAX_PAGES
@@ -1301,6 +1328,7 @@ def main() -> int:
 
     meta = {
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "timezone": "Asia/Shanghai",
         "bias": data["summary"].get("bias"),
         "bull": data["summary"].get("bull"),
         "bear": 100 - _int(data["summary"].get("bull"), 50),
@@ -1310,6 +1338,7 @@ def main() -> int:
         "demo": demo,
         "market_date": (data.get("review_ashare") or {}).get("date"),
         "market_source": (data.get("review_ashare") or {}).get("source"),
+        "market_freshness": freshness,
         "font": str(FONT_PATH.name),
         "source_repo": "002",
     }

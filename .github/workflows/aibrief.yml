@@ -2,8 +2,9 @@ name: 生成章鱼AI 简报设备图
 
 on:
   schedule:
-    # UTC 23:10 = 北京时间 07:10，设备和用户早上都能看到当天简报
+    # 每天两次实时抓取：北京时间 07:10（UTC 23:10）与 19:10（UTC 11:10）。
     - cron: "10 23 * * *"
+    - cron: "10 11 * * *"
   push:
     branches: ["**"]
     # 仅在自身或渲染器变更时触发：排版改动（如字号）应立即换图，不等次日定时任务；
@@ -61,12 +62,15 @@ jobs:
           python3 device_brief/render_brief.py \
             --out-dir aibrief \
             --require-live \
+            --require-fresh-market \
             --min-live-sources "$MIN_LIVE"
           python3 - <<'PY'
           import json
           meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
           print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · {meta['pages']}页 · 字体 {meta.get('font','')} · 生成 {meta['generated_at']}")
           print(f"版式 {meta.get('layout','')} · 预检 {meta.get('layout_validated')} · 快讯每源 {meta.get('news_per_source')} 条 · 收录 {meta.get('news_included')}/{meta.get('news_available')}")
+          freshness = meta.get("market_freshness") or {}
+          print(f"行情新鲜度 {freshness.get('ok')} · {freshness.get('reason','')}")
           print(f"文件大小 {meta['bytes']} bytes")
           PY
           ls -lh aibrief/

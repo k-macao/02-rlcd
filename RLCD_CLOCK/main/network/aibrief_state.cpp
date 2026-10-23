@@ -1,4 +1,5 @@
 // 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
+// last_sync 记录最近一次尝试；last_success 只在成功发布位图时前进。
 // v1.8+ 支持多页：最多 kMaxPages 页，每页 1 分钟轮播。
 // 修复：大数组改堆分配（PSRAM），避免 EXT_RAM_BSS 链接段溢出。
 #include "aibrief_state.h"
@@ -145,7 +146,7 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
         }
         s_aibrief_state.available = true;
         s_aibrief_state.live_source = live_source;
-        s_aibrief_state.last_sync = sync_time;
+        aibrief_record_sync_time(s_aibrief_state, sync_time, true);
         s_aibrief_state.page_count = page_count;
         s_aibrief_state.current_page = 0;
         ++s_aibrief_state.version;
@@ -165,7 +166,7 @@ void aibrief_publish_failure(time_t sync_time)
     }
     s_aibrief_state.live_source = false;
     if (s_aibrief_state.available) {
-        s_aibrief_state.last_sync = sync_time;
+        aibrief_record_sync_time(s_aibrief_state, sync_time, false);
     }
     notify_ui_task();
 }

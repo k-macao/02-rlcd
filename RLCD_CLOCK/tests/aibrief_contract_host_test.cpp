@@ -1,5 +1,7 @@
 // 校验章鱼 AI 简报负载解析与刷新窗口的纯逻辑（支持多页）。
 #include "aibrief_contract.h"
+#include "aibrief_state.h"
+#include "ui_aibrief_page_format.h"
 
 #include <assert.h>
 #include <string.h>
@@ -110,6 +112,35 @@ void test_bit_helpers()
     assert(!aibrief::bit_is_set(nullptr, 0));
 }
 
+void test_read_time_and_page_indicator()
+{
+    char text[48] = {};
+    struct tm local = {};
+    local.tm_hour = 7;
+    local.tm_min = 9;
+    format_aibrief_read_indicator(text, sizeof(text), &local, 1, 28);
+    assert(strcmp(text, "读取 07:09 · 01 / 28") == 0);
+    format_aibrief_read_indicator(text, sizeof(text), &local, 1, 1);
+    assert(strcmp(text, "读取 07:09 · 01 / 01") == 0);
+    format_aibrief_read_indicator(text, sizeof(text), nullptr, 1, 28);
+    assert(strcmp(text, "01 / 28") == 0);
+    format_aibrief_read_indicator(nullptr, 0, &local, 1, 28);
+}
+
+void test_failed_sync_keeps_last_successful_read_time()
+{
+    AibriefSnapshot snapshot = {};
+    aibrief_record_sync_time(snapshot, 100, true);
+    assert(snapshot.last_sync == 100);
+    assert(snapshot.last_success == 100);
+    aibrief_record_sync_time(snapshot, 200, false);
+    assert(snapshot.last_sync == 200);
+    assert(snapshot.last_success == 100);
+    aibrief_record_sync_time(snapshot, 300, true);
+    assert(snapshot.last_sync == 300);
+    assert(snapshot.last_success == 300);
+}
+
 } // namespace
 
 int main()
@@ -118,5 +149,7 @@ int main()
     test_rejects_bad_inputs();
     test_refresh_window();
     test_bit_helpers();
+    test_read_time_and_page_indicator();
+    test_failed_sync_keeps_last_successful_read_time();
     return 0;
 }
