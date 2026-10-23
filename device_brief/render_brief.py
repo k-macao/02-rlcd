@@ -6,7 +6,8 @@
 - 数据源为 002（AH 政策、情绪、热力、趋势分析）
 - 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0）
 - 400×300 固定网格、全页 16px、标题/数字 Bold、真实页码、双栏快讯与末栏均衡
-- 保存前逐页检查边界、字号和叠字；超额时调整快讯版位，不截句、不直接裁页
+- FreeType 原生 MONO + 自动 hinting + 整数像素定位，不使用灰度阈值或抖动
+- 保存前逐页检查边界、字号、纯黑白像素和叠字；超额时调整快讯版位，不截句、不直接裁页
 - 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 48 页
 
 产物（默认写入 aibrief/）：
@@ -54,13 +55,14 @@ except ImportError as e:
     print(f"无法导入 sources（需 002/05 仓库）：{e}", file=sys.stderr)
     sys.exit(2)
 
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from PIL import Image, ImageDraw  # noqa: E402
+from mono_text import MonoFont, get_mono_font  # noqa: E402
 
 WIDTH = 400
 HEIGHT = 300
 MAX_PAGES = 48
 MAGIC = b"AIB1"
-LAYOUT_VERSION = "2.2-alibaba-puhuiti-16px"
+LAYOUT_VERSION = "2.3-alibaba-puhuiti-16px-native-mono"
 CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
@@ -242,7 +244,7 @@ class Sheet:
         self.draw = ImageDraw.Draw(self.image)
         self.font_path = font_path or FONT_PATH
         self.bold_font_path = bold_font_path or FONT_BOLD_PATH
-        self._cache: dict[tuple[str, int, str], ImageFont.FreeTypeFont] = {}
+        self._cache: dict[tuple[str, int, str], MonoFont] = {}
         # 每次文字绘制都留档，保存前可逐页检查字号、边界与叠字。
         self.text_runs: List[dict] = []
         self.region = "body"
@@ -250,17 +252,14 @@ class Sheet:
         self.page_title = ""
         self.page_subtitle = ""
 
-    def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    def _font(self, is_digital: bool, size: int, bold: bool = False) -> MonoFont:
         # 标题或数值串都使用同一字体家族的 Bold，其余文字使用 Regular。
         use_bold = bool(bold or is_digital)
         weight = "Bold" if use_bold else "Regular"
         font_path = self.bold_font_path if use_bold else self.font_path
         key = (str(font_path), size, weight)
         if key not in self._cache:
-            try:
-                self._cache[key] = ImageFont.truetype(str(font_path), size)
-            except (OSError, ValueError) as exc:
-                raise RuntimeError(f"无法加载阿里巴巴普惠体 {weight}：{font_path}") from exc
+            self._cache[key] = get_mono_font(font_path, size)
         return self._cache[key]
 
     def _is_digital_char(self, ch: str) -> bool:
@@ -277,15 +276,14 @@ class Sheet:
         if offset < len(text):
             yield False, text[offset:]
 
-    def font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    def font(self, size: int, bold: bool = False) -> MonoFont:
         return self._font(False, size, bold)
 
     def measure(self, text: str, size: int, bold: bool = False) -> int:
-        total = sum(
-            self.draw.textlength(segment, font=self._font(is_digital, size, bold))
+        return sum(
+            self._font(is_digital, size, bold).measure(segment)
             for is_digital, segment in self._runs(str(text))
         )
-        return int(round(total))
 
     def _wrap_units(self, text: str, size: int, max_width: int,
                     bold: bool = False) -> list[str]:
@@ -303,25 +301,28 @@ class Sheet:
         text = str(text)
         if not text:
             return 0
-        cursor = float(x)
+        origin_x = int(round(x))
+        origin_y = int(round(y))
+        cursor = origin_x
         bbox = None
         for is_digital, segment in self._runs(text):
             font = self._font(is_digital, size, bold)
-            segment_bbox = self.draw.textbbox((cursor, y), segment, font=font)
-            if bbox is None:
-                bbox = segment_bbox
-            else:
-                bbox = (
-                    min(bbox[0], segment_bbox[0]), min(bbox[1], segment_bbox[1]),
-                    max(bbox[2], segment_bbox[2]), max(bbox[3], segment_bbox[3]),
-                )
-            self.draw.text((cursor, y), segment, font=font, fill=fill)
-            cursor += self.draw.textlength(segment, font=font)
+            advance, segment_bbox = font.render(self.draw, cursor, origin_y, segment, fill)
+            if segment_bbox is not None:
+                if bbox is None:
+                    bbox = segment_bbox
+                else:
+                    bbox = (
+                        min(bbox[0], segment_bbox[0]), min(bbox[1], segment_bbox[1]),
+                        max(bbox[2], segment_bbox[2]), max(bbox[3], segment_bbox[3]),
+                    )
+            cursor += advance
         self.text_runs.append({
             "text": text, "size": size, "region": self.region,
-            "bold": bool(bold), "bbox": tuple(int(v) for v in bbox),
+            "bold": bool(bold),
+            "bbox": bbox or (origin_x, origin_y, origin_x, origin_y),
         })
-        return int(round(cursor - x))
+        return cursor - origin_x
 
     def wrap(self, text: str, size: int, max_width: int, max_lines: int = 2,
              bold: bool = False) -> list[str]:
@@ -408,7 +409,7 @@ class Sheet:
             self.text(WIDTH - MARGIN - w, 16, page_info, FONT_MIN, False, WHITE)
 
     def to_bitmap(self) -> bytes:
-        mono = self.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+        mono = self.image.convert("1", dither=Image.NONE)
         bits = mono.load()
         buf = bytearray(WIDTH * HEIGHT // 8)
         idx = 0
@@ -425,7 +426,7 @@ class Sheet:
     def save_single(self, out_dir: Path, meta: dict) -> None:
         """兼容旧单页保存（用于测试）"""
         out_dir.mkdir(parents=True, exist_ok=True)
-        mono = self.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+        mono = self.image.convert("1", dither=Image.NONE)
         mono.save(out_dir / "latest.png")
         buf = self.to_bitmap()
         header = MAGIC + struct.pack("<HH", WIDTH, HEIGHT)
@@ -523,6 +524,8 @@ class MultiPageRenderer:
         for page_no, sheet in enumerate(self.pages, 1):
             if sheet.image.size != (WIDTH, HEIGHT):
                 errors.append(f"第{page_no}页画布为 {sheet.image.size}，应为 {(WIDTH, HEIGHT)}")
+            if any(sheet.image.histogram()[1:255]):
+                errors.append(f"第{page_no}页存在灰阶像素，必须使用原生 1bpp 点阵")
             runs = [r for r in sheet.text_runs if r["text"].strip()]
             if sheet.editorial and not any(r["region"] == "body" for r in runs):
                 errors.append(f"第{page_no}页没有正文")
@@ -555,10 +558,7 @@ class MultiPageRenderer:
         # 必须先完成所有页面和全部校验，再创建/覆盖任何交付文件。
         self.validate()
         out_dir.mkdir(parents=True, exist_ok=True)
-        mono_pages = [
-            p.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
-            for p in self.pages
-        ]
+        mono_pages = [p.image.convert("1", dither=Image.NONE) for p in self.pages]
         bitmaps = b"".join(p.to_bitmap() for p in self.pages)
         payload = MAGIC + struct.pack("<HH", WIDTH, HEIGHT) + bitmaps
         (out_dir / "latest.bin").write_bytes(payload)
@@ -610,6 +610,9 @@ class MultiPageRenderer:
             "numeric_font_weight": "Bold",
             "title_font_weight": "Bold",
             "text_font_weight": "Regular",
+            "rasterizer": "FreeType FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT",
+            "pixel_positioning": "integer",
+            "gray_levels": 2,
             "layout": LAYOUT_VERSION,
             "layout_validated": True,
             "safe_area": [PAGE_MARGIN, BODY_TOP, WIDTH - PAGE_MARGIN, BODY_BOTTOM],

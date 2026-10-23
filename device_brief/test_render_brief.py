@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 """render_brief.py 排版回归测试（不联网，全部用本地样例数据）。
 
-    python3 -m pip install pillow
+    python3 -m pip install pillow freetype-py
     python3 device_brief/test_render_brief.py
 
 回归重点（2026-10 大字版改版后立下的规矩）：
 - 全页文字统一为阿里巴巴普惠体 16px，标题/数值串使用 Bold，其余文字使用 Regular；
   面板是 4.2" 400×300，不许再靠缩字号塞内容；
+- 文字必须经 FreeType 原生 MONO 在整数像素绘制，页面只允许纯黑/纯白，禁止灰阶；
 - 内容最满的一天（四指数 + 成交/涨跌停 + 领涨领跌 + 三条快讯）也不溢出 300px；
 - 没有行情 / 没有快讯 / 没有板块信号时同样能渲染；
 - 输出仍是固件约定的 15008 字节 AIB1 负载（改排版不能动协议）。
@@ -118,21 +119,35 @@ class TypographyTest(unittest.TestCase):
                          [(False, "涨幅 "), (True, "+12.5%")])
 
         calls = []
-        original = sheet.draw.text
+        original = render_brief.MonoFont.render
 
-        def recording(position, text, **kwargs):
-            calls.append(kwargs)
-            return original(position, text, **kwargs)
+        def recording(self_font, draw, x, y, text, fill):
+            calls.append((self_font, text, x, y, fill))
+            return original(self_font, draw, x, y, text, fill)
 
-        with mock.patch.object(sheet.draw, "text", recording):
+        with mock.patch.object(render_brief.MonoFont, "render", recording):
             sheet.text(0, 0, "正文 123", 16)
             sheet.text(0, 20, "标题 123", 16, bold=True)
         self.assertEqual(len(calls), 4)
-        self.assertIs(calls[0]["font"], regular)
-        self.assertIs(calls[1]["font"], bold)
-        self.assertIs(calls[2]["font"], bold)
-        self.assertIs(calls[3]["font"], bold)
-        self.assertTrue(all("stroke_width" not in call for call in calls))
+        self.assertIs(calls[0][0], regular)
+        self.assertIs(calls[1][0], bold)
+        self.assertIs(calls[2][0], bold)
+        self.assertIs(calls[3][0], bold)
+        self.assertTrue(all(isinstance(call[2], int) and isinstance(call[3], int)
+                            for call in calls))
+
+    def test_native_mono_pixels_and_shared_metrics(self):
+        sheet = render_brief.Sheet()
+        font = sheet.font(16)
+        text = "阅读清晰 AI 123"
+        layout = font.layout(text)
+        self.assertEqual(font.measure(text), layout.advance)
+        self.assertTrue(all(isinstance(p.x, int) and isinstance(p.y, int)
+                            for p in layout.placements))
+        self.assertTrue(all(p.glyph.image.mode == "1" for p in layout.placements))
+        sheet.text(12, 48, text, 16)
+        self.assertEqual(sum(sheet.image.histogram()[1:255]), 0)
+        self.assertEqual(sheet.measure(text, 16), layout.advance)
 
 
 class LayoutTest(unittest.TestCase):
@@ -373,6 +388,15 @@ class MultiPageMagazineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "must-not-exist"
             with self.assertRaises(render_brief.LayoutError):
+                renderer.save(out, {})
+            self.assertFalse(out.exists())
+
+    def test_gray_pixels_block_save(self):
+        renderer = manual_renderer(1)
+        renderer.pages[0].image.putpixel((0, 0), 128)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "must-not-exist"
+            with self.assertRaisesRegex(render_brief.LayoutError, "灰阶像素"):
                 renderer.save(out, {})
             self.assertFalse(out.exists())
 

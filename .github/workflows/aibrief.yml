@@ -12,6 +12,7 @@ on:
     paths:
       - ".github/workflows/aibrief.yml"
       - "device_brief/render_brief.py"
+      - "device_brief/mono_text.py"
       - "device_brief/test_render_brief.py"
       - "device_brief/fonts/**"
       - "002/**"
@@ -48,7 +49,7 @@ jobs:
           python-version: "3.11"
 
       - name: 安装渲染依赖
-        run: python3 -m pip install --disable-pip-version-check pillow
+        run: python3 -m pip install --disable-pip-version-check pillow freetype-py
 
       - name: 推送前运行逐页排版回归测试
         run: python3 device_brief/test_render_brief.py
