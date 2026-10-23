@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-24 03:17:27",
+  "generated_at": "2026-10-24 03:22:04",
   "timezone": "Asia/Shanghai",
   "bias": "中性",
-  "bull": 47,
-  "bear": 53,
+  "bull": 49,
+  "bear": 51,
   "signals": 115,
   "live_sources": 52,
   "total_sources": 69,
@@ -17,7 +17,7 @@
     "source": "tencent",
     "latest_kline_date": "2026-10-23",
     "expected_date": "2026-10-23",
-    "checked_at": "2026-10-24 03:17:19"
+    "checked_at": "2026-10-24 03:21:54"
   },
   "font": "SourceHanSansSC-Regular.ttf",
   "source_repo": "002",
@@ -30,8 +30,8 @@
   "pages": 28,
   "bytes": 420008,
   "page_bytes": 420000,
-  "sha256": "0825995f7f740a34eb970272dde65e47261da3b222a6ba0754de5cf14794b5d0",
-  "crc32_bitmap": "6a4b9579",
+  "sha256": "8eb94cfdee75b50b5e993921698a4b86497748eb3a56a90ad4e68796a24b9d1c",
+  "crc32_bitmap": "ce7b7d3e",
   "layout": "2.0-magazine",
   "layout_validated": true,
   "safe_area": [
