@@ -5,13 +5,13 @@
       "version": "v1.8.1",
       "notes": "v1.8.1：拉取 002 仓库作为 AI 简报页，思源黑体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），清晰度提升，回退 MiSans，保证离线渲染。\n3. 全部内容完整显示，分页展示：单文件包含最多 30 页 400×300 1bpp 位图（AIB1 格式，8字节头+N*15000），固件每 60 秒自动翻下一页，1 分钟轮播。\n4. 联网逻辑：开机即联网拉取多页简报，每 5 分钟刷新一次，失败按 5 分钟节流重试；支持…",
       "app": {
-        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.8.1/weather_clock_v1.8.1.bin",
-        "sha256": "a72e5d8a2602be3f0b1ebc8085778c8916cbca93da809f20c1dc9e49f545e24a",
+        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.1/weather_clock_v1.8.1.bin",
+        "sha256": "8ee0950e89bbf240ca1025f84acbb7a988e33e54e979f46d8a472bf09e654609",
         "size": 6322736
       },
       "merged": {
-        "url": "https://github.com/k-macao/04-rlcd/releases/download/v1.8.1/weather_clock_v1.8.1_merged.bin",
-        "sha256": "9e5f8ec68e3988088d30fa11e1d8cc05cc13056dd349f2668e184ac970dd58d7",
+        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.1/weather_clock_v1.8.1_merged.bin",
+        "sha256": "1387b3f2946536d85caa060437f2b4a011f330a6677e4e6e36382a3b6a4461a7",
         "size": 16509951
       }
     },
