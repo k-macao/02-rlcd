@@ -5,5 +5,7 @@
 
 LV_FONT_DECLARE(qweather_icons_36);
 LV_FONT_DECLARE(zh_font_16);
+LV_FONT_DECLARE(aibrief_text_15);
+LV_FONT_DECLARE(aibrief_digit_bold_15);
 LV_FONT_DECLARE(zh_flip_lunar_22);
 LV_FONT_DECLARE(zh_pomodoro_title_24);

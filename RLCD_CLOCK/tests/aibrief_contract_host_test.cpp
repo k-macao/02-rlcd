@@ -49,7 +49,7 @@ void test_parses_valid_payload()
     assert(bitmaps[aibrief::kBitmapBytes] == 1);
     assert(bitmaps[aibrief::kBitmapBytes * 2] == 2);
 
-    // 30 页上限
+    // 48 页上限
     payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages);
     bitmaps.assign(aibrief::kBitmapBytes * aibrief::kMaxPages, 0);
     out_pages = 0;
@@ -120,6 +120,14 @@ void test_read_time_and_page_indicator()
     local.tm_min = 9;
     format_aibrief_read_indicator(text, sizeof(text), &local, 1, 28);
     assert(strcmp(text, "读取 07:09 · 01 / 28") == 0);
+    AibriefReadIndicatorParts parts;
+    format_aibrief_read_indicator_parts(&local, 1, 28, parts);
+    assert(strcmp(parts.prefix, "读取 ") == 0);
+    assert(strcmp(parts.read_time, "07:09") == 0);
+    assert(strcmp(parts.separator, " · ") == 0);
+    assert(strcmp(parts.current_page, "01") == 0);
+    assert(strcmp(parts.page_separator, " / ") == 0);
+    assert(strcmp(parts.page_count, "28") == 0);
     format_aibrief_read_indicator(text, sizeof(text), &local, 1, 1);
     assert(strcmp(text, "读取 07:09 · 01 / 01") == 0);
     format_aibrief_read_indicator(text, sizeof(text), nullptr, 1, 28);

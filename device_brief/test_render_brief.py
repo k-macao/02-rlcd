@@ -6,8 +6,8 @@
     python3 device_brief/test_render_brief.py
 
 回归重点（2026-10 大字版改版后立下的规矩）：
-- 全页最小字号不得低于 10px、正文不得低于 13px。面板是 4.2" 400×300，
-  旧版 7~10px 在实物上看不清，不许再靠缩字号塞内容；
+- 全页文字统一为 15px，数值串使用 Bold，其余文字使用 Regular；
+  面板是 4.2" 400×300，不许再靠缩字号塞内容；
 - 内容最满的一天（四指数 + 成交/涨跌停 + 领涨领跌 + 三条快讯）也不溢出 300px；
 - 没有行情 / 没有快讯 / 没有板块信号时同样能渲染；
 - 输出仍是固件约定的 15008 字节 AIB1 负载（改排版不能动协议）。
@@ -79,21 +79,17 @@ def lowest_ink_row(sheet) -> int:
     return -1
 
 
-class FontSizeFloorTest(unittest.TestCase):
-    def test_named_sizes_respect_floor(self):
-        self.assertGreaterEqual(render_brief.FONT_MIN, 10)
-        self.assertGreaterEqual(render_brief.FONT_BODY, 13)
-        self.assertGreaterEqual(render_brief.FONT_SMALL, 12)
+class FontSize15Test(unittest.TestCase):
+    def test_named_sizes_are_15px(self):
         for name in ("FONT_TITLE", "FONT_SECTION", "FONT_BODY",
                      "FONT_SMALL", "FONT_META", "FONT_MIN"):
-            self.assertGreaterEqual(getattr(render_brief, name),
-                                    render_brief.FONT_MIN, name)
+            self.assertEqual(getattr(render_brief, name), 15, name)
 
-    def test_no_text_drawn_below_floor(self):
+    def test_all_drawn_text_is_15px(self):
         sizes = []
         original = render_brief.Sheet.text
 
-        def recording(self_sheet, x, y, text, size=11, bold=False,
+        def recording(self_sheet, x, y, text, size=15, bold=False,
                       fill=render_brief.BLACK):
             sizes.append(size)
             return original(self_sheet, x, y, text, size, bold, fill)
@@ -101,12 +97,12 @@ class FontSizeFloorTest(unittest.TestCase):
         with mock.patch.object(render_brief.Sheet, "text", recording):
             draw()
         self.assertTrue(sizes, "draw_sheet 没有画任何文字？")
-        self.assertGreaterEqual(min(sizes), render_brief.FONT_MIN, sizes)
+        self.assertEqual(set(sizes), {15}, sizes)
 
 
 class TypographyTest(unittest.TestCase):
     def test_variable_font_uses_regular_weight(self):
-        font = render_brief.Sheet(render_brief.FONT_PATH).font(13)
+        font = render_brief.Sheet(render_brief.FONT_PATH).font(15)
         try:
             instances = font.get_variation_names()
         except (AttributeError, OSError):
@@ -121,11 +117,20 @@ class TypographyTest(unittest.TestCase):
             self.skipTest("selected variable font has no Regular instance")
         self.assertEqual(font.getname()[1], "Regular")
 
-    def test_all_text_uses_one_regular_font(self):
+    def test_digits_bold_and_other_text_regular(self):
         sheet = render_brief.Sheet(render_brief.FONT_PATH)
-        self.assertIs(sheet.font(13, bold=False), sheet.font(13, bold=True))
-        self.assertEqual(sheet.measure("AI 12.3%", 13, bold=False),
-                         sheet.measure("AI 12.3%", 13, bold=True))
+        regular = sheet.font(15)
+        digital = sheet._font(True, 15)
+        self.assertIs(sheet.font(15, bold=False), sheet.font(15, bold=True))
+        self.assertEqual(list(sheet._runs("涨幅 +12.5%")),
+                         [(False, "涨幅 "), (True, "+12.5%")])
+        try:
+            regular.get_variation_names()
+            digital.get_variation_names()
+        except (AttributeError, OSError):
+            self.skipTest("selected font has no variable weight instances")
+        self.assertEqual(regular.getname()[1], "Regular")
+        self.assertEqual(digital.getname()[1], "Bold")
 
         calls = []
         original = sheet.draw.text
@@ -135,10 +140,14 @@ class TypographyTest(unittest.TestCase):
             return original(position, text, **kwargs)
 
         with mock.patch.object(sheet.draw, "text", recording):
-            sheet.text(0, 0, "标题 123", 14, bold=True)
-        self.assertEqual(len(calls), 1)
-        self.assertNotIn("stroke_width", calls[0])
-        self.assertIs(calls[0]["font"], sheet.font(14))
+            sheet.text(0, 0, "标题 123", 15, bold=True)
+        self.assertEqual(len(calls), 2)
+        self.assertIs(calls[0]["font"], regular)
+        self.assertIs(calls[1]["font"], digital)
+        self.assertTrue(all("stroke_width" not in call for call in calls))
+
+        fallback = render_brief.Sheet(render_brief.FONT_DIR / "MiSans-Medium.ttf")
+        self.assertEqual(fallback._font(True, 15).getname()[1], "Bold")
 
 
 class LayoutTest(unittest.TestCase):
@@ -167,7 +176,11 @@ class SectorLineTest(unittest.TestCase):
         self.width = 346
 
     def test_net_and_sources_shown_when_they_fit(self):
-        line = render_brief.sector_line(self.sheet, FULL_SUMMARY, self.width)
+        summary = {
+            "opportunity_sectors": [FULL_SUMMARY["opportunity_sectors"][0]],
+            "pressure_sectors": FULL_SUMMARY["pressure_sectors"],
+        }
+        line = render_brief.sector_line(self.sheet, summary, self.width)
         self.assertIn("美联储+3·22源", line)
         self.assertIn("地缘-9·20源", line)
 
@@ -201,6 +214,16 @@ class WrapAndPayloadTest(unittest.TestCase):
         self.assertLessEqual(
             sheet.measure(line, render_brief.FONT_SMALL),
             render_brief.CONTENT_W - 10)
+
+    def test_numeric_tokens_are_not_split_between_lines(self):
+        sheet = render_brief.Sheet(render_brief.FONT_PATH)
+        text = "成交额 3,172 亿"
+        lines = sheet.wrap_all(text, 15, 100)
+        self.assertEqual("".join(lines), text)
+        self.assertTrue(any("3,172" in line for line in lines), lines)
+        self.assertTrue(all("3," not in line or "3,172" in line for line in lines), lines)
+        date_lines = sheet.wrap_all("日期 2026-10-24 后", 15, 90)
+        self.assertTrue(any("2026-10-24" in line for line in date_lines), date_lines)
 
     def test_payload_contract_unchanged(self):
         sheet = draw()
@@ -266,10 +289,11 @@ class MultiPageMagazineTest(unittest.TestCase):
         self.assertGreater(total, 1)
         for index, sheet in enumerate(renderer.pages, 1):
             self.assertEqual(sheet.image.size, (400, 300))
+            self.assertTrue(any(r["region"] == "body" and r["text"].strip()
+                                for r in sheet.text_runs))
             footer = [r["text"] for r in sheet.text_runs if r["region"] == "footer"]
             self.assertIn(f"读取 11:17 · {index:02d} / {total:02d}", footer)
-            self.assertTrue(all(r["size"] >= render_brief.FONT_MIN
-                                for r in sheet.text_runs))
+            self.assertTrue(all(r["size"] == 15 for r in sheet.text_runs))
 
     def test_long_english_headline_is_fully_paginated(self):
         title = "Market outlook " + "alpha beta gamma delta " * 80 + "final unique tail"
@@ -281,6 +305,7 @@ class MultiPageMagazineTest(unittest.TestCase):
         rendered = "".join(
             run["text"] for sheet in renderer.pages for run in sheet.text_runs
             if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL
+            and run["text"] != "001"
         )
         self.assertEqual(rendered, " ".join(title.split()))
         self.assertTrue(rendered.endswith("final unique tail"))
@@ -302,7 +327,7 @@ class MultiPageMagazineTest(unittest.TestCase):
         render_brief.draw_heatmap_pages(renderer, data["heatmap"], 1, 0)
         renderer.finalize(NOW)
         renderer.validate()
-        self.assertEqual(len(renderer.pages), 4)
+        self.assertEqual(len(renderer.pages), 5)
         rendered = "\n".join(
             run["text"] for sheet in renderer.pages for run in sheet.text_runs
         )

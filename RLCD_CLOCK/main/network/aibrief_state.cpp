@@ -19,7 +19,7 @@ StaticTaskMutex s_aibrief_mutex;
 AibriefSnapshot s_aibrief_state;
 AibriefPageRequestSnapshot s_aibrief_page_state;
 std::atomic<bool> s_aibrief_page_requested{false};
-// 堆分配：450KB，放在 PSRAM，避免 BSS 段过大导致链接失败
+// 堆分配：48×15000=720000 字节，放在 PSRAM，避免 BSS 段过大导致链接失败
 uint8_t* s_aibrief_bitmaps = nullptr;
 
 inline uint8_t* bitmap_at(uint8_t index)

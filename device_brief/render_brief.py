@@ -5,9 +5,9 @@
 杂志网格 2.0：
 - 数据源为 002（AH 政策、情绪、热力、趋势分析）
 - 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），回退 MiSans
-- 400×300 固定网格、标准字号、真实页码、双栏快讯与末栏均衡
+- 400×300 固定网格、全页 15px、数字 Bold、真实页码、双栏快讯与末栏均衡
 - 保存前逐页检查边界、字号和叠字；超额时调整快讯版位，不截句、不直接裁页
-- 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 30 页
+- 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 48 页
 
 产物（默认写入 aibrief/）：
   latest.bin  8 字节头 + N*15000 字节 1bpp 位图（MSB first，1=黑），N=页数
@@ -31,6 +31,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import struct
 import sys
 import time
@@ -57,9 +58,9 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 WIDTH = 400
 HEIGHT = 300
-MAX_PAGES = 30
+MAX_PAGES = 48
 MAGIC = b"AIB1"
-LAYOUT_VERSION = "2.0-magazine"
+LAYOUT_VERSION = "2.1-bold-digits-15px"
 CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
@@ -85,19 +86,20 @@ if os.environ.get("SOURCE_HAN_SANS_FONT"):
 FONT_PATH = next((p for p in FONT_CANDIDATES if p.is_file()), FONT_DIR / "MiSans-Medium.ttf")
 FONT_CHINESE_PATH = FONT_PATH
 FONT_DIGITAL_PATH = FONT_PATH
-FONT_DIGITAL_BOLD_PATH = FONT_PATH
+FONT_DIGITAL_BOLD_PATH = FONT_DIR / "DejaVuSansMono-Bold.ttf"
 
 BLACK, WHITE = 0, 255
 
 # 旧单页接口保留原有 8px 边距；设备多页统一使用下面的杂志网格。
 MARGIN = 8
 CONTENT_W = WIDTH - MARGIN * 2
-FONT_TITLE = 18
-FONT_SECTION = 14
-FONT_BODY = 13
-FONT_SMALL = 12
-FONT_META = 11
-FONT_MIN = 10
+# 全页统一 15px；仅数值串使用 Bold，其余文字保持 Regular。
+FONT_TITLE = 15
+FONT_SECTION = 15
+FONT_BODY = 15
+FONT_SMALL = 15
+FONT_META = 15
+FONT_MIN = 15
 
 # 4.2" RLCD / 400×300 杂志网格。正文和页脚分别留出安全区，
 # 任何文字都不得依赖裁切、缩字或叠字来“放下”。
@@ -109,10 +111,14 @@ BODY_HEIGHT = BODY_BOTTOM - BODY_TOP
 FOOTER_RULE_Y = 278
 COLUMN_GAP = 14
 COLUMN_W = (PAGE_CONTENT_W - COLUMN_GAP) // 2
-LEADING_BODY = 19
-LEADING_SMALL = 16
-LEADING_META = 15
-LEADING_MIN = 14
+NEWS_NUMBER_W = 36
+LEADING_BODY = 20
+LEADING_SMALL = 20
+LEADING_META = 20
+LEADING_MIN = 20
+
+# 数字及与其组成一个数值串的符号使用 Bold；其余字符使用 Regular。
+_NUMERIC_RUN = re.compile(r"[+-]?\d+(?:[.,:/-]\d+)*%?")
 
 # ---------------------------------------------------------------- 数据收集（002）
 def collect_brief_002(limit: int = 12, demo: bool = False):
@@ -246,8 +252,10 @@ class Sheet:
         self.font_path = font_path or FONT_PATH
         self.font_chinese_path = self.font_path
         self.font_digital_path = self.font_path
-        self.font_digital_bold_path = self.font_path
-        self._cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+        self.font_digital_bold_path = (
+            FONT_DIGITAL_BOLD_PATH if FONT_DIGITAL_BOLD_PATH.is_file() else self.font_path
+        )
+        self._cache: dict[tuple[str, int, str], ImageFont.FreeTypeFont] = {}
         # 每次文字绘制都留档，保存前可逐页检查字号、边界与叠字。
         self.text_runs: List[dict] = []
         self.region = "body"
@@ -256,52 +264,87 @@ class Sheet:
         self.page_subtitle = ""
 
     def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        key = (str(self.font_path), size)
+        # 只有数值串切换 Bold；旧调用方的 bold 参数不再让中文或英文变粗。
+        weight = "Bold" if is_digital else "Regular"
+        key = (str(self.font_path), size, weight)
         if key not in self._cache:
             try:
                 font = ImageFont.truetype(str(self.font_path), size)
-                # SourceHanSansSC-Regular.ttf is a variable font whose default
-                # wght axis is Thin (100). On the 1bpp device bitmap, that
-                # weight loses many CJK strokes during thresholding. Select the
-                # actual Regular instance before measuring or drawing text.
+                # 仓库字体默认 wght=Thin；测量与绘图必须显式选择同一命名实例。
                 set_variation = getattr(font, "set_variation_by_name", None)
+                weight_selected = False
                 if callable(set_variation):
                     try:
-                        set_variation("Regular")
+                        set_variation(weight)
+                        weight_selected = True
                     except (OSError, ValueError):
-                        # Static fallback fonts (for example MiSans Medium) do
-                        # not expose named variable-font instances.
                         pass
+                if is_digital and not weight_selected and self.font_digital_bold_path != self.font_path:
+                    # 静态中文字体无法切换 Bold 时，数值使用独立的粗体文件。
+                    font = ImageFont.truetype(str(self.font_digital_bold_path), size)
                 self._cache[key] = font
             except Exception:
-                # 回退到默认
                 self._cache[key] = ImageFont.load_default()
         return self._cache[key]
 
     def _is_digital_char(self, ch: str) -> bool:
-        return False
+        return ch.isascii() and ch.isdigit()
 
     def _runs(self, text: str):
-        if text:
-            yield False, text
+        """按完整数值串分段，避免小数、日期和百分比丢失字距或符号。"""
+        offset = 0
+        for match in _NUMERIC_RUN.finditer(text):
+            if match.start() > offset:
+                yield False, text[offset:match.start()]
+            yield True, match.group(0)
+            offset = match.end()
+        if offset < len(text):
+            yield False, text[offset:]
 
     def font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
         return self._font(False, size)
 
     def measure(self, text: str, size: int, bold: bool = False) -> int:
-        return int(round(self.draw.textlength(text, font=self._font(False, size))))
+        total = sum(
+            self.draw.textlength(segment, font=self._font(is_digital, size))
+            for is_digital, segment in self._runs(str(text))
+        )
+        return int(round(total))
 
-    def text(self, x: int, y: int, text: str, size: int = 11, bold: bool = False,
+    def _wrap_units(self, text: str, size: int, max_width: int) -> list[str]:
+        """数值串完整保留；单个数值本身超宽时才退回逐字符折行。"""
+        units: list[str] = []
+        for is_digital, segment in self._runs(text):
+            if is_digital and self.measure(segment, size) <= max_width:
+                units.append(segment)
+            else:
+                units.extend(segment)
+        return units
+
+    def text(self, x: int, y: int, text: str, size: int = 15, bold: bool = False,
              fill: int = BLACK) -> int:
-        font = self._font(False, size)
         text = str(text)
-        bbox = self.draw.textbbox((x, y), text, font=font)
-        self.draw.text((x, y), text, font=font, fill=fill)
+        if not text:
+            return 0
+        cursor = float(x)
+        bbox = None
+        for is_digital, segment in self._runs(text):
+            font = self._font(is_digital, size)
+            segment_bbox = self.draw.textbbox((cursor, y), segment, font=font)
+            if bbox is None:
+                bbox = segment_bbox
+            else:
+                bbox = (
+                    min(bbox[0], segment_bbox[0]), min(bbox[1], segment_bbox[1]),
+                    max(bbox[2], segment_bbox[2]), max(bbox[3], segment_bbox[3]),
+                )
+            self.draw.text((cursor, y), segment, font=font, fill=fill)
+            cursor += self.draw.textlength(segment, font=font)
         self.text_runs.append({
             "text": text, "size": size, "region": self.region,
             "bbox": tuple(int(v) for v in bbox),
         })
-        return int(round(self.draw.textlength(text, font=font)))
+        return int(round(cursor - x))
 
     def wrap(self, text: str, size: int, max_width: int, max_lines: int = 2,
              bold: bool = False) -> list[str]:
@@ -310,8 +353,8 @@ class Sheet:
             return []
         lines: list[str] = []
         current = ""
-        for ch in text:
-            trial = current + ch
+        for unit in self._wrap_units(text, size, max_width):
+            trial = current + unit
             if self.measure(trial, size, bold) <= max_width:
                 current = trial
                 continue
@@ -319,9 +362,9 @@ class Sheet:
                 lines.append(current)
                 if len(lines) == max_lines:
                     break
-                current = ch
+                current = unit
             else:
-                current = ch
+                current = unit
         if len(lines) < max_lines and current:
             lines.append(current)
         if len(lines) == max_lines:
@@ -340,14 +383,14 @@ class Sheet:
             return []
         lines: list[str] = []
         current = ""
-        for ch in text:
-            trial = current + ch
+        for unit in self._wrap_units(text, size, max_width):
+            trial = current + unit
             if self.measure(trial, size) <= max_width:
                 current = trial
             else:
                 if current:
                     lines.append(current)
-                current = ch
+                current = unit
         if current:
             lines.append(current)
         return lines
@@ -358,7 +401,7 @@ class Sheet:
     def box(self, x1: int, y: int, x2: int, y2: int, fill: int = BLACK):
         self.draw.rectangle((x1, y, x2, y2), fill=fill)
 
-    def inverted(self, x: int, y: int, text: str, size: int = 11, bold: bool = True,
+    def inverted(self, x: int, y: int, text: str, size: int = 15, bold: bool = True,
                  pad_x: int = 5, pad_y: int = 2) -> int:
         width = self.measure(text, size, bold)
         height = size + 3
@@ -367,7 +410,7 @@ class Sheet:
         return width + pad_x * 2
 
     def section(self, y: int, title: str, right: str = "",
-                right_size: int = 12) -> int:
+                right_size: int = 15) -> int:
         self.inverted(MARGIN, y, title, FONT_SECTION, True)
         if right:
             width = self.measure(right, right_size)
@@ -468,19 +511,19 @@ class MultiPageRenderer:
             title_size = FONT_TITLE
             if sheet.measure(title, title_size) > PAGE_CONTENT_W:
                 title_size = FONT_SECTION
-            sheet.text(PAGE_MARGIN, 3, title, title_size)
-            sheet.text(PAGE_MARGIN, 27, sheet.page_subtitle, FONT_MIN)
-            sheet.rule(PAGE_MARGIN, 43, WIDTH - PAGE_MARGIN - 1, 2)
+            sheet.text(PAGE_MARGIN, 0, title, title_size)
+            sheet.text(PAGE_MARGIN, 22, sheet.page_subtitle, FONT_MIN)
+            sheet.rule(PAGE_MARGIN, 44, WIDTH - PAGE_MARGIN - 1, 2)
 
             sheet.region = "footer"
             right = WIDTH - PAGE_MARGIN - 1
             sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, right, 1)
             progress_x = PAGE_MARGIN + round((right - PAGE_MARGIN) * index / total_pages)
             sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, progress_x, 2)
-            sheet.text(PAGE_MARGIN, 284, f"章鱼 AI · {date_text}", FONT_MIN)
+            sheet.text(PAGE_MARGIN, 279, f"章鱼 AI · {date_text}", FONT_MIN)
             page_text = f"读取 {self._now.strftime('%H:%M')} · {index:02d} / {total_pages:02d}"
             sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(page_text, FONT_MIN),
-                       284, page_text, FONT_MIN)
+                       279, page_text, FONT_MIN)
             sheet.region = "body"
         self._finalized = True
         return self
@@ -501,10 +544,12 @@ class MultiPageRenderer:
             if sheet.image.size != (WIDTH, HEIGHT):
                 errors.append(f"第{page_no}页画布为 {sheet.image.size}，应为 {(WIDTH, HEIGHT)}")
             runs = [r for r in sheet.text_runs if r["text"].strip()]
+            if sheet.editorial and not any(r["region"] == "body" for r in runs):
+                errors.append(f"第{page_no}页没有正文")
             for run in runs:
                 x0, y0, x1, y1 = run["bbox"]
-                if run["size"] < FONT_MIN:
-                    errors.append(f"第{page_no}页字号 {run['size']} 低于 {FONT_MIN}")
+                if run["size"] != 15:
+                    errors.append(f"第{page_no}页字号 {run['size']} 不是 15px")
                 if x0 < 0 or y0 < 0 or x1 > WIDTH or y1 > HEIGHT:
                     errors.append(f"第{page_no}页文字越出画布：{run['text'][:24]!r} {run['bbox']}")
                 if sheet.editorial and run["region"] == "body":
@@ -554,7 +599,7 @@ class MultiPageRenderer:
             combined.paste(mono, (0, i * HEIGHT))
         combined.save(out_dir / "latest_combined.png")
 
-        # 5 列校样墙：30 页恰好 5×6，可在推送前逐页目检。
+        # 5 列校样墙：行数按实际页数计算，可在推送前逐页目检。
         columns = 5
         gap = 8
         rows = math.ceil(len(mono_pages) / columns)
@@ -579,6 +624,9 @@ class MultiPageRenderer:
             "sha256": hashlib.sha256(payload).hexdigest(),
             "crc32_bitmap": f"{zlib.crc32(bitmaps) & 0xffffffff:08x}",
             "font": str(self.font_path.name),
+            "font_size": 15,
+            "numeric_font_weight": "Bold",
+            "text_font_weight": "Regular",
             "layout": LAYOUT_VERSION,
             "layout_validated": True,
             "safe_area": [PAGE_MARGIN, BODY_TOP, WIDTH - PAGE_MARGIN, BODY_BOTTOM],
@@ -865,7 +913,7 @@ class NewsFlow(PageFlow):
         x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
         self.sheet.text(x, y + 1, f"{item['number']:03d}", FONT_MIN)
         for line in item["lines"]:
-            self.sheet.text(x + 24, y, line, FONT_SMALL)
+            self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL)
             y += LEADING_SMALL
         y += 7
         if y < BODY_BOTTOM:
@@ -892,7 +940,7 @@ class NewsFlow(PageFlow):
                 if column == 0 and chunk_index == 0:
                     self.sheet.text(x, y + 1, f"{number:03d}", FONT_MIN)
                 for line in column_lines:
-                    self.sheet.text(x + 24, y, line, FONT_SMALL)
+                    self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL)
                     y += LEADING_SMALL
                 if y + 3 < BODY_BOTTOM:
                     self.sheet.rule(x, y + 2, x + COLUMN_W - 5, 1)
@@ -904,7 +952,7 @@ class NewsFlow(PageFlow):
     def add_item(self, number: int, title: str):
         if self.dedicated_page:
             self.new_page()
-        lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - 25)
+        lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - NEWS_NUMBER_W)
         if not lines:
             return
         item_height = len(lines) * LEADING_SMALL + 7
@@ -1292,7 +1340,7 @@ def main() -> int:
                         help="A 股不是最新交易日或回退快照时退出 3")
     parser.add_argument("--min-live-sources", type=int, default=20)
     parser.add_argument("--limit", type=int, default=12)
-    parser.add_argument("--pages", type=int, default=0, help="最大页数（0=固件上限 30）")
+    parser.add_argument("--pages", type=int, default=0, help="最大页数（0=固件上限 48）")
     args = parser.parse_args()
     if args.pages < 0:
         parser.error("--pages 不能为负数")

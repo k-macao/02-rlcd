@@ -16,8 +16,8 @@ inline constexpr size_t kBitmapBytes =
 // 服务器负载：4 字节魔数 + 小端宽度 + 小端高度 + N * 1bpp 位图（1 = 黑）。
 inline constexpr size_t kEnvelopeBytes = 8;
 inline constexpr size_t kPayloadBytes = kEnvelopeBytes + kBitmapBytes;
-// 多页支持：最多 30 页（450KB 位图），每页 1 分钟轮播，完整展示 002 仓库全量内容。
-inline constexpr int kMaxPages = 30;
+// 多页支持：最多 48 页（720000 字节位图），每页 1 分钟轮播，完整展示 002 仓库全量内容。
+inline constexpr int kMaxPages = 48;
 inline constexpr size_t kMaxBitmapBytes = kBitmapBytes * static_cast<size_t>(kMaxPages);
 inline constexpr size_t kMaxPayloadBytes = kEnvelopeBytes + kMaxBitmapBytes;
 inline constexpr size_t kDownloadBufferBytes = kMaxPayloadBytes + 1;
