@@ -478,7 +478,7 @@ class MultiPageRenderer:
             progress_x = PAGE_MARGIN + round((right - PAGE_MARGIN) * index / total_pages)
             sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, progress_x, 2)
             sheet.text(PAGE_MARGIN, 284, f"章鱼 AI · {date_text}", FONT_MIN)
-            page_text = f"{index:02d} / {total_pages:02d}"
+            page_text = f"读取 {self._now.strftime('%H:%M')} · {index:02d} / {total_pages:02d}"
             sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(page_text, FONT_MIN),
                        284, page_text, FONT_MIN)
             sheet.region = "body"

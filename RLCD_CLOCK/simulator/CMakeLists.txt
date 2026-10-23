@@ -108,7 +108,7 @@ target_include_directories(aggregate_clock_view_test PRIVATE "../main/ui" "../ma
 target_link_libraries(aggregate_clock_view_test PRIVATE lvgl)
 
 add_executable(aibrief_contract_test "../tests/aibrief_contract_host_test.cpp")
-target_include_directories(aibrief_contract_test PRIVATE "../main/network")
+target_include_directories(aibrief_contract_test PRIVATE "../main/network" "../main/ui")
 
 add_executable(settings_visual_style_test "../tests/settings_visual_style_host_test.cpp")
 target_include_directories(settings_visual_style_test PRIVATE "../main/ui" "../components/app_bsp")

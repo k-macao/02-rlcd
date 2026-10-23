@@ -13,9 +13,21 @@ struct AibriefSnapshot {
     bool live_source = false;
     uint32_t version = 0;
     time_t last_sync = 0;
+    // 仅在位图成功发布后更新；失败重试不会冒充新的读取时间。
+    time_t last_success = 0;
     uint8_t page_count = 0;
     uint8_t current_page = 0;
 };
+
+inline void aibrief_record_sync_time(AibriefSnapshot &snapshot,
+                                     time_t sync_time,
+                                     bool succeeded)
+{
+    snapshot.last_sync = sync_time;
+    if (succeeded) {
+        snapshot.last_success = sync_time;
+    }
+}
 
 struct AibriefPageRequestSnapshot {
     bool requested = false;

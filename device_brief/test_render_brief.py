@@ -267,7 +267,7 @@ class MultiPageMagazineTest(unittest.TestCase):
         for index, sheet in enumerate(renderer.pages, 1):
             self.assertEqual(sheet.image.size, (400, 300))
             footer = [r["text"] for r in sheet.text_runs if r["region"] == "footer"]
-            self.assertIn(f"{index:02d} / {total:02d}", footer)
+            self.assertIn(f"读取 11:17 · {index:02d} / {total:02d}", footer)
             self.assertTrue(all(r["size"] >= render_brief.FONT_MIN
                                 for r in sheet.text_runs))
 
