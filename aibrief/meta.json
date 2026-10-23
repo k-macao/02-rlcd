@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23 18:47:13",
+  "generated_at": "2026-10-23 18:51:15",
   "bias": "中性",
   "bull": 46,
   "bear": 54,
@@ -20,8 +20,8 @@
   "pages": 28,
   "bytes": 420008,
   "page_bytes": 420000,
-  "sha256": "0aa92f0a29203c00b15ba41194cf67a6acea6bf2f5900f60cc7f56ed2b8017db",
-  "crc32_bitmap": "475e6c3e",
+  "sha256": "f03d7271a9b4cff069f91f10e06704b82bc3c1146db342b2734a7be381f5126e",
+  "crc32_bitmap": "8c02ef1f",
   "layout": "2.0-magazine",
   "layout_validated": true,
   "safe_area": [
