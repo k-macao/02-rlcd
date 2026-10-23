@@ -11,6 +11,7 @@
 - **画布先适配设备**：所有页面先按 400×300 排版，正文安全区为 `x=12..388`、`y=48..273`，页眉、正文、页脚分区固定，不使用图片缩放来迁就内容。
 - **统一阿里巴巴普惠体 3.0、全页 16px**：标题、正文、标签、页眉和页脚均为 16px；页标题、栏目标题、卡片标题和快讯标题，以及数字及其数值串符号使用 `85 Bold`，其余文字使用 `55 Regular`，不描边、不叠影。渲染机读取 `device_brief/fonts/AlibabaPuHuiTi-3-55-Regular.ttf` 和 `AlibabaPuHuiTi-3-85-Bold.ttf`，可分别通过 `ALIBABA_PUHUITI_FONT`、`ALIBABA_PUHUITI_BOLD_FONT` 覆盖路径；缺少字体时直接停止，不回退其他字体家族。
 - **按混合字重真实测量**：标题和正文均按各自字重测量；小数、百分比、日期和时间作为完整数值串参与测量与折行，不在数值中间断行；4.2 英寸面板约 120dpi，不通过缩字塞内容。
+- **原生 1bpp 清晰渲染**：`mono_text.py` 使用 FreeType `FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT` 直接生成黑白字形，所有字形落在整数像素上，测量与绘制共用同一套整数 advance。不再经过灰度图、128 阈值、抖动或亚像素定位；页面预检只允许纯黑/纯白两类像素。面板本身是 1bpp，不能显示真正的灰阶抗锯齿，因此不制造噪点来假装平滑。
 - **杂志式版面**：统一 running header/footer、右下读取时间与真实页码、阅读进度线；总结页使用指标行，行情页使用指数数据网格，热力图使用双栏数据卡，快讯使用双栏流并对末页做左右栏高度均衡。
 - **完整折行而非截句**：超长中英文标题会跨栏或跨页续排，结尾不省略。页码在全部分页结束后统一绘制，不再显示预估总数。
 
@@ -21,17 +22,20 @@
 1. 画布必须为 400×300，页数必须在本次预算及固件 1..48 页范围内。
 2. 所有文字必须恰好为 16px，不得越出画布或侵入页眉/页脚。
 3. 按 Regular/Bold 混合字重检查文字 bounding box，发现叠字直接失败。
-4. 全部通过后才写入二进制和 PNG；页数减少时同步清理旧 `page_*.png`，避免残页混入。
-5. 同时生成 5 列校样墙，行数按实际页数计算，便于推送前逐页目检。
+4. 逐页扫描像素，出现任何灰阶值就停止发布，确保设备收到原生 1bpp 点阵。
+5. 全部通过后才写入二进制和 PNG；页数减少时同步清理旧 `page_*.png`，避免残页混入。
+6. 同时生成 5 列校样墙，行数按实际页数计算，便于推送前逐页目检。
 
-运行 24 项离线回归测试：
+运行 26 项离线回归测试：
 
 ```bash
-python3 -m pip install pillow
+python3 -m pip install pillow freetype-py
 python3 device_brief/test_render_brief.py
 ```
 
-测试覆盖全页阿里巴巴普惠体 16px、标题/数字 Bold 与其他 Regular、数值串完整折行、单页/多页协议、右下读取时间与真实页码、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每日两次 schedule、北京时间及旧行情阻断发布。
+测试覆盖全页阿里巴巴普惠体 16px、标题/数字 Bold 与其他 Regular、MONO 字体调用、整数像素、纯黑白页面与灰阶阻断、数值串完整折行、单页/多页协议、右下读取时间与真实页码、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每日两次 schedule、北京时间及旧行情阻断发布。
+
+实现参考 [FreeType 的单色 hinting 说明](https://github.com/freetype/freetype/blob/master/include/freetype/freetype.h)与 [freetype-py 的 MONO 示例](https://github.com/rougier/freetype-py/blob/master/examples/glyph-monochrome.py)。同时对比了 [ttfautohint-py](https://github.com/fonttools/ttfautohint-py) 预处理、不同阈值及像素字体方案；预处理没有带来足够收益，像素字体则会改变既定字体并存在字符覆盖问题，因此均未采用。真机 [lv_font_conv](https://github.com/lvgl/lv_font_conv) 在 `bpp=1` 时已经使用 MONO 与自动 hinting，无需增加灰阶或子像素格式。
 
 ## 用法
 
