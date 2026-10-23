@@ -359,5 +359,57 @@ class MultiPageMagazineTest(unittest.TestCase):
             self.assertFalse(out.exists())
 
 
+class FreshnessAndScheduleTest(unittest.TestCase):
+    def test_live_collection_reuses_market_freshness_result(self):
+        market = {
+            "date": "2026-10-23", "source": "eastmoney", "indices": [],
+            "turnover": {}, "breadth": {}, "leaders": [], "laggards": [],
+        }
+        freshness = {"ok": True, "source": "eastmoney", "reason": "测试：最新"}
+        with (mock.patch.object(render_brief.sources, "collect_all", return_value={}),
+              mock.patch.object(render_brief.sources, "analyze_brief", return_value={}),
+              mock.patch.object(render_brief.sources, "collect_market_for_push",
+                                return_value=(market, freshness)) as collect_market,
+              mock.patch.object(render_brief.sources, "get_ashare_market",
+                                side_effect=AssertionError("不应重复抓取 A 股日 K")),
+              mock.patch.object(render_brief.sources, "get_hk_market", return_value={}),
+              mock.patch.object(render_brief.sources, "get_us_market", return_value={}),
+              mock.patch.object(render_brief.sources, "analyze_keyword_heatmap", return_value={}),
+              mock.patch.object(render_brief.sources, "analyze_policy", return_value={})):
+            data = render_brief.collect_brief_002()
+        collect_market.assert_called_once_with()
+        self.assertIs(data["market_ashare"], market)
+        self.assertIs(data["market_freshness"], freshness)
+
+    def test_stale_market_blocks_render_and_output(self):
+        data = multi_data({"live-source": [{"title": "unique live headline"}]})
+        data["market_freshness"] = {
+            "ok": False, "source": "snapshot", "reason": "测试：旧快照",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "must-not-exist"
+            argv = ["render_brief.py", "--require-fresh-market", "--out-dir", str(out)]
+            with (mock.patch.object(render_brief, "collect_brief_002", return_value=data),
+                  mock.patch.object(render_brief, "render_with_page_budget") as render,
+                  mock.patch.object(sys, "argv", argv)):
+                self.assertEqual(render_brief.main(), 3)
+            render.assert_not_called()
+            self.assertFalse(out.exists())
+
+    def test_schedule_is_twice_daily_and_requires_freshness(self):
+        workflow = (render_brief.ROOT / ".github" / "workflows" / "aibrief.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(workflow.count("- cron:"), 2)
+        self.assertIn('- cron: "10 23 * * *"', workflow)  # 北京 07:10
+        self.assertIn('- cron: "10 11 * * *"', workflow)  # 北京 19:10
+        self.assertIn("--require-fresh-market", workflow)
+
+    def test_generated_time_uses_beijing_timezone(self):
+        now = render_brief.china_now()
+        self.assertEqual(now.utcoffset().total_seconds(), 8 * 60 * 60)
+        self.assertEqual(now.tzinfo.key, "Asia/Shanghai")
+
+
 if __name__ == "__main__":
     unittest.main()
