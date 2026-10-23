@@ -4,8 +4,8 @@
 
 杂志网格 2.0：
 - 数据源为 002（AH 政策、情绪、热力、趋势分析）
-- 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），回退 MiSans
-- 400×300 固定网格、全页 15px、数字 Bold、真实页码、双栏快讯与末栏均衡
+- 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0）
+- 400×300 固定网格、全页 16px、标题/数字 Bold、真实页码、双栏快讯与末栏均衡
 - 保存前逐页检查边界、字号和叠字；超额时调整快讯版位，不截句、不直接裁页
 - 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 48 页
 
@@ -60,7 +60,7 @@ WIDTH = 400
 HEIGHT = 300
 MAX_PAGES = 48
 MAGIC = b"AIB1"
-LAYOUT_VERSION = "2.1-bold-digits-15px"
+LAYOUT_VERSION = "2.2-alibaba-puhuiti-16px"
 CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
@@ -69,37 +69,27 @@ def china_now() -> datetime:
     return datetime.now(CN_TIMEZONE)
 
 
-# 字体：思源黑体优先，回退 MiSans
+# 全页只使用阿里巴巴普惠体 3.0；缺文件时直接失败，不回退其他字体家族。
 FONT_DIR = ROOT / "device_brief" / "fonts"
-FONT_CANDIDATES = [
-    FONT_DIR / "SourceHanSansSC-Regular.ttf",
-    FONT_DIR / "NotoSansSC-Regular.ttf",
-    FONT_DIR / "SourceHanSansSC[wght].ttf",
-    Path("/tmp/google-fonts/ofl/notosanssc/NotoSansSC[wght].ttf"),
-    FONT_DIR / "MiSans-Medium.ttf",
-    ROOT / "device_brief" / "fonts" / "MiSans-Medium.ttf",
-]
-# 环境变量可覆盖
-if os.environ.get("SOURCE_HAN_SANS_FONT"):
-    FONT_CANDIDATES.insert(0, Path(os.environ["SOURCE_HAN_SANS_FONT"]))
-
-FONT_PATH = next((p for p in FONT_CANDIDATES if p.is_file()), FONT_DIR / "MiSans-Medium.ttf")
-FONT_CHINESE_PATH = FONT_PATH
-FONT_DIGITAL_PATH = FONT_PATH
-FONT_DIGITAL_BOLD_PATH = FONT_DIR / "DejaVuSansMono-Bold.ttf"
+FONT_PATH = Path(os.environ.get(
+    "ALIBABA_PUHUITI_FONT", str(FONT_DIR / "AlibabaPuHuiTi-3-55-Regular.ttf")
+))
+FONT_BOLD_PATH = Path(os.environ.get(
+    "ALIBABA_PUHUITI_BOLD_FONT", str(FONT_DIR / "AlibabaPuHuiTi-3-85-Bold.ttf")
+))
 
 BLACK, WHITE = 0, 255
 
 # 旧单页接口保留原有 8px 边距；设备多页统一使用下面的杂志网格。
 MARGIN = 8
 CONTENT_W = WIDTH - MARGIN * 2
-# 全页统一 15px；仅数值串使用 Bold，其余文字保持 Regular。
-FONT_TITLE = 15
-FONT_SECTION = 15
-FONT_BODY = 15
-FONT_SMALL = 15
-FONT_META = 15
-FONT_MIN = 15
+# 全页统一 16px；标题与完整数值串使用 Bold，其余文字保持 Regular。
+FONT_TITLE = 16
+FONT_SECTION = 16
+FONT_BODY = 16
+FONT_SMALL = 16
+FONT_META = 16
+FONT_MIN = 16
 
 # 4.2" RLCD / 400×300 杂志网格。正文和页脚分别留出安全区，
 # 任何文字都不得依赖裁切、缩字或叠字来“放下”。
@@ -246,15 +236,12 @@ def headline_candidates(brief: dict, limit: int = 6) -> list[str]:
 
 # ---------------------------------------------------------------- 排版工具
 class Sheet:
-    def __init__(self, font_path: Path | None = None):
+    def __init__(self, font_path: Path | None = None,
+                 bold_font_path: Path | None = None):
         self.image = Image.new("L", (WIDTH, HEIGHT), WHITE)
         self.draw = ImageDraw.Draw(self.image)
         self.font_path = font_path or FONT_PATH
-        self.font_chinese_path = self.font_path
-        self.font_digital_path = self.font_path
-        self.font_digital_bold_path = (
-            FONT_DIGITAL_BOLD_PATH if FONT_DIGITAL_BOLD_PATH.is_file() else self.font_path
-        )
+        self.bold_font_path = bold_font_path or FONT_BOLD_PATH
         self._cache: dict[tuple[str, int, str], ImageFont.FreeTypeFont] = {}
         # 每次文字绘制都留档，保存前可逐页检查字号、边界与叠字。
         self.text_runs: List[dict] = []
@@ -264,27 +251,16 @@ class Sheet:
         self.page_subtitle = ""
 
     def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        # 只有数值串切换 Bold；旧调用方的 bold 参数不再让中文或英文变粗。
-        weight = "Bold" if is_digital else "Regular"
-        key = (str(self.font_path), size, weight)
+        # 标题或数值串都使用同一字体家族的 Bold，其余文字使用 Regular。
+        use_bold = bool(bold or is_digital)
+        weight = "Bold" if use_bold else "Regular"
+        font_path = self.bold_font_path if use_bold else self.font_path
+        key = (str(font_path), size, weight)
         if key not in self._cache:
             try:
-                font = ImageFont.truetype(str(self.font_path), size)
-                # 仓库字体默认 wght=Thin；测量与绘图必须显式选择同一命名实例。
-                set_variation = getattr(font, "set_variation_by_name", None)
-                weight_selected = False
-                if callable(set_variation):
-                    try:
-                        set_variation(weight)
-                        weight_selected = True
-                    except (OSError, ValueError):
-                        pass
-                if is_digital and not weight_selected and self.font_digital_bold_path != self.font_path:
-                    # 静态中文字体无法切换 Bold 时，数值使用独立的粗体文件。
-                    font = ImageFont.truetype(str(self.font_digital_bold_path), size)
-                self._cache[key] = font
-            except Exception:
-                self._cache[key] = ImageFont.load_default()
+                self._cache[key] = ImageFont.truetype(str(font_path), size)
+            except (OSError, ValueError) as exc:
+                raise RuntimeError(f"无法加载阿里巴巴普惠体 {weight}：{font_path}") from exc
         return self._cache[key]
 
     def _is_digital_char(self, ch: str) -> bool:
@@ -302,26 +278,27 @@ class Sheet:
             yield False, text[offset:]
 
     def font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-        return self._font(False, size)
+        return self._font(False, size, bold)
 
     def measure(self, text: str, size: int, bold: bool = False) -> int:
         total = sum(
-            self.draw.textlength(segment, font=self._font(is_digital, size))
+            self.draw.textlength(segment, font=self._font(is_digital, size, bold))
             for is_digital, segment in self._runs(str(text))
         )
         return int(round(total))
 
-    def _wrap_units(self, text: str, size: int, max_width: int) -> list[str]:
+    def _wrap_units(self, text: str, size: int, max_width: int,
+                    bold: bool = False) -> list[str]:
         """数值串完整保留；单个数值本身超宽时才退回逐字符折行。"""
         units: list[str] = []
         for is_digital, segment in self._runs(text):
-            if is_digital and self.measure(segment, size) <= max_width:
+            if is_digital and self.measure(segment, size, bold) <= max_width:
                 units.append(segment)
             else:
                 units.extend(segment)
         return units
 
-    def text(self, x: int, y: int, text: str, size: int = 15, bold: bool = False,
+    def text(self, x: int, y: int, text: str, size: int = 16, bold: bool = False,
              fill: int = BLACK) -> int:
         text = str(text)
         if not text:
@@ -329,7 +306,7 @@ class Sheet:
         cursor = float(x)
         bbox = None
         for is_digital, segment in self._runs(text):
-            font = self._font(is_digital, size)
+            font = self._font(is_digital, size, bold)
             segment_bbox = self.draw.textbbox((cursor, y), segment, font=font)
             if bbox is None:
                 bbox = segment_bbox
@@ -342,7 +319,7 @@ class Sheet:
             cursor += self.draw.textlength(segment, font=font)
         self.text_runs.append({
             "text": text, "size": size, "region": self.region,
-            "bbox": tuple(int(v) for v in bbox),
+            "bold": bool(bold), "bbox": tuple(int(v) for v in bbox),
         })
         return int(round(cursor - x))
 
@@ -353,7 +330,7 @@ class Sheet:
             return []
         lines: list[str] = []
         current = ""
-        for unit in self._wrap_units(text, size, max_width):
+        for unit in self._wrap_units(text, size, max_width, bold):
             trial = current + unit
             if self.measure(trial, size, bold) <= max_width:
                 current = trial
@@ -376,16 +353,17 @@ class Sheet:
                 lines[-1] = last + "…"
         return lines
 
-    def wrap_all(self, text: str, size: int, max_width: int) -> list[str]:
+    def wrap_all(self, text: str, size: int, max_width: int,
+                 bold: bool = False) -> list[str]:
         """不限制行数，完整折行，全部内容都显示。"""
         text = " ".join(str(text).split())
         if not text:
             return []
         lines: list[str] = []
         current = ""
-        for unit in self._wrap_units(text, size, max_width):
+        for unit in self._wrap_units(text, size, max_width, bold):
             trial = current + unit
-            if self.measure(trial, size) <= max_width:
+            if self.measure(trial, size, bold) <= max_width:
                 current = trial
             else:
                 if current:
@@ -401,7 +379,7 @@ class Sheet:
     def box(self, x1: int, y: int, x2: int, y2: int, fill: int = BLACK):
         self.draw.rectangle((x1, y, x2, y2), fill=fill)
 
-    def inverted(self, x: int, y: int, text: str, size: int = 15, bold: bool = True,
+    def inverted(self, x: int, y: int, text: str, size: int = 16, bold: bool = True,
                  pad_x: int = 5, pad_y: int = 2) -> int:
         width = self.measure(text, size, bold)
         height = size + 3
@@ -410,7 +388,7 @@ class Sheet:
         return width + pad_x * 2
 
     def section(self, y: int, title: str, right: str = "",
-                right_size: int = 15) -> int:
+                right_size: int = 16) -> int:
         self.inverted(MARGIN, y, title, FONT_SECTION, True)
         if right:
             width = self.measure(right, right_size)
@@ -472,8 +450,10 @@ class LayoutError(RuntimeError):
 
 
 class MultiPageRenderer:
-    def __init__(self, font_path: Path | None = None):
+    def __init__(self, font_path: Path | None = None,
+                 bold_font_path: Path | None = None):
         self.font_path = font_path or FONT_PATH
+        self.bold_font_path = bold_font_path or FONT_BOLD_PATH
         self.pages: List[Sheet] = []
         self.page_limit = MAX_PAGES
         self.layout_meta: Dict[str, Any] = {}
@@ -482,7 +462,7 @@ class MultiPageRenderer:
 
     def new_page(self, title: str = "", subtitle: str = "", page_info: str = "") -> Sheet:
         # page_info 仅为旧调用签名保留；页码只能在全部分页完成后绘制。
-        sheet = Sheet(self.font_path)
+        sheet = Sheet(self.font_path, self.bold_font_path)
         sheet.editorial = True
         sheet.page_title = title or "AI 简报"
         sheet.page_subtitle = subtitle or "OCTOPUS AI / DAILY BRIEF"
@@ -509,9 +489,9 @@ class MultiPageRenderer:
             sheet.box(0, 0, WIDTH - 1, 2)
             title = sheet.page_title
             title_size = FONT_TITLE
-            if sheet.measure(title, title_size) > PAGE_CONTENT_W:
+            if sheet.measure(title, title_size, True) > PAGE_CONTENT_W:
                 title_size = FONT_SECTION
-            sheet.text(PAGE_MARGIN, 0, title, title_size)
+            sheet.text(PAGE_MARGIN, 0, title, title_size, True)
             sheet.text(PAGE_MARGIN, 22, sheet.page_subtitle, FONT_MIN)
             sheet.rule(PAGE_MARGIN, 44, WIDTH - PAGE_MARGIN - 1, 2)
 
@@ -548,8 +528,8 @@ class MultiPageRenderer:
                 errors.append(f"第{page_no}页没有正文")
             for run in runs:
                 x0, y0, x1, y1 = run["bbox"]
-                if run["size"] != 15:
-                    errors.append(f"第{page_no}页字号 {run['size']} 不是 15px")
+                if run["size"] != 16:
+                    errors.append(f"第{page_no}页字号 {run['size']} 不是 16px")
                 if x0 < 0 or y0 < 0 or x1 > WIDTH or y1 > HEIGHT:
                     errors.append(f"第{page_no}页文字越出画布：{run['text'][:24]!r} {run['bbox']}")
                 if sheet.editorial and run["region"] == "body":
@@ -624,8 +604,11 @@ class MultiPageRenderer:
             "sha256": hashlib.sha256(payload).hexdigest(),
             "crc32_bitmap": f"{zlib.crc32(bitmaps) & 0xffffffff:08x}",
             "font": str(self.font_path.name),
-            "font_size": 15,
+            "bold_font": str(self.bold_font_path.name),
+            "font_family": "Alibaba PuHuiTi 3.0",
+            "font_size": 16,
             "numeric_font_weight": "Bold",
+            "title_font_weight": "Bold",
             "text_font_weight": "Regular",
             "layout": LAYOUT_VERSION,
             "layout_validated": True,
@@ -689,7 +672,7 @@ def sector_line(sheet: Sheet, summary: dict, max_width: int) -> str:
 def draw_sheet(summary: dict, market: dict | None, review: dict | None,
                headlines: list[str], now: datetime, live: int, total: int,
                demo: bool) -> Sheet:
-    """兼容旧单页绘制（测试用），使用思源黑体"""
+    """兼容旧单页绘制（测试用），使用阿里巴巴普惠体"""
     sheet = Sheet(FONT_PATH)
     right_edge = WIDTH - MARGIN
 
@@ -745,9 +728,9 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
     if headlines:
         for title in headlines[:3]:
             sheet.draw.rectangle((MARGIN, y + 5, MARGIN + 3, y + 8), fill=BLACK)
-            line = sheet.wrap(title, FONT_SMALL, CONTENT_W - 10, 1)
+            line = sheet.wrap(title, FONT_SMALL, CONTENT_W - 10, 1, True)
             if line:
-                sheet.text(MARGIN + 10, y, line[0], FONT_SMALL)
+                sheet.text(MARGIN + 10, y, line[0], FONT_SMALL, True)
             y += 16
     return sheet
 
@@ -781,8 +764,9 @@ class PageFlow:
             self.new_page()
 
     def add_text(self, text: str, size: int = FONT_BODY,
-                 leading: int = LEADING_BODY, indent: int = 0, gap: int = 6):
-        lines = self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent)
+                 leading: int = LEADING_BODY, indent: int = 0, gap: int = 6,
+                 bold: bool = False):
+        lines = self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent, bold)
         if not lines:
             return
         if len(lines) * leading <= BODY_HEIGHT:
@@ -790,29 +774,30 @@ class PageFlow:
         for line in lines:
             if self.y + leading > BODY_BOTTOM:
                 self.new_page()
-            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size)
+            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size, bold)
             self.y += leading
         self.y += gap
 
     def add_rich(self, paragraphs: List[dict], gap: int = 7, separator: bool = False):
         """排版一组不同层级的完整段落；一块能放下时避免跨页拆散。"""
-        specs: List[tuple[str, int, int, int]] = []
+        specs: List[tuple[str, int, int, int, bool]] = []
         for paragraph in paragraphs:
             text = str(paragraph.get("text") or "")
             size = int(paragraph.get("size") or FONT_BODY)
             leading = int(paragraph.get("leading") or (size + 6))
             indent = int(paragraph.get("indent") or 0)
-            for line in self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent):
-                specs.append((line, size, leading, indent))
+            bold = bool(paragraph.get("bold"))
+            for line in self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent, bold):
+                specs.append((line, size, leading, indent, bold))
         if not specs:
             return
         height = sum(spec[2] for spec in specs)
         if height <= BODY_HEIGHT:
             self.ensure(height)
-        for line, size, leading, indent in specs:
+        for line, size, leading, indent, bold in specs:
             if self.y + leading > BODY_BOTTOM:
                 self.new_page()
-            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size)
+            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size, bold)
             self.y += leading
         if separator and self.y + 4 < BODY_BOTTOM:
             self.sheet.rule(PAGE_MARGIN, self.y + 2, WIDTH - PAGE_MARGIN - 1, 1)
@@ -832,8 +817,8 @@ class PageFlow:
             self.ensure(20 + min(2, len(lines)) * leading)
         x = PAGE_MARGIN
         self.sheet.box(x, self.y + 5, x + 5, self.y + 10)
-        self.sheet.text(x + 10, self.y, label, FONT_META)
-        line_start = x + 18 + self.sheet.measure(label, FONT_META)
+        self.sheet.text(x + 10, self.y, label, FONT_META, True)
+        line_start = x + 18 + self.sheet.measure(label, FONT_META, True)
         if line_start < WIDTH - PAGE_MARGIN - 12:
             self.sheet.rule(line_start, self.y + 8, WIDTH - PAGE_MARGIN - 1, 1)
         self.y += 20
@@ -913,7 +898,7 @@ class NewsFlow(PageFlow):
         x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
         self.sheet.text(x, y + 1, f"{item['number']:03d}", FONT_MIN)
         for line in item["lines"]:
-            self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL)
+            self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL, True)
             y += LEADING_SMALL
         y += 7
         if y < BODY_BOTTOM:
@@ -940,7 +925,7 @@ class NewsFlow(PageFlow):
                 if column == 0 and chunk_index == 0:
                     self.sheet.text(x, y + 1, f"{number:03d}", FONT_MIN)
                 for line in column_lines:
-                    self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL)
+                    self.sheet.text(x + NEWS_NUMBER_W, y, line, FONT_SMALL, True)
                     y += LEADING_SMALL
                 if y + 3 < BODY_BOTTOM:
                     self.sheet.rule(x, y + 2, x + COLUMN_W - 5, 1)
@@ -952,7 +937,7 @@ class NewsFlow(PageFlow):
     def add_item(self, number: int, title: str):
         if self.dedicated_page:
             self.new_page()
-        lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - NEWS_NUMBER_W)
+        lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - NEWS_NUMBER_W, True)
         if not lines:
             return
         item_height = len(lines) * LEADING_SMALL + 7
@@ -1030,7 +1015,7 @@ class HeatFlow(NewsFlow):
         net = _int(keyword.get("net"))
         sentiment = str(keyword.get("sentiment_label") or keyword.get("sentiment") or "中性")
         etf = self._etf_codes(keyword)
-        title_lines = self.sheet.wrap_all(tag, FONT_BODY, COLUMN_W - 43)
+        title_lines = self.sheet.wrap_all(tag, FONT_BODY, COLUMN_W - 43, True)
         meta = f"{net:+d} · {sentiment}"
         separate_etf = bool(etf) and self.sheet.measure(meta + etf, FONT_MIN) + 12 > COLUMN_W
         height = len(title_lines) * 18 + LEADING_MIN + (LEADING_MIN if separate_etf else 0) + 9
@@ -1043,7 +1028,7 @@ class HeatFlow(NewsFlow):
         self.sheet.text(x + COLUMN_W - self.sheet.measure(heat_text, FONT_TITLE),
                         self.y, heat_text, FONT_TITLE)
         for line in title_lines:
-            self.sheet.text(x, self.y, line, FONT_BODY)
+            self.sheet.text(x, self.y, line, FONT_BODY, True)
             self.y += 18
         self.sheet.text(x, self.y, meta, FONT_MIN)
         if etf and not separate_etf:
@@ -1191,12 +1176,13 @@ def draw_policy_pages(renderer: MultiPageRenderer, policy: dict | None,
             mentions = _int(bucket.get("mentions"))
             stance = str(bucket.get("stance") or "中性")
             flow.add_rich([
-                {"text": f"{index:02d}  {tag}   净{net:+d}", "size": FONT_BODY, "leading": LEADING_BODY},
+                {"text": f"{index:02d}  {tag}   净{net:+d}", "size": FONT_BODY,
+                 "leading": LEADING_BODY, "bold": True},
                 {"text": f"{stance} · {sources_hit}源命中 · {mentions}条提及",
                  "size": FONT_META, "leading": LEADING_META, "indent": 24},
             ], gap=3, separator=True)
         else:
-            flow.add_text(f"{index:02d}  {bucket}", FONT_SMALL, LEADING_SMALL)
+            flow.add_text(f"{index:02d}  {bucket}", FONT_SMALL, LEADING_SMALL, bold=True)
     return _page_count_delta(renderer, before, page_num)
 
 
@@ -1207,7 +1193,8 @@ def _sector_paragraphs(item: dict, index: int, pressure: bool = False) -> List[d
     mentions = _int(item.get("mentions"))
     direction = "承压" if pressure else "机会"
     paragraphs = [
-        {"text": f"{index:02d}  {tag}   {direction}净{net:+d}", "size": FONT_SECTION, "leading": 20},
+        {"text": f"{index:02d}  {tag}   {direction}净{net:+d}", "size": FONT_SECTION,
+         "leading": 20, "bold": True},
         {"text": f"{sources_hit}源命中 · {mentions}条提及", "size": FONT_META,
          "leading": LEADING_META, "indent": 24},
     ]

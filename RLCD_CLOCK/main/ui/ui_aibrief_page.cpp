@@ -37,6 +37,8 @@ constexpr int kAibriefPageIndicatorX = 194;
 constexpr int kAibriefPageIndicatorY = 279;
 constexpr int kAibriefPageIndicatorW = 194;
 constexpr int kAibriefPageIndicatorH = 21;
+// 位图页脚从 y=279 起绘制；阿里巴巴普惠体 16px 的 Pillow ascender 为 17px。
+constexpr int kAibriefBitmapFooterBaseline = 17;
 constexpr int kAibriefPageSegmentCount = 6;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
 constexpr const char *kAibriefHintText = "长按 KEY 返回 · 自动每分钟翻页";
@@ -140,9 +142,9 @@ void update_page_indicator()
         parts.current_page, parts.page_separator, parts.page_count,
     };
     const lv_font_t *fonts[kAibriefPageSegmentCount] = {
-        &aibrief_text_15, &aibrief_digit_bold_15,
-        &aibrief_text_15, &aibrief_digit_bold_15,
-        &aibrief_text_15, &aibrief_digit_bold_15,
+        &aibrief_text_16, &aibrief_digit_bold_16,
+        &aibrief_text_16, &aibrief_digit_bold_16,
+        &aibrief_text_16, &aibrief_digit_bold_16,
     };
     int widths[kAibriefPageSegmentCount] = {};
     int total_width = 0;
@@ -155,10 +157,15 @@ void update_page_indicator()
             total_width += widths[i];
         }
     }
+    const int text_baseline = aibrief_text_16.line_height - aibrief_text_16.base_line;
+    const int digit_baseline =
+        aibrief_digit_bold_16.line_height - aibrief_digit_bold_16.base_line;
+    const int text_y = kAibriefBitmapFooterBaseline - text_baseline;
+    const int digit_y = kAibriefBitmapFooterBaseline - digit_baseline;
     int x = kAibriefPageIndicatorW - total_width;
     for (int i = 0; i < kAibriefPageSegmentCount; ++i) {
-        // 数字字库行高较小，下移 1px 后与中文基线一致。
-        lv_obj_set_pos(s_aibrief_page_segment_labels[i], x, i % 2);
+        // 中文和数字都与位图左侧页脚共用同一基线。
+        lv_obj_set_pos(s_aibrief_page_segment_labels[i], x, i % 2 ? digit_y : text_y);
         lv_obj_set_size(s_aibrief_page_segment_labels[i],
                         widths[i], fonts[i]->line_height);
         x += widths[i];
@@ -209,7 +216,7 @@ bool build_aibrief_page()
                                                           kAibriefEmptyLabelW,
                                                           kAibriefEmptyLabelH,
                                                           kAibriefEmptyText,
-                                                          &zh_font_16,
+                                                          &aibrief_text_16,
                                                           AIBRIEF_LABEL_CREATE_FAILED_LOG);
     s_aibrief_hint_label = make_centered_label_with_font(root,
                                                          kAibriefHintLabelX,
@@ -217,9 +224,9 @@ bool build_aibrief_page()
                                                          kAibriefHintLabelW,
                                                          kAibriefHintLabelH,
                                                          kAibriefHintText,
-                                                         &zh_font_16,
+                                                         &aibrief_text_16,
                                                          AIBRIEF_LABEL_CREATE_FAILED_LOG);
-    // 右下不透明白底覆盖位图回退页脚；六段标签混排 Regular 与 Bold 15px。
+    // 右下不透明白底覆盖位图回退页脚；六段标签混排 Regular 与 Bold 16px。
     s_aibrief_page_indicator = lv_obj_create(root);
     if (s_aibrief_page_indicator) {
         lv_obj_set_pos(s_aibrief_page_indicator, kAibriefPageIndicatorX, kAibriefPageIndicatorY);
@@ -236,7 +243,7 @@ bool build_aibrief_page()
             if (!label) {
                 continue;
             }
-            const lv_font_t *font = i % 2 ? &aibrief_digit_bold_15 : &aibrief_text_15;
+            const lv_font_t *font = i % 2 ? &aibrief_digit_bold_16 : &aibrief_text_16;
             lv_obj_set_style_text_font(label, font, 0);
             lv_obj_set_style_text_color(label, lv_color_black(), 0);
             lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);

@@ -1,7 +1,7 @@
 /*******************************************************************************
- * Size: 15 px
+ * Size: 16 px
  * Bpp: 1
- * Opts: --font /tmp/aibrief-fonts/digit-bold.ttf -r 0x30-0x3A --size 15 --bpp 1 --format lvgl --no-kerning --lv-include lvgl.h --lv-font-name aibrief_digit_bold_15 --output RLCD_CLOCK/main/assets/aibrief_digit_bold_15.c
+ * Opts: --font /home/user/02-rlcd/device_brief/fonts/AlibabaPuHuiTi-3-85-Bold.ttf -r 0x30-0x3A --size 16 --bpp 1 --format lvgl --no-kerning --lv-include lvgl.h --lv-font-name aibrief_digit_bold_16 --output /home/user/02-rlcd/RLCD_CLOCK/main/assets/aibrief_digit_bold_16.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -10,11 +10,11 @@
 #include "lvgl.h"
 #endif
 
-#ifndef AIBRIEF_DIGIT_BOLD_15
-#define AIBRIEF_DIGIT_BOLD_15 1
+#ifndef AIBRIEF_DIGIT_BOLD_16
+#define AIBRIEF_DIGIT_BOLD_16 1
 #endif
 
-#if AIBRIEF_DIGIT_BOLD_15
+#if AIBRIEF_DIGIT_BOLD_16
 
 /*-----------------
  *    BITMAPS
@@ -23,47 +23,46 @@
 /*Store the image of the glyphs*/
 static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     /* U+0030 "0" */
-    0x38, 0xfb, 0xbe, 0x3c, 0x78, 0xf1, 0xe3, 0xc6,
-    0xd9, 0xf1, 0xc0,
+    0x3c, 0x66, 0xc3, 0xc3, 0xc3, 0xc3, 0xc3, 0xc3,
+    0xc3, 0x66, 0x3c,
 
     /* U+0031 "1" */
-    0x31, 0xe0, 0xc1, 0x83, 0x6, 0xc, 0x18, 0x30,
-    0x63, 0xff, 0xf0,
+    0x7f, 0xc6, 0x31, 0x8c, 0x63, 0x18, 0xc6,
 
     /* U+0032 "2" */
-    0x79, 0xfb, 0x18, 0x30, 0x60, 0xc3, 0xe, 0x38,
-    0xe3, 0xff, 0xf0,
+    0x7c, 0x6, 0x6, 0x6, 0x6, 0xe, 0x1c, 0x38,
+    0x70, 0xe0, 0xff,
 
     /* U+0033 "3" */
-    0x3c, 0xfd, 0x18, 0x30, 0xe7, 0x8f, 0x3, 0x6,
-    0x8f, 0xfb, 0xc0,
+    0xfc, 0xc, 0x18, 0x77, 0x81, 0xc1, 0x83, 0x6,
+    0x1b, 0xe0,
 
     /* U+0034 "4" */
-    0xe, 0xf, 0x7, 0x86, 0xc3, 0x63, 0x33, 0x99,
-    0xff, 0xff, 0x83, 0x1, 0x80, 0xc0,
+    0xe, 0xf, 0x7, 0x86, 0xc6, 0x63, 0x33, 0x19,
+    0xff, 0x6, 0x3, 0x1, 0x80,
 
     /* U+0035 "5" */
-    0x7e, 0x7e, 0x60, 0x60, 0x7c, 0x7e, 0x7, 0x3,
-    0x3, 0x47, 0xfe, 0x3c,
+    0x7c, 0x83, 0x6, 0xf, 0xc1, 0xc1, 0x83, 0x6,
+    0x1b, 0xe0,
 
     /* U+0036 "6" */
-    0x3c, 0xfd, 0x96, 0xd, 0xdf, 0xf9, 0xe3, 0xc6,
-    0xcd, 0xf1, 0xc0,
+    0x1e, 0x30, 0x60, 0x40, 0xfe, 0xe7, 0xc3, 0xc3,
+    0xc3, 0x66, 0x3c,
 
     /* U+0037 "7" */
-    0xff, 0xfc, 0x30, 0x61, 0x83, 0x6, 0x18, 0x30,
-    0x60, 0xc1, 0x80,
+    0xfe, 0xc, 0x38, 0x60, 0xc3, 0x6, 0x1c, 0x30,
+    0x61, 0x80,
 
     /* U+0038 "8" */
-    0x3d, 0xff, 0x1e, 0x3c, 0x6f, 0x9f, 0x63, 0xc7,
-    0x8f, 0xfb, 0xc0,
+    0x7e, 0xc3, 0xc3, 0xc3, 0x3c, 0x66, 0xc3, 0xc3,
+    0xc3, 0xe7, 0x3c,
 
     /* U+0039 "9" */
-    0x38, 0xfb, 0x36, 0x3c, 0x79, 0xff, 0xbb, 0x6,
-    0x9b, 0xf3, 0xc0,
+    0x3c, 0x66, 0xc3, 0xc3, 0xc3, 0xe7, 0x7b, 0x7,
+    0x6, 0xc, 0x38,
 
     /* U+003A ":" */
-    0xff, 0x80, 0x3f, 0xe0
+    0xfc, 0xf, 0xc0
 };
 
 
@@ -73,17 +72,17 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
 
 static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 0, .adv_w = 0, .box_w = 0, .box_h = 0, .ofs_x = 0, .ofs_y = 0} /* id = 0 reserved */,
-    {.bitmap_index = 0, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 11, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 22, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 33, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 0, .ofs_y = 0},
-    {.bitmap_index = 44, .adv_w = 142, .box_w = 9, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 58, .adv_w = 142, .box_w = 8, .box_h = 12, .ofs_x = 0, .ofs_y = 0},
-    {.bitmap_index = 70, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 81, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 92, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 103, .adv_w = 142, .box_w = 7, .box_h = 12, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 114, .adv_w = 78, .box_w = 3, .box_h = 9, .ofs_x = 1, .ofs_y = 0}
+    {.bitmap_index = 0, .adv_w = 150, .box_w = 8, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 11, .adv_w = 150, .box_w = 5, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 18, .adv_w = 150, .box_w = 8, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 29, .adv_w = 150, .box_w = 7, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 39, .adv_w = 150, .box_w = 9, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 52, .adv_w = 150, .box_w = 7, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 62, .adv_w = 150, .box_w = 8, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 73, .adv_w = 150, .box_w = 7, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 83, .adv_w = 150, .box_w = 8, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 94, .adv_w = 150, .box_w = 8, .box_h = 11, .ofs_x = 1, .ofs_y = 0},
+    {.bitmap_index = 105, .adv_w = 102, .box_w = 2, .box_h = 9, .ofs_x = 2, .ofs_y = 0}
 };
 
 /*---------------------
@@ -139,19 +138,19 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
 
 /*Initialize a public general font descriptor*/
 #if LVGL_VERSION_MAJOR >= 8
-const lv_font_t aibrief_digit_bold_15 = {
+const lv_font_t aibrief_digit_bold_16 = {
 #else
-lv_font_t aibrief_digit_bold_15 = {
+lv_font_t aibrief_digit_bold_16 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
     .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
-    .line_height = 12,          /*The maximum line height required by the font*/
+    .line_height = 11,          /*The maximum line height required by the font*/
     .base_line = 0,             /*Baseline measured from the bottom of the line*/
 #if !(LVGL_VERSION_MAJOR == 6 && LVGL_VERSION_MINOR == 0)
     .subpx = LV_FONT_SUBPX_NONE,
 #endif
 #if LV_VERSION_CHECK(7, 4, 0) || LVGL_VERSION_MAJOR >= 8
-    .underline_position = -2,
+    .underline_position = -1,
     .underline_thickness = 1,
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
@@ -163,5 +162,5 @@ lv_font_t aibrief_digit_bold_15 = {
 
 
 
-#endif /*#if AIBRIEF_DIGIT_BOLD_15*/
+#endif /*#if AIBRIEF_DIGIT_BOLD_16*/
 
