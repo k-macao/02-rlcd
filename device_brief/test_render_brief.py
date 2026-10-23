@@ -285,6 +285,11 @@ class MultiPageMagazineTest(unittest.TestCase):
         self.assertEqual(rendered, " ".join(title.split()))
         self.assertTrue(rendered.endswith("final unique tail"))
         self.assertNotIn("…", rendered)
+        for sheet in renderer.pages:
+            body_x = [run["bbox"][0] for run in sheet.text_runs
+                      if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL]
+            self.assertTrue(any(x < 200 for x in body_x))
+            self.assertTrue(any(x >= 200 for x in body_x), "超长标题末页不应只剩单侧一栏")
 
     def test_all_forty_heat_keywords_are_kept(self):
         data = multi_data()

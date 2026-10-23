@@ -826,12 +826,14 @@ class NewsFlow(PageFlow):
         self.column = 0
         self.page_items: List[dict] = []
         self.has_split_item = False
+        self.dedicated_page = False
         super().__init__(*args, **kwargs)
 
     def new_page(self):
         self.column = 0
         self.page_items = []
         self.has_split_item = False
+        self.dedicated_page = False
         super().new_page()
 
     def _advance(self):
@@ -851,32 +853,55 @@ class NewsFlow(PageFlow):
         if y < BODY_BOTTOM:
             self.sheet.rule(x, y - 4, x + COLUMN_W - 5, 1)
 
+    def _add_dedicated_long_item(self, number: int, lines: List[str]):
+        """超长标题独占页面，并按行数均衡双栏，避免下一页只孤零零剩一行。"""
+        per_column = BODY_HEIGHT // LEADING_SMALL
+        per_page = per_column * 2
+        page_count = math.ceil(len(lines) / per_page)
+        offset = 0
+        for chunk_index in range(page_count):
+            # 所有页均匀分配，而不是前 N-1 页塞满、末页只剩一两行。
+            chunk_size = len(lines) // page_count + int(chunk_index < len(lines) % page_count)
+            chunk = lines[offset:offset + chunk_size]
+            offset += chunk_size
+            if chunk_index:
+                self.new_page()
+            left_count = (len(chunk) + 1) // 2
+            columns = [chunk[:left_count], chunk[left_count:]]
+            for column, column_lines in enumerate(columns):
+                x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
+                y = BODY_TOP
+                if column == 0 and chunk_index == 0:
+                    self.sheet.text(x, y + 1, f"{number:03d}", FONT_MIN)
+                for line in column_lines:
+                    self.sheet.text(x + 24, y, line, FONT_SMALL)
+                    y += LEADING_SMALL
+                if y + 3 < BODY_BOTTOM:
+                    self.sheet.rule(x, y + 2, x + COLUMN_W - 5, 1)
+            self.has_split_item = True
+            self.dedicated_page = True
+            self.column = 1
+            self.y = BODY_TOP + len(columns[1]) * LEADING_SMALL
+
     def add_item(self, number: int, title: str):
+        if self.dedicated_page:
+            self.new_page()
         lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - 25)
         if not lines:
             return
         item_height = len(lines) * LEADING_SMALL + 7
-        if ((item_height <= BODY_HEIGHT and self.y + item_height > BODY_BOTTOM)
-                or (item_height > BODY_HEIGHT and self.y > BODY_TOP)):
-            self._advance()
-        if item_height <= BODY_HEIGHT:
-            item = {"number": number, "lines": lines, "height": item_height}
-            self._draw_whole_item(item, self.column, self.y)
-            self.page_items.append(item)
-            self.y += item_height
+        if item_height > BODY_HEIGHT:
+            if self.page_items or self.column != 0 or self.y > BODY_TOP:
+                self.balance_last_page()
+                self.new_page()
+            self._add_dedicated_long_item(number, lines)
             return
-
-        # 极端长标题允许跨栏/跨页续排，但不省略任何一行。
-        self.has_split_item = True
-        for line_index, line in enumerate(lines):
-            if self.y + LEADING_SMALL > BODY_BOTTOM:
-                self._advance()
-            x = PAGE_MARGIN + self.column * (COLUMN_W + COLUMN_GAP)
-            if line_index == 0:
-                self.sheet.text(x, self.y + 1, f"{number:03d}", FONT_MIN)
-            self.sheet.text(x + 24, self.y, line, FONT_SMALL)
-            self.y += LEADING_SMALL
-        self.y += 7
+        if self.y + item_height > BODY_BOTTOM:
+            self._advance()
+        item = {"number": number, "lines": lines, "height": item_height}
+        self._draw_whole_item(item, self.column, self.y)
+        self.page_items.append(item)
+        self.y += item_height
 
     def balance_last_page(self):
         """末页按实际行高均衡左右栏；有跨栏长标题时保留原阅读顺序。"""
