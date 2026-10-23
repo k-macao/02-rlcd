@@ -216,5 +216,148 @@ class WrapAndPayloadTest(unittest.TestCase):
             self.assertTrue((out / "latest.png").exists())
 
 
+# ---------------------------------------------------------------- 多页杂志版回归
+def multi_data(brief=None):
+    heatmap = {
+        "headline": "测试热力图",
+        "keywords": [
+            {"display": "AI", "heat": 88, "net": 3, "sentiment_label": "偏多",
+             "sources": 4, "mentions": 9,
+             "etf_pair": [{"code": "03438.HK"}, {"code": "03140.HK"}]},
+            {"display": "黄金", "heat": 42, "net": -1, "sentiment_label": "偏空",
+             "sources": 2, "mentions": 3,
+             "etf_pair": [{"code": "02840.HK"}, {"code": "03566.HK"}]},
+        ],
+    }
+    policy = {
+        "headline": "政策信号保持中性，等待后续确认。", "stance": "中性",
+        "buckets": [{"tag": "央行 · 流动性", "net": 1, "sources": 3,
+                     "mentions": 5, "stance": "偏鸽"}],
+    }
+    return {
+        "summary": FULL_SUMMARY,
+        "review_ashare": FULL_REVIEW,
+        "review_hk": FULL_REVIEW,
+        "review_us": FULL_REVIEW,
+        "heatmap": heatmap,
+        "policy": policy,
+        "brief": brief if brief is not None else {
+            "测试源": [{"title": title} for title in HEADLINES],
+        },
+    }
+
+
+def manual_renderer(page_count):
+    renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
+    for index in range(page_count):
+        sheet = renderer.new_page("排版校样", "TEST")
+        sheet.text(render_brief.PAGE_MARGIN, render_brief.BODY_TOP,
+                   f"第 {index + 1} 页正文", render_brief.FONT_BODY)
+        renderer.add_page(sheet)
+    renderer.finalize(NOW)
+    return renderer
+
+
+class MultiPageMagazineTest(unittest.TestCase):
+    def test_every_page_has_real_number_and_passes_preflight(self):
+        renderer = render_brief.draw_all_pages(multi_data(), NOW, 51, 69, False)
+        renderer.validate()
+        total = len(renderer.pages)
+        self.assertGreater(total, 1)
+        for index, sheet in enumerate(renderer.pages, 1):
+            self.assertEqual(sheet.image.size, (400, 300))
+            footer = [r["text"] for r in sheet.text_runs if r["region"] == "footer"]
+            self.assertIn(f"{index:02d} / {total:02d}", footer)
+            self.assertTrue(all(r["size"] >= render_brief.FONT_MIN
+                                for r in sheet.text_runs))
+
+    def test_long_english_headline_is_fully_paginated(self):
+        title = "Market outlook " + "alpha beta gamma delta " * 80 + "final unique tail"
+        renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
+        render_brief.draw_news_pages(renderer, {"测试源": [{"title": title}]}, 1, 0)
+        renderer.finalize(NOW)
+        renderer.validate()
+        self.assertGreater(len(renderer.pages), 1)
+        rendered = "".join(
+            run["text"] for sheet in renderer.pages for run in sheet.text_runs
+            if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL
+        )
+        self.assertEqual(rendered, " ".join(title.split()))
+        self.assertTrue(rendered.endswith("final unique tail"))
+        self.assertNotIn("…", rendered)
+        for sheet in renderer.pages:
+            body_x = [run["bbox"][0] for run in sheet.text_runs
+                      if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL]
+            self.assertTrue(any(x < 200 for x in body_x))
+            self.assertTrue(any(x >= 200 for x in body_x), "超长标题末页不应只剩单侧一栏")
+
+    def test_all_forty_heat_keywords_are_kept(self):
+        data = multi_data()
+        data["heatmap"]["keywords"] = [
+            {"display": f"K{i:02d}", "heat": i, "net": 0,
+             "sentiment_label": "中性", "etf_pair": [{"code": "03000.HK"}]}
+            for i in range(1, 41)
+        ]
+        renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
+        render_brief.draw_heatmap_pages(renderer, data["heatmap"], 1, 0)
+        renderer.finalize(NOW)
+        renderer.validate()
+        self.assertEqual(len(renderer.pages), 4)
+        rendered = "\n".join(
+            run["text"] for sheet in renderer.pages for run in sheet.text_runs
+        )
+        for i in range(1, 41):
+            self.assertIn(f"K{i:02d}", rendered)
+
+    def test_page_budget_adapts_news_without_cutting_analysis(self):
+        brief = {
+            f"测试源{i:02d}": [
+                {"title": f"来源{i:02d} 快讯{j}"} for j in range(3)
+            ] for i in range(12)
+        }
+        data = multi_data(brief)
+        data.update({"review_ashare": None, "review_hk": None, "review_us": None,
+                     "heatmap": None, "policy": None})
+        renderer = render_brief.render_with_page_budget(
+            data, NOW, 0, len(brief), False, max_pages=8
+        )
+        self.assertEqual(len(renderer.pages), 8)
+        self.assertEqual(renderer.layout_meta["news_per_source"], 1)
+        self.assertEqual(renderer.layout_meta["news_included"], 12)
+        self.assertEqual(renderer.layout_meta["news_omitted"], 24)
+        self.assertEqual(renderer.pages[0].page_title, "AI 每日总结")
+
+    def test_demo_collection_is_fully_offline(self):
+        with mock.patch.object(render_brief.sources, "collect_all",
+                               side_effect=AssertionError("demo 不应联网")):
+            data = render_brief.collect_brief_002(demo=True)
+        self.assertEqual(len(data["brief"]), 69)
+        self.assertEqual(data["review_ashare"]["source"], "snapshot")
+
+    def test_save_removes_stale_pages_and_writes_contact_sheet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            manual_renderer(2).save(out, {"test": True})
+            self.assertTrue((out / "page_02.png").exists())
+            manual_renderer(1).save(out, {"test": True})
+            self.assertFalse((out / "page_02.png").exists())
+            self.assertTrue((out / "latest_contact_sheet.png").exists())
+            self.assertEqual(len((out / "latest.bin").read_bytes()), 15008)
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["pages"], 1)
+            self.assertTrue(meta["layout_validated"])
+
+    def test_overlap_blocks_save_before_creating_output(self):
+        renderer = manual_renderer(1)
+        sheet = renderer.pages[0]
+        sheet.text(render_brief.PAGE_MARGIN, render_brief.BODY_TOP,
+                   "叠压文字", render_brief.FONT_BODY)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "must-not-exist"
+            with self.assertRaises(render_brief.LayoutError):
+                renderer.save(out, {})
+            self.assertFalse(out.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

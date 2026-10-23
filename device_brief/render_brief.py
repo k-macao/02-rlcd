@@ -2,20 +2,22 @@
 # -*- coding: utf-8 -*-
 """把 002「章鱼 AI·全景分析」渲染成 RLCD 设备可显示的多页 400×300 单色图。
 
-v1.8 重构：
-- 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析）
+杂志网格 2.0：
+- 数据源为 002（AH 政策、情绪、热力、趋势分析）
 - 字体统一使用思源黑体（Source Han Sans / Noto Sans SC），回退 MiSans
-- 全部内容完整显示，分多页展示，每页 1 分钟自动轮播
+- 400×300 固定网格、标准字号、真实页码、双栏快讯与末栏均衡
+- 保存前逐页检查边界、字号和叠字；超额时调整快讯版位，不截句、不直接裁页
 - 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 30 页
 
 产物（默认写入 aibrief/）：
   latest.bin  8 字节头 + N*15000 字节 1bpp 位图（MSB first，1=黑），N=页数
   latest.png  第一页 PNG 预览
-  latest_*.png 多页 PNG 预览（可选）
-  meta.json   生成时间、页数、数据来源、SHA-256
+  page_*.png  每页 PNG 预览
+  latest_contact_sheet.png  5 列全页校样墙
+  meta.json   生成时间、真实页数、精选口径、预检结果、SHA-256
 
 用法：
-  python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 全量）
+  python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 数据）
   python3 device_brief/render_brief.py --demo          # 离线演示数据
   python3 device_brief/render_brief.py --require-live  # 实时源不足则失败退出（CI 用）
   python3 device_brief/render_brief.py --out-dir aibrief --pages 20
@@ -23,8 +25,10 @@ v1.8 重构：
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
+import math
 import os
 import struct
 import sys
@@ -51,7 +55,9 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 WIDTH = 400
 HEIGHT = 300
+MAX_PAGES = 30
 MAGIC = b"AIB1"
+LAYOUT_VERSION = "2.0-magazine"
 
 # 字体：思源黑体优先，回退 MiSans
 FONT_DIR = ROOT / "device_brief" / "fonts"
@@ -74,6 +80,7 @@ FONT_DIGITAL_BOLD_PATH = FONT_PATH
 
 BLACK, WHITE = 0, 255
 
+# 旧单页接口保留原有 8px 边距；设备多页统一使用下面的杂志网格。
 MARGIN = 8
 CONTENT_W = WIDTH - MARGIN * 2
 FONT_TITLE = 18
@@ -83,9 +90,44 @@ FONT_SMALL = 12
 FONT_META = 11
 FONT_MIN = 10
 
+# 4.2" RLCD / 400×300 杂志网格。正文和页脚分别留出安全区，
+# 任何文字都不得依赖裁切、缩字或叠字来“放下”。
+PAGE_MARGIN = 12
+PAGE_CONTENT_W = WIDTH - PAGE_MARGIN * 2
+BODY_TOP = 48
+BODY_BOTTOM = 273
+BODY_HEIGHT = BODY_BOTTOM - BODY_TOP
+FOOTER_RULE_Y = 278
+COLUMN_GAP = 14
+COLUMN_W = (PAGE_CONTENT_W - COLUMN_GAP) // 2
+LEADING_BODY = 19
+LEADING_SMALL = 16
+LEADING_META = 15
+LEADING_MIN = 14
+
 # ---------------------------------------------------------------- 数据收集（002）
-def collect_brief_002(limit: int = 12):
-    """从 002 仓库抓取全量数据，返回 dict 包含各板块分析结果。"""
+def collect_brief_002(limit: int = 12, demo: bool = False):
+    """采集 002 数据；``demo=True`` 时完全离线，不触碰任何网络接口。"""
+    if demo:
+        brief = {name: sources._demo_items(name) for name in sources.SOURCES}
+        summary = sources.analyze_brief(brief)
+        market_ashare = copy.deepcopy(sources._ASHARE_SNAPSHOT)
+        market_hk = copy.deepcopy(sources._HK_SNAPSHOT)
+        market_us = copy.deepcopy(sources._US_SNAPSHOT)
+        return {
+            "brief": brief,
+            "summary": summary,
+            "market_ashare": market_ashare,
+            "review_ashare": sources.analyze_ashare(market_ashare),
+            "market_hk": market_hk,
+            "review_hk": sources.analyze_hk(market_hk),
+            "market_us": market_us,
+            "review_us": sources.analyze_us(market_us),
+            "heatmap": summary.get("heatmap") or sources.analyze_keyword_heatmap(brief, top_n=40),
+            "policy": summary.get("policy") or sources.analyze_policy(brief, deep=False),
+            "policy_deep": None,
+        }
+
     brief = sources.collect_all(limit=limit)
 
     # 基础分析
@@ -188,6 +230,12 @@ class Sheet:
         self.font_digital_path = self.font_path
         self.font_digital_bold_path = self.font_path
         self._cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+        # 每次文字绘制都留档，保存前可逐页检查字号、边界与叠字。
+        self.text_runs: List[dict] = []
+        self.region = "body"
+        self.editorial = False
+        self.page_title = ""
+        self.page_subtitle = ""
 
     def _font(self, is_digital: bool, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
         key = (str(self.font_path), size)
@@ -228,7 +276,13 @@ class Sheet:
     def text(self, x: int, y: int, text: str, size: int = 11, bold: bool = False,
              fill: int = BLACK) -> int:
         font = self._font(False, size)
+        text = str(text)
+        bbox = self.draw.textbbox((x, y), text, font=font)
         self.draw.text((x, y), text, font=font, fill=fill)
+        self.text_runs.append({
+            "text": text, "size": size, "region": self.region,
+            "bbox": tuple(int(v) for v in bbox),
+        })
         return int(round(self.draw.textlength(text, font=font)))
 
     def wrap(self, text: str, size: int, max_width: int, max_lines: int = 2,
@@ -352,50 +406,152 @@ class Sheet:
     def save(self, out_dir: Path, meta: dict) -> None:
         self.save_single(out_dir, meta)
 
+class LayoutError(RuntimeError):
+    """任一页未通过预检时阻止写入设备负载。"""
+
+
 class MultiPageRenderer:
     def __init__(self, font_path: Path | None = None):
         self.font_path = font_path or FONT_PATH
         self.pages: List[Sheet] = []
+        self.page_limit = MAX_PAGES
+        self.layout_meta: Dict[str, Any] = {}
+        self._finalized = False
+        self._now = datetime.now()
 
     def new_page(self, title: str = "", subtitle: str = "", page_info: str = "") -> Sheet:
+        # page_info 仅为旧调用签名保留；页码只能在全部分页完成后绘制。
         sheet = Sheet(self.font_path)
-        if title:
-            sheet.header_bar(title, subtitle, page_info)
+        sheet.editorial = True
+        sheet.page_title = title or "AI 简报"
+        sheet.page_subtitle = subtitle or "OCTOPUS AI / DAILY BRIEF"
         return sheet
 
     def add_page(self, sheet: Sheet):
         self.pages.append(sheet)
+        self._finalized = False
+
+    def finalize(self, now: datetime | None = None):
+        """全部内容排版结束后，再统一绘制真实页码与 running header/footer。"""
+        if self._finalized:
+            return self
+        self._now = now or self._now
+        if not self.pages:
+            sheet = self.new_page("AI 简报", "暂无内容")
+            sheet.text(PAGE_MARGIN, BODY_TOP, "暂无简报内容", FONT_BODY)
+            self.add_page(sheet)
+
+        total_pages = len(self.pages)
+        date_text = self._now.strftime("%Y.%m.%d")
+        for index, sheet in enumerate(self.pages, 1):
+            sheet.region = "header"
+            sheet.box(0, 0, WIDTH - 1, 2)
+            title = sheet.page_title
+            title_size = FONT_TITLE
+            if sheet.measure(title, title_size) > PAGE_CONTENT_W:
+                title_size = FONT_SECTION
+            sheet.text(PAGE_MARGIN, 3, title, title_size)
+            sheet.text(PAGE_MARGIN, 27, sheet.page_subtitle, FONT_MIN)
+            sheet.rule(PAGE_MARGIN, 43, WIDTH - PAGE_MARGIN - 1, 2)
+
+            sheet.region = "footer"
+            right = WIDTH - PAGE_MARGIN - 1
+            sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, right, 1)
+            progress_x = PAGE_MARGIN + round((right - PAGE_MARGIN) * index / total_pages)
+            sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, progress_x, 2)
+            sheet.text(PAGE_MARGIN, 284, f"章鱼 AI · {date_text}", FONT_MIN)
+            page_text = f"{index:02d} / {total_pages:02d}"
+            sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(page_text, FONT_MIN),
+                       284, page_text, FONT_MIN)
+            sheet.region = "body"
+        self._finalized = True
+        return self
+
+    @staticmethod
+    def _overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+        return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
+
+    def validate(self, max_pages: int | None = None):
+        """逐页预检画布、字号、安全区和文字碰撞；失败时不产出任何文件。"""
+        self.finalize()
+        limit = max_pages or self.page_limit or MAX_PAGES
+        errors: List[str] = []
+        if not 1 <= len(self.pages) <= limit:
+            errors.append(f"页数 {len(self.pages)} 超出本次版位上限 {limit}")
+
+        for page_no, sheet in enumerate(self.pages, 1):
+            if sheet.image.size != (WIDTH, HEIGHT):
+                errors.append(f"第{page_no}页画布为 {sheet.image.size}，应为 {(WIDTH, HEIGHT)}")
+            runs = [r for r in sheet.text_runs if r["text"].strip()]
+            for run in runs:
+                x0, y0, x1, y1 = run["bbox"]
+                if run["size"] < FONT_MIN:
+                    errors.append(f"第{page_no}页字号 {run['size']} 低于 {FONT_MIN}")
+                if x0 < 0 or y0 < 0 or x1 > WIDTH or y1 > HEIGHT:
+                    errors.append(f"第{page_no}页文字越出画布：{run['text'][:24]!r} {run['bbox']}")
+                if sheet.editorial and run["region"] == "body":
+                    if y0 < BODY_TOP or y1 > BODY_BOTTOM:
+                        errors.append(
+                            f"第{page_no}页正文侵入页眉/页脚：{run['text'][:24]!r} {run['bbox']}"
+                        )
+            for i, first in enumerate(runs):
+                for second in runs[i + 1:]:
+                    if self._overlap(first["bbox"], second["bbox"]):
+                        errors.append(
+                            f"第{page_no}页文字叠压：{first['text'][:16]!r} / {second['text'][:16]!r}"
+                        )
+                if len(errors) >= 12:
+                    break
+            if len(errors) >= 12:
+                break
+        if errors:
+            raise LayoutError("；".join(errors[:12]))
+        return self
 
     def save(self, out_dir: Path, meta: dict):
+        # 必须先完成所有页面和全部校验，再创建/覆盖任何交付文件。
+        self.validate()
         out_dir.mkdir(parents=True, exist_ok=True)
-        if not self.pages:
-            # 至少一页
-            self.pages.append(Sheet(self.font_path))
-
-        # 生成所有位图
+        mono_pages = [
+            p.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
+            for p in self.pages
+        ]
         bitmaps = b"".join(p.to_bitmap() for p in self.pages)
-        header = MAGIC + struct.pack("<HH", WIDTH, HEIGHT)
-        payload = header + bitmaps
+        payload = MAGIC + struct.pack("<HH", WIDTH, HEIGHT) + bitmaps
         (out_dir / "latest.bin").write_bytes(payload)
+        mono_pages[0].save(out_dir / "latest.png")
 
-        # PNG 预览：第一页 + 拼接总览
-        first = self.pages[0].image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
-        first.save(out_dir / "latest.png")
+        expected_previews = set()
+        for i, mono in enumerate(mono_pages, 1):
+            name = f"page_{i:02d}.png"
+            expected_previews.add(name)
+            mono.save(out_dir / name)
+        # 页数变少时移除旧校样，避免把上一版残页当成新内容推送。
+        for old in out_dir.glob("page_*.png"):
+            if old.name not in expected_previews:
+                old.unlink()
 
-        # 保存每页 PNG（用于调试）
-        for i, sheet in enumerate(self.pages):
-            mono = sheet.image.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
-            mono.save(out_dir / f"page_{i+1:02d}.png")
+        combined = Image.new("1", (WIDTH, HEIGHT * len(mono_pages)), 1)
+        for i, mono in enumerate(mono_pages):
+            combined.paste(mono, (0, i * HEIGHT))
+        combined.save(out_dir / "latest_combined.png")
 
-        # 拼接长图（垂直）
-        combined_h = HEIGHT * len(self.pages)
-        combined = Image.new("L", (WIDTH, combined_h), WHITE)
-        for i, sheet in enumerate(self.pages):
-            combined.paste(sheet.image, (0, i * HEIGHT))
-        combined_mono = combined.point(lambda v: BLACK if v < 128 else WHITE).convert("1", dither=Image.NONE)
-        combined_mono.save(out_dir / "latest_combined.png")
+        # 5 列校样墙：30 页恰好 5×6，可在推送前逐页目检。
+        columns = 5
+        gap = 8
+        rows = math.ceil(len(mono_pages) / columns)
+        contact = Image.new(
+            "1", (columns * WIDTH + (columns + 1) * gap,
+                  rows * HEIGHT + (rows + 1) * gap), 1
+        )
+        for i, mono in enumerate(mono_pages):
+            x = gap + (i % columns) * (WIDTH + gap)
+            y = gap + (i // columns) * (HEIGHT + gap)
+            contact.paste(mono, (x, y))
+        contact.save(out_dir / "latest_contact_sheet.png")
 
         meta = dict(meta)
+        meta.update(self.layout_meta)
         meta.update({
             "width": WIDTH,
             "height": HEIGHT,
@@ -405,9 +561,13 @@ class MultiPageRenderer:
             "sha256": hashlib.sha256(payload).hexdigest(),
             "crc32_bitmap": f"{zlib.crc32(bitmaps) & 0xffffffff:08x}",
             "font": str(self.font_path.name),
+            "layout": LAYOUT_VERSION,
+            "layout_validated": True,
+            "safe_area": [PAGE_MARGIN, BODY_TOP, WIDTH - PAGE_MARGIN, BODY_BOTTOM],
+            "page_titles": [p.page_title for p in self.pages],
         })
         (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"已生成 {len(self.pages)} 页，{out_dir}/latest.bin ({len(payload)} bytes)")
+        print(f"已逐页预检并生成 {len(self.pages)} 页，{out_dir}/latest.bin ({len(payload)} bytes)")
 
 # ---------------------------------------------------------------- 兼容旧接口（用于测试）
 def fmt_pct(value) -> str:
@@ -525,481 +685,584 @@ def draw_sheet(summary: dict, market: dict | None, review: dict | None,
             y += 16
     return sheet
 
-# ---------------------------------------------------------------- 新多页绘制（002 全量）
-def draw_daily_summary_pages(renderer: MultiPageRenderer, data: dict, now: datetime, page_num: int, total_estimate: int) -> int:
+# ---------------------------------------------------------------- 多页杂志排版（400×300）
+class PageFlow:
+    """在固定安全区内顺序排版；只翻页，不缩字、不截句。"""
+
+    def __init__(self, renderer: MultiPageRenderer, title: str, subtitle: str = ""):
+        self.renderer = renderer
+        self.title = title
+        self.subtitle = subtitle
+        self._continued = False
+        self.sheet: Sheet
+        self.y = BODY_TOP
+        self._start_page()
+
+    def _start_page(self):
+        subtitle = self.subtitle + (" · 续" if self._continued and self.subtitle else "")
+        self.sheet = self.renderer.new_page(self.title, subtitle)
+        self.renderer.add_page(self.sheet)
+        self.y = BODY_TOP
+
+    def new_page(self):
+        self._continued = True
+        self._start_page()
+
+    def ensure(self, height: int):
+        if height <= BODY_HEIGHT and self.y + height > BODY_BOTTOM:
+            self.new_page()
+        elif self.y >= BODY_BOTTOM:
+            self.new_page()
+
+    def add_text(self, text: str, size: int = FONT_BODY,
+                 leading: int = LEADING_BODY, indent: int = 0, gap: int = 6):
+        lines = self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent)
+        if not lines:
+            return
+        if len(lines) * leading <= BODY_HEIGHT:
+            self.ensure(len(lines) * leading)
+        for line in lines:
+            if self.y + leading > BODY_BOTTOM:
+                self.new_page()
+            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size)
+            self.y += leading
+        self.y += gap
+
+    def add_rich(self, paragraphs: List[dict], gap: int = 7, separator: bool = False):
+        """排版一组不同层级的完整段落；一块能放下时避免跨页拆散。"""
+        specs: List[tuple[str, int, int, int]] = []
+        for paragraph in paragraphs:
+            text = str(paragraph.get("text") or "")
+            size = int(paragraph.get("size") or FONT_BODY)
+            leading = int(paragraph.get("leading") or (size + 6))
+            indent = int(paragraph.get("indent") or 0)
+            for line in self.sheet.wrap_all(text, size, PAGE_CONTENT_W - indent):
+                specs.append((line, size, leading, indent))
+        if not specs:
+            return
+        height = sum(spec[2] for spec in specs)
+        if height <= BODY_HEIGHT:
+            self.ensure(height)
+        for line, size, leading, indent in specs:
+            if self.y + leading > BODY_BOTTOM:
+                self.new_page()
+            self.sheet.text(PAGE_MARGIN + indent, self.y, line, size)
+            self.y += leading
+        if separator and self.y + 4 < BODY_BOTTOM:
+            self.sheet.rule(PAGE_MARGIN, self.y + 2, WIDTH - PAGE_MARGIN - 1, 1)
+            self.y += 5
+        self.y += gap
+
+    def add_entry(self, label: str, text: str, size: int = FONT_SMALL, gap: int = 8):
+        """带细线的栏目标签，与正文至少两行保持同页。"""
+        lines = self.sheet.wrap_all(text, size, PAGE_CONTENT_W)
+        if not lines:
+            return
+        leading = LEADING_SMALL if size == FONT_SMALL else LEADING_BODY
+        height = 20 + len(lines) * leading
+        if height <= BODY_HEIGHT:
+            self.ensure(height)
+        else:
+            self.ensure(20 + min(2, len(lines)) * leading)
+        x = PAGE_MARGIN
+        self.sheet.box(x, self.y + 5, x + 5, self.y + 10)
+        self.sheet.text(x + 10, self.y, label, FONT_META)
+        line_start = x + 18 + self.sheet.measure(label, FONT_META)
+        if line_start < WIDTH - PAGE_MARGIN - 12:
+            self.sheet.rule(line_start, self.y + 8, WIDTH - PAGE_MARGIN - 1, 1)
+        self.y += 20
+        for line in lines:
+            if self.y + leading > BODY_BOTTOM:
+                self.new_page()
+            self.sheet.text(PAGE_MARGIN, self.y, line, size)
+            self.y += leading
+        self.y += gap
+
+    def add_metrics(self, metrics: List[tuple[str, str]]):
+        if not metrics:
+            return
+        height = 58
+        self.ensure(height)
+        x0 = PAGE_MARGIN
+        right = WIDTH - PAGE_MARGIN
+        cell_w = PAGE_CONTENT_W // len(metrics)
+        self.sheet.rule(x0, self.y, right - 1, 1)
+        for i, (label, value) in enumerate(metrics):
+            x = x0 + i * cell_w
+            if i:
+                self.sheet.draw.line((x, self.y + 7, x, self.y + 49), fill=BLACK)
+            self.sheet.text(x + 7, self.y + 7, label, FONT_MIN)
+            value_size = FONT_TITLE if self.sheet.measure(value, FONT_TITLE) <= cell_w - 14 else FONT_SECTION
+            self.sheet.text(x + 7, self.y + 23, value, value_size)
+        self.sheet.rule(x0, self.y + 54, right - 1, 1)
+        self.y += height
+
+    def add_index_grid(self, indices: List[dict]):
+        for row_start in range(0, len(indices), 2):
+            row = indices[row_start:row_start + 2]
+            self.ensure(44)
+            for column, item in enumerate(row):
+                x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
+                raw_name = str(item.get("name") or "--")
+                name = (raw_name.replace("上证指数", "上证").replace("深证成指", "深证")
+                        .replace("创业板指", "创业板").replace("恒生指数", "恒生")
+                        .replace("恒生科技指数", "恒生科技"))
+                close = item.get("close")
+                close_text = f"{float(close):,.2f}" if isinstance(close, (int, float)) else "--"
+                pct = fmt_pct(item.get("pct"))
+                self.sheet.text(x, self.y + 1, name, FONT_META)
+                self.sheet.text(x + COLUMN_W - self.sheet.measure(pct, FONT_META),
+                                self.y + 2, pct, FONT_META)
+                close_size = FONT_TITLE if self.sheet.measure(close_text, FONT_TITLE) <= COLUMN_W else FONT_SECTION
+                self.sheet.text(x, self.y + 18, close_text, close_size)
+            self.sheet.rule(PAGE_MARGIN, self.y + 42, WIDTH - PAGE_MARGIN - 1, 1)
+            self.y += 44
+
+
+class NewsFlow(PageFlow):
+    """双栏快讯流：短条目整块移动，长条目按行续排，绝不省略结尾。"""
+
+    def __init__(self, *args, **kwargs):
+        self.column = 0
+        self.page_items: List[dict] = []
+        self.has_split_item = False
+        self.dedicated_page = False
+        super().__init__(*args, **kwargs)
+
+    def new_page(self):
+        self.column = 0
+        self.page_items = []
+        self.has_split_item = False
+        self.dedicated_page = False
+        super().new_page()
+
+    def _advance(self):
+        if self.column == 0:
+            self.column = 1
+            self.y = BODY_TOP
+        else:
+            self.new_page()
+
+    def _draw_whole_item(self, item: dict, column: int, y: int):
+        x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
+        self.sheet.text(x, y + 1, f"{item['number']:03d}", FONT_MIN)
+        for line in item["lines"]:
+            self.sheet.text(x + 24, y, line, FONT_SMALL)
+            y += LEADING_SMALL
+        y += 7
+        if y < BODY_BOTTOM:
+            self.sheet.rule(x, y - 4, x + COLUMN_W - 5, 1)
+
+    def _add_dedicated_long_item(self, number: int, lines: List[str]):
+        """超长标题独占页面，并按行数均衡双栏，避免下一页只孤零零剩一行。"""
+        per_column = BODY_HEIGHT // LEADING_SMALL
+        per_page = per_column * 2
+        page_count = math.ceil(len(lines) / per_page)
+        offset = 0
+        for chunk_index in range(page_count):
+            # 所有页均匀分配，而不是前 N-1 页塞满、末页只剩一两行。
+            chunk_size = len(lines) // page_count + int(chunk_index < len(lines) % page_count)
+            chunk = lines[offset:offset + chunk_size]
+            offset += chunk_size
+            if chunk_index:
+                self.new_page()
+            left_count = (len(chunk) + 1) // 2
+            columns = [chunk[:left_count], chunk[left_count:]]
+            for column, column_lines in enumerate(columns):
+                x = PAGE_MARGIN + column * (COLUMN_W + COLUMN_GAP)
+                y = BODY_TOP
+                if column == 0 and chunk_index == 0:
+                    self.sheet.text(x, y + 1, f"{number:03d}", FONT_MIN)
+                for line in column_lines:
+                    self.sheet.text(x + 24, y, line, FONT_SMALL)
+                    y += LEADING_SMALL
+                if y + 3 < BODY_BOTTOM:
+                    self.sheet.rule(x, y + 2, x + COLUMN_W - 5, 1)
+            self.has_split_item = True
+            self.dedicated_page = True
+            self.column = 1
+            self.y = BODY_TOP + len(columns[1]) * LEADING_SMALL
+
+    def add_item(self, number: int, title: str):
+        if self.dedicated_page:
+            self.new_page()
+        lines = self.sheet.wrap_all(title, FONT_SMALL, COLUMN_W - 25)
+        if not lines:
+            return
+        item_height = len(lines) * LEADING_SMALL + 7
+        if item_height > BODY_HEIGHT:
+            if self.page_items or self.column != 0 or self.y > BODY_TOP:
+                self.balance_last_page()
+                self.new_page()
+            self._add_dedicated_long_item(number, lines)
+            return
+        if self.y + item_height > BODY_BOTTOM:
+            self._advance()
+        item = {"number": number, "lines": lines, "height": item_height}
+        self._draw_whole_item(item, self.column, self.y)
+        self.page_items.append(item)
+        self.y += item_height
+
+    def balance_last_page(self):
+        """末页按实际行高均衡左右栏；有跨栏长标题时保留原阅读顺序。"""
+        if self.has_split_item or len(self.page_items) < 2:
+            return
+        heights = [item["height"] for item in self.page_items]
+        best = None
+        for split in range(1, len(self.page_items)):
+            left = sum(heights[:split])
+            right = sum(heights[split:])
+            if left <= BODY_HEIGHT and right <= BODY_HEIGHT:
+                score = abs(left - right) + (2 if left < right else 0)
+                if best is None or score < best[0]:
+                    best = (score, split)
+        if best is None:
+            return
+        split = best[1]
+        columns = [self.page_items[:split], self.page_items[split:]]
+        # finalize() 尚未绘制页眉页脚；只清理正文，文字测量缓存继续复用。
+        self.sheet.draw.rectangle((0, BODY_TOP, WIDTH - 1, FOOTER_RULE_Y - 1), fill=WHITE)
+        self.sheet.text_runs = [r for r in self.sheet.text_runs if r["region"] != "body"]
+        for column, items in enumerate(columns):
+            y = BODY_TOP
+            for item in items:
+                self._draw_whole_item(item, column, y)
+                y += item["height"]
+        self.column = 1
+        self.y = sum(item["height"] for item in columns[1]) + BODY_TOP
+
+
+class HeatFlow(NewsFlow):
+    """热力图双栏数据卡：全部关键词保留，删去重复的长产品说明。"""
+
+    def new_page(self):
+        self.columns_top = BODY_TOP
+        super().new_page()
+
+    def begin_cards(self):
+        self.columns_top = self.y
+
+    def _advance(self):
+        if self.column == 0:
+            self.column = 1
+            self.y = self.columns_top
+        else:
+            self.new_page()
+
+    @staticmethod
+    def _etf_codes(keyword: dict) -> str:
+        pair = keyword.get("etf_pair") or []
+        codes = [str(item.get("code") or "") for item in pair if isinstance(item, dict)]
+        codes = [code for code in codes if code]
+        if codes:
+            return " × ".join(codes[:2])
+        return str(keyword.get("concept") or "").replace("港股 ETF 双标的：", "")
+
+    def add_card(self, keyword: dict):
+        tag = str(keyword.get("display") or keyword.get("tag") or keyword.get("keyword") or "未命名")
+        heat = _int(round(float(keyword.get("heat") or keyword.get("mentions") or 0)))
+        net = _int(keyword.get("net"))
+        sentiment = str(keyword.get("sentiment_label") or keyword.get("sentiment") or "中性")
+        etf = self._etf_codes(keyword)
+        title_lines = self.sheet.wrap_all(tag, FONT_BODY, COLUMN_W - 43)
+        meta = f"{net:+d} · {sentiment}"
+        separate_etf = bool(etf) and self.sheet.measure(meta + etf, FONT_MIN) + 12 > COLUMN_W
+        height = len(title_lines) * 18 + LEADING_MIN + (LEADING_MIN if separate_etf else 0) + 9
+        if height > BODY_HEIGHT:
+            raise LayoutError(f"单个热力关键词超过整页：{tag[:30]}")
+        if self.y + height > BODY_BOTTOM:
+            self._advance()
+        x = PAGE_MARGIN + self.column * (COLUMN_W + COLUMN_GAP)
+        heat_text = f"{heat:02d}"
+        self.sheet.text(x + COLUMN_W - self.sheet.measure(heat_text, FONT_TITLE),
+                        self.y, heat_text, FONT_TITLE)
+        for line in title_lines:
+            self.sheet.text(x, self.y, line, FONT_BODY)
+            self.y += 18
+        self.sheet.text(x, self.y, meta, FONT_MIN)
+        if etf and not separate_etf:
+            self.sheet.text(x + COLUMN_W - self.sheet.measure(etf, FONT_MIN), self.y, etf, FONT_MIN)
+        self.y += LEADING_MIN
+        if etf and separate_etf:
+            self.sheet.text(x, self.y, etf, FONT_MIN)
+            self.y += LEADING_MIN
+        rule_right = x + COLUMN_W - 5
+        self.sheet.rule(x, self.y + 2, rule_right, 1)
+        heat_x = x + round((rule_right - x) * max(0, min(100, heat)) / 100)
+        self.sheet.rule(x, self.y + 2, heat_x, 2)
+        self.y += 9
+
+
+def _page_count_delta(renderer: MultiPageRenderer, before: int, page_num: int) -> int:
+    return page_num + len(renderer.pages) - before
+
+
+def _int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def draw_daily_summary_pages(renderer: MultiPageRenderer, data: dict, now: datetime,
+                             page_num: int, total_estimate: int) -> int:
+    before = len(renderer.pages)
     summary = data.get("summary") or {}
     bias = str(summary.get("bias") or "中性")
-    bull = int(summary.get("bull") or 50)
+    bull = _int(summary.get("bull"), 50)
     bear = 100 - bull
-    signals = int(summary.get("signals") or 0)
-    headline = str(summary.get("headline") or "暂无总结")
-    sectors_up = summary.get("sectors_up") or []
-    sectors_down = summary.get("sectors_down") or []
-    flow = summary.get("flow") or str(summary.get("headline") or "")
+    signals = _int(summary.get("signals"))
+    flow = PageFlow(renderer, "AI 每日总结", f"今日判断 · {bias}")
+    flow.add_text(str(summary.get("headline") or "暂无市场总结"), FONT_SECTION, 21, gap=10)
+    flow.add_metrics([
+        ("市场情绪", bias),
+        ("多方 / 空方", f"{bull}% / {bear}%"),
+        ("信号样本", str(signals)),
+    ])
+    up = "、".join(summary.get("sectors_up") or [])
+    down = "、".join(summary.get("sectors_down") or [])
+    sector_text = "｜".join(filter(None, [f"利好 {up}" if up else "", f"承压 {down}" if down else ""]))
+    flow.add_entry("板块方向", sector_text or "暂无明确方向", FONT_BODY)
+    flow.add_entry("资金流向", str(summary.get("flow") or "暂无资金流向信号"), FONT_BODY)
+    return _page_count_delta(renderer, before, page_num)
 
-    sheet = renderer.new_page("AI 每日总结", f"{bias} 多{bull}% 空{bear}%", f"{page_num}/{total_estimate}")
-    y = 34
-    # 标题区
-    for line in sheet.wrap_all(headline, FONT_BODY, CONTENT_W):
-        if y + 18 > HEIGHT - 8:
-            renderer.add_page(sheet)
-            page_num += 1
-            sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
-            y = 34
-        sheet.text(MARGIN, y, line, FONT_BODY)
-        y += 18
 
-    y += 4
-    sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
-    y += 6
-
-    # 多空
-    if y + 36 < HEIGHT:
-        sheet.text(MARGIN, y, f"多空：多{bull}% 空{bear}% · {signals}信号", FONT_SMALL)
-        y += 16
-        sheet.text(MARGIN, y, f"情绪：{bias}", FONT_SMALL)
-        y += 16
-
-    # 板块
-    if sectors_up or sectors_down:
-        if y + 20 < HEIGHT:
-            sheet.text(MARGIN, y, "板块方向：", FONT_SMALL, True)
-            y += 16
-            up_text = "利好 " + "、".join(sectors_up) if sectors_up else ""
-            down_text = "承压 " + "、".join(sectors_down) if sectors_down else ""
-            combined = "｜".join(filter(None, [up_text, down_text])) or "暂无明确方向"
-            for line in sheet.wrap_all(combined, FONT_SMALL, CONTENT_W):
-                if y + 16 > HEIGHT - 8:
-                    renderer.add_page(sheet)
-                    page_num += 1
-                    sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
-                    y = 34
-                sheet.text(MARGIN, y, line, FONT_SMALL)
-                y += 16
-
-    # 资金流向
-    if flow:
-        y += 4
-        for line in sheet.wrap_all(f"资金：{flow}", FONT_SMALL, CONTENT_W):
-            if y + 16 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page("AI 每日总结(续)", "", f"{page_num}/{total_estimate}")
-                y = 34
-            sheet.text(MARGIN, y, line, FONT_SMALL)
-            y += 16
-
-    renderer.add_page(sheet)
-    return page_num + 1
-
-def draw_market_pages(renderer: MultiPageRenderer, review: dict | None, market_name: str, page_num: int, total_estimate: int) -> int:
-    if not review:
-        sheet = renderer.new_page(f"AI 看盘·{market_name}", "暂无数据", f"{page_num}/{total_estimate}")
-        sheet.text(MARGIN, 40, "今日未获取行情", FONT_BODY)
-        renderer.add_page(sheet)
-        return page_num + 1
-
-    date = str(review.get("date") or "--")
-    sheet = renderer.new_page(f"AI 看盘·{market_name}", date, f"{page_num}/{total_estimate}")
-    y = 34
-
-    headline = str(review.get("headline") or "")
-    if headline:
-        for line in sheet.wrap_all(headline, FONT_BODY, CONTENT_W):
-            if y + 18 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
-                y = 34
-            sheet.text(MARGIN, y, line, FONT_BODY)
-            y += 18
-        y += 4
-        sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
-        y += 6
-
-    indices = review.get("indices") or []
-    if indices and y + 40 < HEIGHT:
-        sheet.text(MARGIN, y, "指数：", FONT_SMALL, True)
-        y += 16
-        for item in indices[:6]:
-            if y + 16 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
-                y = 34
-            name = str(item.get("name") or "")
-            short_name = name.replace("上证指数", "上证").replace("深证成指", "深证").replace("创业板指", "创业板").replace("科创50", "科创50").replace("恒生指数", "恒生").replace("恒生科技指数", "恒生科技")
-            close = item.get("close")
-            pct = fmt_pct(item.get("pct"))
-            close_text = f"{float(close):,.2f}" if isinstance(close, (int, float)) else "--"
-            line = f"{short_name} {close_text} {pct}"
-            sheet.text(MARGIN, y, line, FONT_SMALL)
-            y += 16
-
-    # 成交、涨跌、领涨等
-    for key in ["turnover_text", "breadth_text", "sectors_text", "funds_text", "outlook"]:
-        text = review.get(key) or ""
-        if not text:
-            # 尝试从旧字段组合
-            continue
-        if y + 16 > HEIGHT - 8:
-            renderer.add_page(sheet)
-            page_num += 1
-            sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
-            y = 34
-        for line in sheet.wrap_all(text, FONT_SMALL, CONTENT_W):
-            if y + 16 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page(f"AI 看盘·{market_name}(续)", date, f"{page_num}/{total_estimate}")
-                y = 34
-            sheet.text(MARGIN, y, line, FONT_SMALL)
-            y += 16
-
-    # 详细字段（002 的 review 结构）
+def _market_fallback_points(review: dict) -> List[dict]:
+    points: List[dict] = []
+    for key, label in [
+        ("turnover_text", "成交额"), ("breadth_text", "市场广度"),
+        ("sectors_text", "板块表现"), ("funds_text", "资金流向"),
+        ("outlook", "后市观点"),
+    ]:
+        if review.get(key):
+            points.append({"label": label, "text": str(review[key])})
+    if points:
+        return points
     turnover = review.get("turnover") or {}
+    if turnover.get("amount") is not None:
+        points.append({"label": "成交额", "text": f"成交 {fmt_amount(turnover['amount'])}"})
     breadth = review.get("breadth") or {}
-    leaders = review.get("leaders") or []
-    laggards = review.get("laggards") or []
-
-    if turnover and y + 16 < HEIGHT:
-        parts = []
-        if turnover.get("amount") is not None:
-            parts.append(f"成交 {fmt_amount(turnover.get('amount'))}")
-        if parts:
-            sheet.text(MARGIN, y, " · ".join(parts), FONT_SMALL)
-            y += 16
-
-    if breadth and y + 16 < HEIGHT:
-        parts = []
-        if breadth.get("limit_up") is not None:
-            parts.append(f"涨停 {breadth.get('limit_up')}")
-        if breadth.get("limit_down") is not None:
-            parts.append(f"跌停 {breadth.get('limit_down')}")
-        if breadth.get("up") is not None:
-            parts.append(f"上涨 {breadth.get('up')}")
-        if breadth.get("down") is not None:
-            parts.append(f"下跌 {breadth.get('down')}")
-        if parts:
-            line = " · ".join(parts)
-            for l in sheet.wrap_all(line, FONT_SMALL, CONTENT_W):
-                if y + 16 > HEIGHT - 8:
-                    break
-                sheet.text(MARGIN, y, l, FONT_SMALL)
-                y += 16
-
-    if leaders and y + 16 < HEIGHT:
-        names = [str(x.get("name") or "") for x in leaders[:3]]
+    parts = []
+    for key, label in [("up", "上涨"), ("down", "下跌"), ("limit_up", "涨停"), ("limit_down", "跌停")]:
+        if breadth.get(key) is not None:
+            parts.append(f"{label} {breadth[key]}")
+    if parts:
+        points.append({"label": "市场广度", "text": " · ".join(parts)})
+    for key, label, limit in [("leaders", "领涨", 3), ("laggards", "领跌", 3)]:
+        names = [str(x.get("name") or "") for x in (review.get(key) or [])[:limit]]
+        names = [name for name in names if name]
         if names:
-            sheet.text(MARGIN, y, "领涨 " + "、".join(names), FONT_SMALL)
-            y += 16
-    if laggards and y + 16 < HEIGHT:
-        names = [str(x.get("name") or "") for x in laggards[:2]]
-        if names:
-            sheet.text(MARGIN, y, "领跌 " + "、".join(names), FONT_SMALL)
-            y += 16
+            points.append({"label": label, "text": "、".join(names)})
+    return points
 
-    renderer.add_page(sheet)
-    return page_num + 1
 
-def draw_heatmap_pages(renderer: MultiPageRenderer, heatmap: dict | None, page_num: int, total_estimate: int) -> int:
-    if not heatmap:
-        sheet = renderer.new_page("AI 情绪热力图", "暂无", f"{page_num}/{total_estimate}")
-        sheet.text(MARGIN, 40, "暂无热力图数据", FONT_BODY)
-        renderer.add_page(sheet)
-        return page_num + 1
+def draw_market_pages(renderer: MultiPageRenderer, review: dict | None, market_name: str,
+                      page_num: int, total_estimate: int) -> int:
+    before = len(renderer.pages)
+    date = str((review or {}).get("date") or "日期待定")
+    flow = PageFlow(renderer, f"AI 看盘 · {market_name}", date)
+    if not review:
+        flow.add_entry("STATUS", "今日未获取行情，等待数据源恢复。", FONT_BODY)
+        return _page_count_delta(renderer, before, page_num)
+    flow.add_text(str(review.get("headline") or "暂无行情复盘"), FONT_SMALL, LEADING_SMALL, gap=4)
+    flow.add_index_grid(list(review.get("indices") or [])[:6])
+    points = [p for p in (review.get("points") or []) if p.get("key") != "indices"]
+    if not points:
+        points = _market_fallback_points(review)
+    for point in points:
+        text = str(point.get("text") or "")
+        if text:
+            # 标准六维复盘固定在两页展开：第一页指数/成交/广度，第二页板块/资金/策略。
+            if point.get("key") == "sectors" and flow.y > BODY_TOP:
+                flow.new_page()
+            label = str(point.get("label") or "市场观察")
+            flow.add_rich([
+                {"text": f"{label}｜{text}", "size": FONT_SMALL, "leading": LEADING_SMALL},
+            ], gap=0)
+    return _page_count_delta(renderer, before, page_num)
 
-    headline = str(heatmap.get("headline") or "情绪热力图")
-    keywords = heatmap.get("keywords") or heatmap.get("items") or []
-    # 002 的 heatmap 结构可能是 list of dicts
+
+def draw_heatmap_pages(renderer: MultiPageRenderer, heatmap: dict | None,
+                       page_num: int, total_estimate: int) -> int:
+    before = len(renderer.pages)
+    keywords = (heatmap or {}).get("keywords") or (heatmap or {}).get("items") or []
     if isinstance(keywords, dict):
-        # 可能是 dict
-        keywords = list(keywords.values()) if keywords else []
-
-    # 分页：每页 8 个关键词
-    per_page = 7
-    total_pages_needed = max(1, (len(keywords) + per_page - 1) // per_page)
-
-    for chunk_idx in range(total_pages_needed):
-        start = chunk_idx * per_page
-        chunk = keywords[start:start+per_page]
-        sub_title = headline[:20] + "..." if len(headline) > 20 else headline
-        sheet = renderer.new_page("AI 情绪热力图", sub_title if chunk_idx == 0 else "", f"{page_num}/{total_estimate}")
-        y = 34
-
-        if chunk_idx == 0:
-            for line in sheet.wrap_all(headline, FONT_SMALL, CONTENT_W):
-                if y + 16 > HEIGHT - 8:
-                    break
-                sheet.text(MARGIN, y, line, FONT_SMALL)
-                y += 16
-            y += 4
-            sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
-            y += 6
-
-        if not chunk:
-            sheet.text(MARGIN, y, "暂无关键词", FONT_SMALL)
+        keywords = list(keywords.values())
+    flow = HeatFlow(renderer, "AI 情绪热力图", f"HEAT / {len(keywords)} 关键词 · 净信号 / ETF")
+    if not heatmap:
+        flow.add_entry("STATUS", "暂无热力图数据，不做无依据推演。", FONT_BODY)
+        return _page_count_delta(renderer, before, page_num)
+    # 长总结已在「每日总结」呈现；热力页保留全部关键词，以纯数据跨页展示。
+    if not keywords:
+        flow.add_entry("关键词", str(heatmap.get("headline") or "当日样本暂无关键词命中。"), FONT_BODY)
+    flow.begin_cards()
+    for keyword in keywords:
+        if isinstance(keyword, dict):
+            flow.add_card(keyword)
         else:
-            for kw in chunk:
-                if y + 36 > HEIGHT - 8:
-                    break
-                if isinstance(kw, dict):
-                    tag = str(kw.get("tag") or kw.get("keyword") or "")
-                    heat = kw.get("heat") or kw.get("mentions") or 0
-                    sentiment = kw.get("sentiment") or kw.get("sentiment_label") or ""
-                    net = kw.get("net") or 0
-                    line1 = f"{tag} 热度{heat} {sentiment} 净{net:+d}" if tag else str(kw)[:30]
-                else:
-                    line1 = str(kw)[:30]
-                sheet.text(MARGIN, y, line1, FONT_SMALL, True)
-                y += 16
-                # 第二行显示 ETF 或提示
-                if isinstance(kw, dict):
-                    hint = str(kw.get("hint") or kw.get("etf_pair_text") or "")[:40]
-                    if hint:
-                        for l in sheet.wrap_all(hint, FONT_MIN, CONTENT_W):
-                            if y + 12 > HEIGHT - 8:
-                                break
-                            sheet.text(MARGIN+6, y, l, FONT_MIN)
-                            y += 12
-                            break
-                y += 4
+            flow.add_item(0, str(keyword))
+    return _page_count_delta(renderer, before, page_num)
 
-        renderer.add_page(sheet)
-        page_num += 1
 
-    return page_num
-
-def draw_policy_pages(renderer: MultiPageRenderer, policy: dict | None, page_num: int, total_estimate: int) -> int:
+def draw_policy_pages(renderer: MultiPageRenderer, policy: dict | None,
+                      page_num: int, total_estimate: int) -> int:
+    before = len(renderer.pages)
+    flow = PageFlow(renderer, "AI 政策分析", str((policy or {}).get("stance") or "政策信号"))
     if not policy:
-        sheet = renderer.new_page("AI 政策分析", "暂无", f"{page_num}/{total_estimate}")
-        sheet.text(MARGIN, 40, "暂无政策信号", FONT_BODY)
-        renderer.add_page(sheet)
-        return page_num + 1
-
-    headline = str(policy.get("headline") or "政策分析")
-    sheet = renderer.new_page("AI 政策分析", "", f"{page_num}/{total_estimate}")
-    y = 34
-    for line in sheet.wrap_all(headline, FONT_SMALL, CONTENT_W):
-        if y + 16 > HEIGHT - 8:
-            renderer.add_page(sheet)
-            page_num += 1
-            sheet = renderer.new_page("AI 政策分析(续)", "", f"{page_num}/{total_estimate}")
-            y = 34
-        sheet.text(MARGIN, y, line, FONT_SMALL)
-        y += 16
-
-    y += 4
-    sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
-    y += 6
-
+        flow.add_entry("STATUS", "暂无政策信号，等待数据源恢复。", FONT_BODY)
+        return _page_count_delta(renderer, before, page_num)
+    flow.add_text(str(policy.get("headline") or "政策分析"), FONT_SMALL, LEADING_SMALL, gap=6)
     buckets = policy.get("buckets") or policy.get("sectors") or []
     if isinstance(buckets, dict):
         buckets = list(buckets.values())
-
-    for b in buckets[:8]:
-        if y + 32 > HEIGHT - 8:
-            renderer.add_page(sheet)
-            page_num += 1
-            sheet = renderer.new_page("AI 政策分析(续)", "", f"{page_num}/{total_estimate}")
-            y = 34
-        if isinstance(b, dict):
-            tag = str(b.get("tag") or b.get("label") or b.get("dimension") or "")
-            net = b.get("net") or b.get("policy_net") or 0
-            sources_hit = b.get("sources") or b.get("sources_hit") or 0
-            mentions = b.get("mentions") or 0
-            stance = b.get("stance") or ""
-            line = f"{tag} 净{net:+d} {sources_hit}源·{mentions}条 {stance}"
+    if not buckets:
+        flow.add_entry("政策维度", "当日样本中暂无政策面信号可统计。", FONT_BODY)
+    for index, bucket in enumerate(buckets[:8], 1):
+        if isinstance(bucket, dict):
+            tag = str(bucket.get("tag") or bucket.get("label") or bucket.get("dimension") or "未命名")
+            net = _int(bucket.get("net") if bucket.get("net") is not None else bucket.get("policy_net"))
+            sources_hit = _int(bucket.get("sources") if bucket.get("sources") is not None else bucket.get("sources_hit"))
+            mentions = _int(bucket.get("mentions"))
+            stance = str(bucket.get("stance") or "中性")
+            flow.add_rich([
+                {"text": f"{index:02d}  {tag}   净{net:+d}", "size": FONT_BODY, "leading": LEADING_BODY},
+                {"text": f"{stance} · {sources_hit}源命中 · {mentions}条提及",
+                 "size": FONT_META, "leading": LEADING_META, "indent": 24},
+            ], gap=3, separator=True)
         else:
-            line = str(b)[:40]
-        for l in sheet.wrap_all(line, FONT_SMALL, CONTENT_W):
-            if y + 16 > HEIGHT - 8:
-                break
-            sheet.text(MARGIN, y, l, FONT_SMALL)
-            y += 16
-            break
-        y += 2
+            flow.add_text(f"{index:02d}  {bucket}", FONT_SMALL, LEADING_SMALL)
+    return _page_count_delta(renderer, before, page_num)
 
-    renderer.add_page(sheet)
-    return page_num + 1
 
-def draw_sectors_pages(renderer: MultiPageRenderer, summary: dict, page_num: int, total_estimate: int) -> int:
-    opp = summary.get("opportunity_sectors") or []
-    press = summary.get("pressure_sectors") or []
+def _sector_paragraphs(item: dict, index: int, pressure: bool = False) -> List[dict]:
+    tag = str(item.get("tag") or "未命名")
+    net = _int(item.get("net"))
+    sources_hit = _int(item.get("sources"))
+    mentions = _int(item.get("mentions"))
+    direction = "承压" if pressure else "机会"
+    paragraphs = [
+        {"text": f"{index:02d}  {tag}   {direction}净{net:+d}", "size": FONT_SECTION, "leading": 20},
+        {"text": f"{sources_hit}源命中 · {mentions}条提及", "size": FONT_META,
+         "leading": LEADING_META, "indent": 24},
+    ]
+    etf_text = HeatFlow._etf_codes(item)
+    if etf_text:
+        paragraphs.append({"text": f"ETF  {etf_text}", "size": FONT_MIN,
+                           "leading": LEADING_MIN, "indent": 24})
+    # 每个方向保留一条代表证据；其余证据与完整 ETF 说明仍在网页简报。
+    for evidence in (item.get("evidence") or [])[:1]:
+        title = " ".join(str(evidence.get("title") or "").split())
+        if title:
+            source = str(evidence.get("source") or "").strip()
+            prefix = f"· {source}｜" if source else "· "
+            paragraphs.append({"text": prefix + title, "size": FONT_MIN,
+                               "leading": LEADING_MIN, "indent": 24})
+    return paragraphs
 
-    sheet = renderer.new_page("AI 板块机会", f"机会{len(opp)} 承压{len(press)}", f"{page_num}/{total_estimate}")
-    y = 34
 
-    if opp:
-        sheet.text(MARGIN, y, "机会方向：", FONT_SMALL, True)
-        y += 16
-        for item in opp[:6]:
-            if y + 40 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page("AI 板块机会(续)", "", f"{page_num}/{total_estimate}")
-                y = 34
-            tag = str(item.get("tag") or "")
-            net = int(item.get("net") or 0)
-            sources_cnt = int(item.get("sources") or 0)
-            mentions = int(item.get("mentions") or 0)
-            sheet.text(MARGIN, y, f"{tag} 净{net:+d} {sources_cnt}源·{mentions}条", FONT_SMALL, True)
-            y += 16
-            # 证据
-            evidence = item.get("evidence") or []
-            for ev in evidence[:2]:
-                if y + 14 > HEIGHT - 8:
-                    break
-                title = str(ev.get("title") or "")[:36]
-                for l in sheet.wrap_all(f"·{title}", FONT_MIN, CONTENT_W-6):
-                    if y + 12 > HEIGHT - 8:
-                        break
-                    sheet.text(MARGIN+4, y, l, FONT_MIN)
-                    y += 12
-                    break
-            # ETF
-            etf_text = str(item.get("etf_pair_text") or "")[:50]
-            if etf_text and y + 12 < HEIGHT - 8:
-                sheet.text(MARGIN+4, y, etf_text[:40], FONT_MIN)
-                y += 12
-            y += 4
+def draw_sectors_pages(renderer: MultiPageRenderer, summary: dict,
+                       page_num: int, total_estimate: int) -> int:
+    before = len(renderer.pages)
+    opportunities = summary.get("opportunity_sectors") or []
+    pressures = summary.get("pressure_sectors") or []
+    flow = PageFlow(renderer, "AI 板块机会", f"机会 {len(opportunities)} · 承压 {len(pressures)}")
+    if not opportunities and not pressures:
+        flow.add_entry("板块方向", "今日样本中暂无净多头或净空头信号占优的板块。", FONT_BODY)
+    for index, item in enumerate(opportunities[:4], 1):
+        flow.add_rich(_sector_paragraphs(item, index), gap=2, separator=True)
+    for index, item in enumerate(pressures[:2], 1):
+        flow.add_rich(_sector_paragraphs(item, index, pressure=True), gap=2, separator=True)
+    return _page_count_delta(renderer, before, page_num)
 
-    if press:
-        if y + 20 < HEIGHT:
-            y += 4
-            sheet.rule(MARGIN, y, WIDTH - MARGIN - 1, 1)
-            y += 6
-            sheet.text(MARGIN, y, "承压方向：", FONT_SMALL, True)
-            y += 16
-        for item in press[:4]:
-            if y + 32 > HEIGHT - 8:
-                renderer.add_page(sheet)
-                page_num += 1
-                sheet = renderer.new_page("AI 板块机会(续)", "", f"{page_num}/{total_estimate}")
-                y = 34
-            tag = str(item.get("tag") or "")
-            net = int(item.get("net") or 0)
-            sheet.text(MARGIN, y, f"{tag} 净{net:+d}", FONT_SMALL, True)
-            y += 16
-            evidence = item.get("evidence") or []
-            for ev in evidence[:1]:
-                if y + 12 > HEIGHT - 8:
-                    break
-                title = str(ev.get("title") or "")[:36]
-                sheet.text(MARGIN+4, y, f"·{title}", FONT_MIN)
-                y += 12
-            y += 4
 
-    renderer.add_page(sheet)
-    return page_num + 1
-
-def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int, total_estimate: int) -> int:
-    # 按板块分组
+def _group_news(brief: dict, per_source: int) -> Dict[str, List[str]]:
     sections = getattr(sources, "SECTIONS", [])
     section_map = {s["key"]: s["label"] for s in sections} if sections else {}
-
-    # 收集所有新闻，按板块
     grouped: Dict[str, List[str]] = {}
+    seen = set()
     for name, items in brief.items():
-        meta = None
         try:
             meta = sources.source_meta(name)
-        except:
-            pass
-        sec_key = (meta.get("section") if meta else "finance") or "finance"
-        sec_label = section_map.get(sec_key, sec_key)
-        if sec_label not in grouped:
-            grouped[sec_label] = []
-        for it in items[:3]:  # 每源 3 条
-            title = " ".join(str(it.get("title", "")).split())
-            if title:
-                grouped[sec_label].append(title)
+        except Exception:
+            meta = None
+        section_key = (meta.get("section") if meta else "finance") or "finance"
+        label = section_map.get(section_key, section_key)
+        target = grouped.setdefault(label, [])
+        for item in items[:max(0, per_source)]:
+            title = " ".join(str(item.get("title", "")).split())
+            key = title.lower()
+            if title and key not in seen:
+                seen.add(key)
+                target.append(title)
+    return {label: titles for label, titles in grouped.items() if titles}
 
-    # 去重
-    seen = set()
-    for sec in list(grouped.keys()):
-        uniq = []
-        for t in grouped[sec]:
-            k = t.lower()
-            if k not in seen:
-                seen.add(k)
-                uniq.append(t)
-        grouped[sec] = uniq
 
-    # 分页渲染：每页最多 14 条标题
-    per_page = 12
-    for sec_label, titles in grouped.items():
-        if not titles:
-            continue
-        # 该板块可能需要多页
-        chunks = [titles[i:i+per_page] for i in range(0, len(titles), per_page)]
-        for chunk_idx, chunk in enumerate(chunks):
-            suffix = f"({chunk_idx+1}/{len(chunks)})" if len(chunks) > 1 else ""
-            sheet = renderer.new_page(f"全网快讯·{sec_label}{suffix}", f"{len(titles)}条", f"{page_num}/{total_estimate}")
-            y = 34
-            for idx, title in enumerate(chunk):
-                if y + 16 > HEIGHT - 8:
-                    break
-                # 编号 + 标题
-                wrapped = sheet.wrap_all(title, FONT_SMALL, CONTENT_W - 10)
-                if not wrapped:
-                    continue
-                # 第一行带点
-                sheet.draw.rectangle((MARGIN, y + 5, MARGIN + 3, y + 8), fill=BLACK)
-                sheet.text(MARGIN + 8, y, wrapped[0], FONT_SMALL)
-                y += 16
-                # 剩余行
-                for extra in wrapped[1:2]:  # 最多再显示一行
-                    if y + 14 > HEIGHT - 8:
-                        break
-                    sheet.text(MARGIN + 8, y, extra, FONT_MIN)
-                    y += 12
-            renderer.add_page(sheet)
-            page_num += 1
+def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int,
+                    total_estimate: int, news_per_source: int = 3) -> int:
+    before = len(renderer.pages)
+    available = _group_news(brief, 3)
+    grouped = available if news_per_source == 3 else _group_news(brief, news_per_source)
+    available_count = sum(len(titles) for titles in available.values())
+    included_count = sum(len(titles) for titles in grouped.values())
+    renderer.layout_meta.update({
+        "news_per_source": news_per_source,
+        "news_available": available_count,
+        "news_included": included_count,
+        "news_omitted": max(0, available_count - included_count),
+    })
+    if not grouped:
+        flow = PageFlow(renderer, "全网快讯", "暂无快讯")
+        flow.add_entry("STATUS", "今日未获取可显示的快讯标题。", FONT_BODY)
+        return _page_count_delta(renderer, before, page_num)
 
-    return page_num
+    number = 1
+    for label, titles in grouped.items():
+        edition = f" · 精选{news_per_source}条/源" if news_per_source < 3 else f" · {len(titles)}条"
+        flow = NewsFlow(renderer, "全网快讯", label + edition)
+        for title in titles:
+            flow.add_item(number, title)
+            number += 1
+        flow.balance_last_page()
+    return _page_count_delta(renderer, before, page_num)
 
-def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool) -> MultiPageRenderer:
+
+def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool,
+                   news_per_source: int = 3) -> MultiPageRenderer:
     renderer = MultiPageRenderer(FONT_PATH)
-    # 预估总页数用于页码显示（先粗略）
-    total_estimate = 20
-
     page_num = 1
-
-    # 1. 封面 + 每日总结
-    page_num = draw_daily_summary_pages(renderer, data, now, page_num, total_estimate)
-
-    # 2-4. 行情
-    page_num = draw_market_pages(renderer, data.get("review_ashare"), "A股", page_num, total_estimate)
-    page_num = draw_market_pages(renderer, data.get("review_hk"), "港股", page_num, total_estimate)
-    page_num = draw_market_pages(renderer, data.get("review_us"), "美股", page_num, total_estimate)
-
-    # 5. 热力图
-    page_num = draw_heatmap_pages(renderer, data.get("heatmap"), page_num, total_estimate)
-
-    # 6. 政策
-    page_num = draw_policy_pages(renderer, data.get("policy"), page_num, total_estimate)
-
-    # 7. 板块机会
-    page_num = draw_sectors_pages(renderer, data.get("summary") or {}, page_num, total_estimate)
-
-    # 8+. 新闻
-    page_num = draw_news_pages(renderer, data.get("brief") or {}, page_num, total_estimate)
-
-    # 更新所有页面的页码显示为真实总数
-    real_total = len(renderer.pages)
-    for idx, sheet in enumerate(renderer.pages):
-        # 重绘页码：我们已在 header 中写入旧预估，现在覆盖右下角
-        # 简单在底部重写页码
-        page_text = f"{idx+1}/{real_total}"
-        # 清除旧页码区域并重写（底部黑条已在 header，此处在底部写）
-        # 直接在底部写页码
-        w = sheet.measure(page_text, FONT_MIN)
-        # 擦除底部区域
-        sheet.box(WIDTH - MARGIN - w - 4, HEIGHT - 14, WIDTH - MARGIN, HEIGHT - 1, WHITE)
-        sheet.text(WIDTH - MARGIN - w, HEIGHT - 14, page_text, FONT_MIN)
-
+    page_num = draw_daily_summary_pages(renderer, data, now, page_num, 0)
+    page_num = draw_market_pages(renderer, data.get("review_ashare"), "A股", page_num, 0)
+    page_num = draw_market_pages(renderer, data.get("review_hk"), "港股", page_num, 0)
+    page_num = draw_market_pages(renderer, data.get("review_us"), "美股", page_num, 0)
+    page_num = draw_heatmap_pages(renderer, data.get("heatmap"), page_num, 0)
+    page_num = draw_policy_pages(renderer, data.get("policy"), page_num, 0)
+    page_num = draw_sectors_pages(renderer, data.get("summary") or {}, page_num, 0)
+    draw_news_pages(renderer, data.get("brief") or {}, page_num, 0, news_per_source)
+    if demo and renderer.pages:
+        renderer.pages[0].page_subtitle += " · 离线演示"
+    renderer.finalize(now)
     return renderer
+
+
+def render_with_page_budget(data: dict, now: datetime, live: int, total: int, demo: bool,
+                            max_pages: int = MAX_PAGES) -> MultiPageRenderer:
+    """先完整排版，再在 3→2→1 条/源间调整快讯版位；分析栏目不裁剪。"""
+    max_pages = max(1, min(MAX_PAGES, max_pages or MAX_PAGES))
+    last_count = 0
+    for per_source in (3, 2, 1):
+        renderer = draw_all_pages(data, now, live, total, demo, news_per_source=per_source)
+        renderer.page_limit = max_pages
+        last_count = len(renderer.pages)
+        if last_count <= max_pages:
+            renderer.validate(max_pages)
+            if per_source < 3:
+                print(f"版位自适应：快讯每源精选 {per_source} 条，分析栏目与关键结论保留，共 {last_count} 页")
+            return renderer
+        print(f"排版预检：每源 {per_source} 条快讯需 {last_count} 页，超过 {max_pages} 页，调整快讯版位")
+    raise LayoutError(
+        f"分析栏目与每源 1 条快讯仍需 {last_count} 页（上限 {max_pages}）；"
+        "已停止生成，未裁切正文或覆盖上一版"
+    )
 
 # ---------------------------------------------------------------- 主流程
 def main() -> int:
@@ -1009,11 +1272,13 @@ def main() -> int:
     parser.add_argument("--require-live", action="store_true", help="实时源不足时退出 3")
     parser.add_argument("--min-live-sources", type=int, default=20)
     parser.add_argument("--limit", type=int, default=12)
-    parser.add_argument("--pages", type=int, default=0, help="限制最大页数（0 不限制）")
+    parser.add_argument("--pages", type=int, default=0, help="最大页数（0=固件上限 30）")
     args = parser.parse_args()
+    if args.pages < 0:
+        parser.error("--pages 不能为负数")
 
     started = time.time()
-    data = collect_brief_002(limit=args.limit)
+    data = collect_brief_002(limit=args.limit, demo=args.demo)
     brief = data["brief"]
     live, total = live_source_stats(brief)
     demo = live == 0
@@ -1026,21 +1291,19 @@ def main() -> int:
         return 3
 
     now = datetime.now()
-    renderer = draw_all_pages(data, now, live, total, demo)
-
-    if args.pages and args.pages > 0:
-        renderer.pages = renderer.pages[:args.pages]
-
-    # 限制最多 30 页（固件上限）
-    if len(renderer.pages) > 30:
-        print(f"页数 {len(renderer.pages)} 超过固件上限 30，截断", file=sys.stderr)
-        renderer.pages = renderer.pages[:30]
+    try:
+        renderer = render_with_page_budget(
+            data, now, live, total, demo, max_pages=args.pages or MAX_PAGES
+        )
+    except LayoutError as exc:
+        print(f"排版预检未通过：{exc}", file=sys.stderr)
+        return 5
 
     meta = {
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
         "bias": data["summary"].get("bias"),
         "bull": data["summary"].get("bull"),
-        "bear": data["summary"].get("bear"),
+        "bear": 100 - _int(data["summary"].get("bull"), 50),
         "signals": data["summary"].get("signals"),
         "live_sources": live,
         "total_sources": total,
@@ -1052,23 +1315,12 @@ def main() -> int:
     }
 
     out_dir = Path(args.out_dir)
-    renderer.save(out_dir, meta)
-    print(f"已生成 {out_dir}/latest.bin ({len(renderer.pages)} 页)")
-
-    # 兼容旧单页测试：额外生成单页版本用于 test_render_brief.py
     try:
-        single_sheet = draw_sheet(
-            data["summary"],
-            data.get("market_ashare"),
-            data.get("review_ashare"),
-            headline_candidates(brief, 6),
-            now, live, total, demo
-        )
-        # 保存为 latest_single 用于测试，不覆盖多页的 latest.bin
-        # 测试会调用 save_single
-    except Exception:
-        pass
-
+        renderer.save(out_dir, meta)
+    except LayoutError as exc:
+        print(f"排版预检未通过：{exc}", file=sys.stderr)
+        return 5
+    print(f"全页校样：{out_dir}/latest_contact_sheet.png")
     return 0
 
 if __name__ == "__main__":
