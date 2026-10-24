@@ -14,6 +14,26 @@ struct AibriefReadIndicatorParts {
     char page_count[3];
 };
 
+inline unsigned clamp_aibrief_time_component(int value, unsigned maximum)
+{
+    if (value < 0) {
+        return 0U;
+    }
+    const unsigned component = static_cast<unsigned>(value);
+    return component > maximum ? maximum : component;
+}
+
+inline void format_aibrief_two_digits(char *out, unsigned value)
+{
+    // 页面和时间分量均为两位显示；饱和到 99，保证目标缓冲区始终足够。
+    if (value > 99U) {
+        value = 99U;
+    }
+    out[0] = static_cast<char>('0' + value / 10U);
+    out[1] = static_cast<char>('0' + value % 10U);
+    out[2] = '\0';
+}
+
 inline void format_aibrief_read_indicator_parts(
     const struct tm *read_time,
     unsigned current_page,
@@ -23,13 +43,16 @@ inline void format_aibrief_read_indicator_parts(
     parts = AibriefReadIndicatorParts{};
     if (read_time) {
         snprintf(parts.prefix, sizeof(parts.prefix), "读取 ");
-        snprintf(parts.read_time, sizeof(parts.read_time), "%02d:%02d",
-                 read_time->tm_hour, read_time->tm_min);
+        format_aibrief_two_digits(
+            parts.read_time, clamp_aibrief_time_component(read_time->tm_hour, 23U));
+        parts.read_time[2] = ':';
+        format_aibrief_two_digits(
+            parts.read_time + 3, clamp_aibrief_time_component(read_time->tm_min, 59U));
         snprintf(parts.separator, sizeof(parts.separator), " · ");
     }
-    snprintf(parts.current_page, sizeof(parts.current_page), "%02u", current_page);
+    format_aibrief_two_digits(parts.current_page, current_page);
     snprintf(parts.page_separator, sizeof(parts.page_separator), " / ");
-    snprintf(parts.page_count, sizeof(parts.page_count), "%02u", page_count);
+    format_aibrief_two_digits(parts.page_count, page_count);
 }
 
 inline void format_aibrief_read_indicator(char *out,

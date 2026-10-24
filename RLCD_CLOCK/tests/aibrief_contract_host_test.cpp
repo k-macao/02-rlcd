@@ -132,6 +132,12 @@ void test_read_time_and_page_indicator()
     assert(strcmp(text, "读取 07:09 · 01 / 01") == 0);
     format_aibrief_read_indicator(text, sizeof(text), nullptr, 1, 28);
     assert(strcmp(text, "01 / 28") == 0);
+
+    // 两位字段必须始终保持固定长度；异常输入饱和到显示上限。
+    local.tm_hour = -1;
+    local.tm_min = 90;
+    format_aibrief_read_indicator(text, sizeof(text), &local, 100, 255);
+    assert(strcmp(text, "读取 00:59 · 99 / 99") == 0);
     format_aibrief_read_indicator(nullptr, 0, &local, 1, 28);
 }
 
