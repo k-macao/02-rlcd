@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "需要构建的版本标签，例如 v1.7.0"
+        description: "需要发布的版本号，例如 v1.8.2。标签已存在则按标签构建，否则用当前分支最新提交构建并补打标签"
         required: true
         type: string
 
@@ -48,10 +48,36 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "构建版本: $version (原始输入: $REQUESTED_VERSION)"
 
+      - name: 解析检出来源
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH_REF: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 手动触发常被当作「发布当前 main」，此时标签往往还没打。
+          # 标签缺失时改为构建当前分支的最新提交，构建成功后再补打标签，
+          # 避免 checkout 直接报 "A branch or tag with the name '...' could not be found"。
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "ref=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "create_tag=false" >> "$GITHUB_OUTPUT"
+            echo "标签 ${VERSION} 已存在，按标签构建"
+            exit 0
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            echo "触发事件 ${GITHUB_EVENT_NAME} 但标签 ${VERSION} 不存在" >&2
+            exit 1
+          fi
+          echo "ref=${BRANCH_REF}" >> "$GITHUB_OUTPUT"
+          echo "create_tag=true" >> "$GITHUB_OUTPUT"
+          echo "标签 ${VERSION} 不存在：改为构建 ${BRANCH_REF} 的最新提交，构建成功后自动补打标签"
+
       - name: 检出待发布源码
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.version.outputs.version }}
+          ref: ${{ steps.source.outputs.ref }}
           fetch-depth: 0
           submodules: recursive
 
@@ -63,7 +89,10 @@ jobs:
           set -euo pipefail
           project_version="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
           if [[ "$project_version" != "$EXPECTED_VERSION" ]]; then
-            echo "标签版本 $EXPECTED_VERSION 与工程版本 $project_version 不一致" >&2
+            echo "请求发布的版本 $EXPECTED_VERSION 与源码工程版本 $project_version 不一致" >&2
+            echo "若确实要发 $EXPECTED_VERSION，请先执行：" >&2
+            echo "  python3 .github/scripts/bump_version.py --set $EXPECTED_VERSION" >&2
+            echo "并提交后重试；否则请改用 $project_version 重跑本工作流。" >&2
             exit 1
           fi
 
@@ -135,6 +164,20 @@ jobs:
             --latest firmware/latest.json \
             --versions firmware/versions.json
 
+      - name: 补打发布标签
+        if: steps.source.outputs.create_tag == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 标签必须指向本次真正构建的提交，不能让 gh release create 按默认分支最新提交补建。
+          # 用 GITHUB_TOKEN 推送标签不会再次触发本工作流，因此 Release、清单更新、
+          # 版本递增都在当前这次运行内完成。
+          git tag "$VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/$VERSION"
+          echo "已创建标签 $VERSION -> $GITHUB_SHA"
+
       - name: 创建或更新 Release 并上传固件
         env:
           GH_TOKEN: ${{ github.token }}
@@ -192,7 +235,8 @@ jobs:
           exit 1
 
       - name: 自动递增版本号（为下一次发布准备）
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        # 手动发布（本次补打了标签）也要递增，否则 main 会一直停在已发布版本上。
+        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || steps.source.outputs.create_tag == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
