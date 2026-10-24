@@ -1,0 +1,115 @@
+name: 诊断构建（临时）
+
+# 临时工作流：把 ESP-IDF 构建日志里的错误行转成注解（annotations），
+# 便于在没有日志下载权限的环境中定位编译失败原因。定位完成后即删除。
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "要构建的 ref（标签/分支/SHA）"
+        required: true
+        default: "main"
+  push:
+    branches:
+      - "arena/**"
+    paths:
+      - ".github/workflows/diag-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: ESP32-S3 诊断构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: 准备 OTA 端点
+        env:
+          OTA_MANIFEST_URL: ${{ vars.WEATHER_CLOCK_OTA_MANIFEST_URL || format('https://raw.githubusercontent.com/{0}/main/firmware/latest.json', github.repository) }}
+          OTA_BACKUP_MANIFEST_URL: ${{ vars.WEATHER_CLOCK_OTA_BACKUP_MANIFEST_URL || format('https://cdn.jsdelivr.net/gh/{0}@main/firmware/latest.json', github.repository) }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/prepare_ota_endpoint.py \
+            --output RLCD_CLOCK/main/core/ota_endpoint_local.h
+          test -s RLCD_CLOCK/main/core/ota_endpoint_local.h
+
+      - name: 构建并捕获日志
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          docker run --rm \
+            -e IDF_TARGET=esp32s3 \
+            -v "$GITHUB_WORKSPACE:/app/repo" \
+            -w "/app/repo/RLCD_CLOCK" \
+            espressif/idf:v5.5.3 \
+            /bin/bash -c 'git config --global --add safe.directory "*" && idf.py build' 2>&1 | tee /tmp/build.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "构建退出码: $status"
+          exit "$status"
+
+      - name: 错误行（可直接在运行摘要里看到）
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "=== 匹配到的错误行（最多 10 条）==="
+          grep -nE "error:|Error |ERROR|undefined reference|overflowed|FAILED|CMake Error" /tmp/build.log \
+            | tail -10 > /tmp/errs.txt || true
+          if [ ! -s /tmp/errs.txt ]; then
+            echo "未匹配到关键字，改用日志尾部"
+            tail -10 /tmp/build.log > /tmp/errs.txt
+          fi
+          cat /tmp/errs.txt
+          while IFS= read -r line; do
+            echo "::error::$line"
+          done < /tmp/errs.txt
+
+      - name: 失败命令上下文（向上 6 行）
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          first_line=$(head -1 /tmp/errs.txt | cut -d: -f1)
+          if [ -n "${first_line:-}" ] && [ "$first_line" -eq "$first_line" ] 2>/dev/null; then
+            start=$(( first_line > 6 ? first_line - 6 : 1 ))
+            echo "=== 第 ${start}-${first_line} 行 ==="
+            sed -n "${start},${first_line}p" /tmp/build.log | while IFS= read -r line; do
+              echo "::error::${line:0:800}"
+            done
+          fi
+
+      - name: 日志尾部
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "=== 最后 10 行 ==="
+          tail -10 /tmp/build.log | while IFS= read -r line; do
+            echo "::error::${line:0:800}"
+          done
+
+      - name: 统计
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ -f /tmp/build.log ]; then
+            echo "日志行数: $(wc -l < /tmp/build.log)"
+            echo "日志大小: $(wc -c < /tmp/build.log)"
+            echo "=== 出现的编译错误类型 ==="
+            grep -oE "(Compilation error|undefined reference to [^ ]+|error: [^\"]{0,80})" /tmp/build.log | sort | uniq -c | sort -rn | head -15 || true
+          else
+            echo "没有日志"
+          fi
