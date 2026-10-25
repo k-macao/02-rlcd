@@ -1,31 +1,17 @@
 {
-  "latest": "v1.8.4",
+  "latest": "v1.8.3",
   "items": [
     {
-      "version": "v1.8.4",
-      "notes": "v1.8.4：拉取 002 仓库作为 AI 简报页，阿里巴巴普惠体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 16px，标题与数字使用 85 Bold、其他文字使用 55 Regular；真机右下页脚和未获取提示同步使用同一字体。服务器使用 FreeType 原生 MONO、自动 hinting 与整数像素定位，取消灰度阈值和抖动，提升 1bpp 笔画清晰度与稳定性。\n3. 全部内容完整显示，分页展示：单文件包含最…",
-      "app": {
-        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.4/weather_clock_v1.8.4.bin",
-        "sha256": "6d00b8de272579e5e1bb01825fd9c350243de4897419f8bfabc68a08abe820be",
-        "size": 6325168
-      },
-      "merged": {
-        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.4/weather_clock_v1.8.4_merged.bin",
-        "sha256": "5356aa235022a25e055a291388ac93b3bb22dd0162d787248f58e6b45364a211",
-        "size": 16509951
-      }
-    },
-    {
       "version": "v1.8.3",
-      "notes": "v1.8.3：共 3 项更新。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量…\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 1…\n3. 全部内容完整显示，分页展示：单文件包含最…\n完整说明见源码仓库同版本 Release。",
+      "notes": "v1.8.3：拉取 002 仓库作为 AI 简报页，阿里巴巴普惠体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 16px，标题与数字使用 85 Bold、其他文字使用 55 Regular；真机右下页脚和未获取提示同步使用同一字体。服务器使用 FreeType 原生 MONO、自动 hinting 与整数像素定位，取消灰度阈值和抖动，提升 1bpp 笔画清晰度与稳定性。\n3. 全部内容完整显示，分页展示：单文件包含最…",
       "app": {
         "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.3/weather_clock_v1.8.3.bin",
-        "sha256": "2fd0aca73ebb34a2135e052d3a690c34349e5822adcb119662618f1a0d4fb4dd",
+        "sha256": "73544c94c4cd333c030023c6bbacb6521b97979cd318b81c142d16e004738e42",
         "size": 6325168
       },
       "merged": {
         "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.3/weather_clock_v1.8.3_merged.bin",
-        "sha256": "a8a80c0e283251f19c8967a632a2ea192e40733d06833b2f2532cef94219e21d",
+        "sha256": "8598c8483cac048a2144e34dd5147ec67874d63392e7ff853843076d1d361aaa",
         "size": 16509951
       }
     },
@@ -138,6 +124,20 @@
       "merged": {
         "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.14/weather_clock_v1.6.14_merged.bin",
         "sha256": "c371a641dc19c95b3403243c31e0ac2adbda019001567f6b1d955e6a06c12226",
+        "size": 16509951
+      }
+    },
+    {
+      "version": "v1.6.13",
+      "notes": "v1.6.13：共 1 项更新。\n1. 修复零点附近成功校时后短时间内重复进行 NTP 同步的问题，减少不必要的 Wi-Fi…\n完整说明见源码仓库同版本 Release。",
+      "app": {
+        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.13/weather_clock_v1.6.13.bin",
+        "sha256": "d019bcc6f2f4edb4ddf80de7f73f64f692599f02aa9536728906aee957a966d3",
+        "size": 6311696
+      },
+      "merged": {
+        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.13/weather_clock_v1.6.13_merged.bin",
+        "sha256": "1afbcc6a9535b8860cbdfb66b84ae4410d346084dba9722650f19766321fa3f0",
         "size": 16509951
       }
     }
