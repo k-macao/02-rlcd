@@ -4266,22 +4266,27 @@ def _fetch_ashare_pools(review_date: str) -> dict:
 
     try:
         total_zt, zt_pool = _fetch_ashare_pool_all(_ASHARE_ZT_URL, ymd, "fbt:asc")
+    except Exception:
+        total_zt, zt_pool = None, []
+    # 只有真正拿到数据才回填：合法休市日会返回 tc=0（int），而网络/限流失败时
+    # tc 为 None 且列表为空——此时保持 limit_up=None、total_pages=0，文案降级为
+    # “口径暂缺”、前端隐藏分页组件，不能谎报“涨停 0 家 / 共 0 页”。
+    if total_zt is not None or zt_pool:
         count = _to_int_count(total_zt, len(zt_pool))
         out["limit_up"] = count
         out["zt_pages"] = _pages(count)
         out["zt_pool"] = list(zt_pool)
         out["hot_sectors"] = _sector_counts(zt_pool)[:4]
-    except Exception:
-        pass
     try:
         total_dt, dt_pool = _fetch_ashare_pool_all(_ASHARE_DT_URL, ymd, "fund:asc")
+    except Exception:
+        total_dt, dt_pool = None, []
+    if total_dt is not None or dt_pool:
         count = _to_int_count(total_dt, len(dt_pool))
         out["limit_down"] = count
         out["dt_pages"] = _pages(count)
         out["dt_pool"] = list(dt_pool)
         out["cold_sectors"] = _sector_counts(dt_pool)[:3]
-    except Exception:
-        pass
     return out
 
 
