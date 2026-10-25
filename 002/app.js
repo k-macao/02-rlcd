@@ -574,3 +574,102 @@ document.querySelectorAll('.pixel-switch input[data-toggle]').forEach(input=>{
   });
   loadStatus();
 })();
+
+/* ===================== 涨停池分页翻页（当前页/总页 + 每30秒自动翻页） =====================
+   从 /api/market 拉取 breadth.zt_pool / zt_pages，按 page_size 分页显示；
+   静态托管（GitHub Pages）下 /api/market 不可用时保持隐藏，不干扰静态预览。 */
+(function(){
+  const pagerEl = document.getElementById('ztPoolPager');
+  const infoEl = document.getElementById('ztPagerInfo');
+  const listEl = document.getElementById('ztPagerList');
+  const prevBtn = document.getElementById('ztPagerPrev');
+  const nextBtn = document.getElementById('ztPagerNext');
+  const autoEl = document.getElementById('ztPagerAuto');
+  if(!pagerEl || !infoEl || !listEl || !prevBtn || !nextBtn || !autoEl) return;
+
+  let state = {
+    pool: [],
+    pages: { page_size: 5, total_pages: 0, total_count: 0, page: 1 },
+    page: 1,
+    auto: true,
+    timer: null,
+    interval: 30000,
+  };
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }
+
+  function render(){
+    const totalPages = state.pages.total_pages || 0;
+    const totalCount = state.pages.total_count || 0;
+    const pageSize = state.pages.page_size || 5;
+    let page = Math.max(1, Math.min(state.page, totalPages || 1));
+    state.page = page;
+    infoEl.textContent = totalPages ? `第 ${page} 页 / 共 ${totalPages} 页（${totalCount} 家）` : '第 1 页 / 共 0 页（0 家）';
+    prevBtn.disabled = page <= 1;
+    nextBtn.disabled = page >= totalPages || totalPages === 0;
+
+    const start = (page - 1) * pageSize;
+    const pageItems = state.pool.slice(start, start + pageSize);
+    listEl.innerHTML = pageItems.map(item => {
+      const code = esc(item.code || item.symbol || item.f12 || '');
+      const name = esc(item.name || item.f14 || '');
+      const sector = esc(item.hybk || item.sector || '');
+      return `<li><span class="code">${code}</span><span class="name">${name}</span>${sector ? `<span class="sector">${sector}</span>` : ''}</li>`;
+    }).join('') || '<li style="color:#666;font-size:10px;">暂无数据</li>';
+  }
+
+  function nextPage(){
+    const totalPages = state.pages.total_pages || 0;
+    if(totalPages <= 1) return;
+    state.page = state.page % totalPages + 1;
+    render();
+  }
+
+  function startAuto(){
+    stopAuto();
+    if(!state.auto) return;
+    state.timer = setInterval(nextPage, state.interval);
+  }
+  function stopAuto(){
+    if(state.timer){ clearInterval(state.timer); state.timer = null; }
+  }
+
+  async function load(){
+    try{
+      const res = await fetch('api/market');
+      if(!res.ok) throw new Error('market api');
+      const data = await res.json();
+      const breadth = data && data.breadth || {};
+      const pages = breadth.zt_pages || { page_size: 5, total_pages: 0, total_count: 0, page: 1 };
+      const pool = Array.isArray(breadth.zt_pool) ? breadth.zt_pool : [];
+      state.pages = pages;
+      state.pool = pool;
+      state.page = 1;
+      pagerEl.hidden = false;
+      render();
+      startAuto();
+    }catch(e){
+      pagerEl.hidden = true;
+    }
+  }
+
+  prevBtn.onclick = () => {
+    const totalPages = state.pages.total_pages || 0;
+    if(totalPages <= 1) return;
+    state.page = state.page <= 1 ? totalPages : state.page - 1;
+    render();
+    startAuto();
+  };
+  nextBtn.onclick = () => { nextPage(); startAuto(); };
+  autoEl.onclick = () => {
+    state.auto = !state.auto;
+    autoEl.textContent = `自动翻页：${state.auto ? '开' : '关'} · 30 秒`;
+    if(state.auto) startAuto(); else stopAuto();
+  };
+
+  load();
+  if(typeof refreshBtn !== 'undefined' && refreshBtn){
+    refreshBtn.addEventListener('click', load);
+  }
+  window._ztPagerReload = load;
+})();

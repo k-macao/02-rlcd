@@ -156,6 +156,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "source": review.get("source"),
                 "bias": review.get("bias"),
                 "indices": review.get("indices"),
+                "breadth": review.get("breadth"),
             })
         if path == "/api/heatmap":
             # 情绪热力图：关键词级热度与情绪（面向股市投资）

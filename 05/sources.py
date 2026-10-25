@@ -4233,11 +4233,19 @@ def _to_int_count(value, fallback: int) -> int:
 def _fetch_ashare_pools(review_date: str) -> dict:
     """涨停/跌停池（按日回溯）：家数 + 涨停行业分布（领涨线索）+ 跌停行业分布（领跌线索）。
 
-    不再只抓第 1 页的 5 条：翻页抓齐全量（tc 家）后再统计行业分布，这样
-    “涨停 45 家”的分母才与实际参与统计的个股一致。
+    翻页抓齐全量（tc 家）后再统计行业分布，并把分页元数据与首页个股
+    列表一起返回，供前端“当前页/总页 + 自动翻页”展示。
     """
-    out = {"limit_up": None, "limit_down": None, "hot_sectors": [], "cold_sectors": []}
+    out = {
+        "limit_up": None, "limit_down": None,
+        "hot_sectors": [], "cold_sectors": [],
+        "zt_pages": {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1},
+        "dt_pages": {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1},
+        "zt_pool": [],
+        "dt_pool": [],
+    }
     ymd = review_date.replace("-", "")
+    page_size = 5
 
     def _sector_counts(stocks: list) -> list:
         counts = {}
@@ -4247,15 +4255,30 @@ def _fetch_ashare_pools(review_date: str) -> dict:
                 counts[sector] = counts.get(sector, 0) + 1
         return sorted(counts, key=counts.get, reverse=True)
 
+    def _pages(total_count: int) -> dict:
+        total_pages = (total_count + page_size - 1) // page_size if total_count else 0
+        return {
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "page": 1,
+        }
+
     try:
         total_zt, zt_pool = _fetch_ashare_pool_all(_ASHARE_ZT_URL, ymd, "fbt:asc")
-        out["limit_up"] = _to_int_count(total_zt, len(zt_pool))
+        count = _to_int_count(total_zt, len(zt_pool))
+        out["limit_up"] = count
+        out["zt_pages"] = _pages(count)
+        out["zt_pool"] = list(zt_pool)
         out["hot_sectors"] = _sector_counts(zt_pool)[:4]
     except Exception:
         pass
     try:
         total_dt, dt_pool = _fetch_ashare_pool_all(_ASHARE_DT_URL, ymd, "fund:asc")
-        out["limit_down"] = _to_int_count(total_dt, len(dt_pool))
+        count = _to_int_count(total_dt, len(dt_pool))
+        out["limit_down"] = count
+        out["dt_pages"] = _pages(count)
+        out["dt_pool"] = list(dt_pool)
         out["cold_sectors"] = _sector_counts(dt_pool)[:3]
     except Exception:
         pass
@@ -4331,6 +4354,10 @@ def _build_ashare_market(klines: dict, today) -> dict:
                 "limit_up": pools["limit_up"], "limit_down": pools["limit_down"],
                 "broken": None, "seal_rate": None, "ladder": None,
                 "hot_sectors": pools["hot_sectors"],
+                "zt_pages": pools.get("zt_pages", {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1}),
+                "dt_pages": pools.get("dt_pages", {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1}),
+                "zt_pool": pools.get("zt_pool", []),
+                "dt_pool": pools.get("dt_pool", []),
             },
             "leaders": leaders,
             "laggards": laggards,
