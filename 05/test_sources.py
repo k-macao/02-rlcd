@@ -2015,5 +2015,93 @@ class MarketFreshnessTest(unittest.TestCase):
         self.assertTrue(fresh.get("forced"))
 
 
+class AsharePoolPaginationTest(unittest.TestCase):
+    """涨停/跌停池全量翻页：家数、个股列表与前端分页元数据必须一致。"""
+
+    @staticmethod
+    def _fake_api(tc, page_size_seen=None):
+        """模拟东方财富涨停池接口：返回 tc 家总数 + 按 Pageindex 分页的 pool。"""
+        def _fetch(url, params=None, *args, **kwargs):
+            params = params or {}
+            size = int(params.get("pagesize", 50))
+            index = int(params.get("Pageindex", 0))
+            if page_size_seen is not None:
+                page_size_seen.append(index)
+            everything = [
+                {"f12": f"{i:06d}", "f14": f"股票{i}", "hybk": ["算力硬件", "存储芯片", "农业", "黄金"][i % 4]}
+                for i in range(tc)
+            ]
+            return {"data": {"tc": tc, "pool": everything[index * size:(index + 1) * size]}}
+        return _fetch
+
+    def _with_fake_api(self, tc, func):
+        orig = sources._fetch_json
+        sources._fetch_json = self._fake_api(tc)
+        try:
+            return func()
+        finally:
+            sources._fetch_json = orig
+
+    def test_pool_all_fetches_every_page(self):
+        # tc=137、每页 50 条 → 必须翻 3 页抓齐 137 条，不能只留第 1 页 50 条。
+        indexes = []
+        orig = sources._fetch_json
+        sources._fetch_json = self._fake_api(137, indexes)
+        try:
+            total, pool = sources._fetch_ashare_pool_all("https://example.test", "20261024", "fbt:asc")
+        finally:
+            sources._fetch_json = orig
+        self.assertEqual(total, 137)
+        self.assertEqual(len(pool), 137)
+        self.assertEqual(indexes, [0, 1, 2])
+
+    def test_pool_all_stops_when_total_missing(self):
+        # 接口不返回 tc 时以实际抓取条数为准，空页即停，不会无限翻页。
+        orig = sources._fetch_json
+        sources._fetch_json = lambda url, params=None, *a, **k: {"data": {"pool": (
+            [{"f12": "000001", "f14": "股票1", "hybk": "算力硬件"}]
+            if int((params or {}).get("Pageindex", 0)) == 0 else []
+        )}}
+        try:
+            total, pool = sources._fetch_ashare_pool_all("https://example.test", "20261024", "fbt:asc")
+        finally:
+            sources._fetch_json = orig
+        self.assertIsNone(total)
+        self.assertEqual(len(pool), 1)
+
+    def test_pools_expose_page_metadata_matching_pool(self):
+        # 45 家 / 每页 5 条 → 9 页，且 zt_pool 必须是全量 45 条，前端翻页才不会翻出空页。
+        pools = self._with_fake_api(45, lambda: sources._fetch_ashare_pools("2026-10-24"))
+        self.assertEqual(pools["limit_up"], 45)
+        self.assertEqual(len(pools["zt_pool"]), 45)
+        self.assertEqual(pools["zt_pages"], {
+            "page_size": 5, "total_pages": 9, "total_count": 45, "page": 1,
+        })
+        self.assertEqual(pools["dt_pages"]["total_pages"], 9)
+
+    def test_pools_empty_day_hides_pager(self):
+        # 当日无涨停（如休市）→ total_pages 为 0，前端据此隐藏整个分页组件。
+        pools = self._with_fake_api(0, lambda: sources._fetch_ashare_pools("2026-10-24"))
+        self.assertEqual(pools["limit_up"], 0)
+        self.assertEqual(pools["zt_pool"], [])
+        self.assertEqual(pools["zt_pages"]["total_pages"], 0)
+        self.assertEqual(pools["zt_pages"]["total_count"], 0)
+
+    def test_pools_survive_network_error(self):
+        # 抓取异常时不得抛出，返回可用的空壳，避免 /api/market 整体 500。
+        def _boom(*args, **kwargs):
+            raise RuntimeError("network down")
+        orig = sources._fetch_json
+        sources._fetch_json = _boom
+        try:
+            pools = sources._fetch_ashare_pools("2026-10-24")
+        finally:
+            sources._fetch_json = orig
+        self.assertIsNone(pools["limit_up"])
+        self.assertEqual(pools["zt_pool"], [])
+        self.assertEqual(pools["zt_pages"]["total_pages"], 0)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
