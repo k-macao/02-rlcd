@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-25 22:57:22",
+  "generated_at": "2026-10-26 05:27:51",
   "timezone": "Asia/Shanghai",
   "bias": "中性",
-  "bull": 47,
-  "bear": 53,
+  "bull": 43,
+  "bear": 57,
   "signals": 105,
   "live_sources": 50,
   "total_sources": 69,
@@ -17,7 +17,7 @@
     "source": "eastmoney",
     "latest_kline_date": "2026-10-23",
     "expected_date": "2026-10-23",
-    "checked_at": "2026-10-25 22:57:14"
+    "checked_at": "2026-10-26 05:27:43"
   },
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "source_repo": "002",
@@ -30,8 +30,8 @@
   "pages": 45,
   "bytes": 675008,
   "page_bytes": 675000,
-  "sha256": "7bff8a6fa60011fb7cea94165c005652f3954010b001610236b5059f95e75e68",
-  "crc32_bitmap": "56300d30",
+  "sha256": "4e8b813bb9e6e82ef9799f93642df780b5758a3afcff41d809a795ed09984791",
+  "crc32_bitmap": "e8c4bc36",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
   "font_size": 16,
