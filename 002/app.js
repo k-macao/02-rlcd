@@ -604,9 +604,11 @@ document.querySelectorAll('.pixel-switch input[data-toggle]').forEach(input=>{
     const pageSize = state.pages.page_size || 5;
     let page = Math.max(1, Math.min(state.page, totalPages || 1));
     state.page = page;
-    infoEl.textContent = totalPages ? `第 ${page} 页 / 共 ${totalPages} 页（${totalCount} 家）` : '第 1 页 / 共 0 页（0 家）';
+    if(!totalPages){ pagerEl.hidden = true; return; }
+    pagerEl.hidden = false;
+    infoEl.textContent = `第 ${page} 页 / 共 ${totalPages} 页（${totalCount} 家）`;
     prevBtn.disabled = page <= 1;
-    nextBtn.disabled = page >= totalPages || totalPages === 0;
+    nextBtn.disabled = page >= totalPages;
 
     const start = (page - 1) * pageSize;
     const pageItems = state.pool.slice(start, start + pageSize);
@@ -645,6 +647,7 @@ document.querySelectorAll('.pixel-switch input[data-toggle]').forEach(input=>{
       state.pages = pages;
       state.pool = pool;
       state.page = 1;
+      if(!pages.total_pages){ pagerEl.hidden = true; return; }
       pagerEl.hidden = false;
       render();
       startAuto();
