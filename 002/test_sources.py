@@ -2137,8 +2137,8 @@ class AsharePoolPaginationTest(unittest.TestCase):
         })
         self.assertEqual(pools["dt_pages"]["total_pages"], 9)
 
-    def test_pools_empty_day_hides_pager(self):
-        # 当日无涨停（如休市）→ total_pages 为 0，前端据此隐藏整个分页组件。
+    def test_pools_empty_day_zero_pages(self):
+        # 当日无涨停（如休市）→ total_pages 为 0，页面只显示「更新时间」不带涨跌停家数。
         pools = self._with_fake_api(0, lambda: sources._fetch_ashare_pools("2026-10-24"))
         self.assertEqual(pools["limit_up"], 0)
         self.assertEqual(pools["zt_pool"], [])

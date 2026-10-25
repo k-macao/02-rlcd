@@ -575,65 +575,20 @@ document.querySelectorAll('.pixel-switch input[data-toggle]').forEach(input=>{
   loadStatus();
 })();
 
-/* ===================== 涨停池分页翻页（当前页/总页 + 每30秒自动翻页） =====================
-   从 /api/market 拉取 breadth.zt_pool / zt_pages，按 page_size 分页显示；
-   静态托管（GitHub Pages）下 /api/market 不可用时保持隐藏，不干扰静态预览。 */
+/* ===================== 右下角「更新时间」 =====================
+   只展示大盘数据的更新时间，不再做涨停池分页。
+   时间取 /api/market 的 freshness.checked_at（其次 date）；
+   静态托管（GitHub Pages）下接口不可用时显示「—」，不谎报时间。 */
 (function(){
-  const pagerEl = document.getElementById('ztPoolPager');
-  const infoEl = document.getElementById('ztPagerInfo');
-  const listEl = document.getElementById('ztPagerList');
-  const prevBtn = document.getElementById('ztPagerPrev');
-  const nextBtn = document.getElementById('ztPagerNext');
-  const autoEl = document.getElementById('ztPagerAuto');
-  if(!pagerEl || !infoEl || !listEl || !prevBtn || !nextBtn || !autoEl) return;
+  const el = document.getElementById('reviewUpdated');
+  if(!el) return;
+  const REFRESH_MS = 300000;  // 与服务端 /api/market 的 5 分钟缓存对齐
 
-  let state = {
-    pool: [],
-    pages: { page_size: 5, total_pages: 0, total_count: 0, page: 1 },
-    page: 1,
-    auto: true,
-    timer: null,
-    interval: 30000,
-  };
-
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }
-
-  function render(){
-    const totalPages = state.pages.total_pages || 0;
-    const totalCount = state.pages.total_count || 0;
-    const pageSize = state.pages.page_size || 5;
-    let page = Math.max(1, Math.min(state.page, totalPages || 1));
-    state.page = page;
-    if(!totalPages){ pagerEl.hidden = true; return; }
-    pagerEl.hidden = false;
-    infoEl.textContent = `第 ${page} 页 / 共 ${totalPages} 页（${totalCount} 家）`;
-    prevBtn.disabled = page <= 1;
-    nextBtn.disabled = page >= totalPages;
-
-    const start = (page - 1) * pageSize;
-    const pageItems = state.pool.slice(start, start + pageSize);
-    listEl.innerHTML = pageItems.map(item => {
-      const code = esc(item.code || item.symbol || item.f12 || '');
-      const name = esc(item.name || item.f14 || '');
-      const sector = esc(item.hybk || item.sector || '');
-      return `<li><span class="code">${code}</span><span class="name">${name}</span>${sector ? `<span class="sector">${sector}</span>` : ''}</li>`;
-    }).join('') || '<li style="color:#666;font-size:10px;">暂无数据</li>';
-  }
-
-  function nextPage(){
-    const totalPages = state.pages.total_pages || 0;
-    if(totalPages <= 1) return;
-    state.page = state.page % totalPages + 1;
-    render();
-  }
-
-  function startAuto(){
-    stopAuto();
-    if(!state.auto) return;
-    state.timer = setInterval(nextPage, state.interval);
-  }
-  function stopAuto(){
-    if(state.timer){ clearInterval(state.timer); state.timer = null; }
+  function fmt(stamp){
+    if(!stamp) return '—';
+    const text = String(stamp).trim();
+    const m = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}` : text;
   }
 
   async function load(){
@@ -641,38 +596,18 @@ document.querySelectorAll('.pixel-switch input[data-toggle]').forEach(input=>{
       const res = await fetch('api/market');
       if(!res.ok) throw new Error('market api');
       const data = await res.json();
-      const breadth = data && data.breadth || {};
-      const pages = breadth.zt_pages || { page_size: 5, total_pages: 0, total_count: 0, page: 1 };
-      const pool = Array.isArray(breadth.zt_pool) ? breadth.zt_pool : [];
-      state.pages = pages;
-      state.pool = pool;
-      state.page = 1;
-      if(!pages.total_pages){ pagerEl.hidden = true; return; }
-      pagerEl.hidden = false;
-      render();
-      startAuto();
+      const freshness = (data && data.freshness) || {};
+      const stamp = freshness.checked_at || (data && data.date) || '';
+      el.textContent = `更新时间 ${fmt(stamp)}`;
+      const source = (data && data.source) || freshness.source || '';
+      el.title = source ? `数据来源：${source}` : '';
     }catch(e){
-      pagerEl.hidden = true;
+      el.textContent = '更新时间 —';
+      el.title = '';
     }
   }
 
-  prevBtn.onclick = () => {
-    const totalPages = state.pages.total_pages || 0;
-    if(totalPages <= 1) return;
-    state.page = state.page <= 1 ? totalPages : state.page - 1;
-    render();
-    startAuto();
-  };
-  nextBtn.onclick = () => { nextPage(); startAuto(); };
-  autoEl.onclick = () => {
-    state.auto = !state.auto;
-    autoEl.textContent = `自动翻页：${state.auto ? '开' : '关'} · 30 秒`;
-    if(state.auto) startAuto(); else stopAuto();
-  };
-
   load();
-  if(typeof refreshBtn !== 'undefined' && refreshBtn){
-    refreshBtn.addEventListener('click', load);
-  }
-  window._ztPagerReload = load;
+  setInterval(() => { if(!document.hidden) load(); }, REFRESH_MS);
+  window._reviewUpdatedReload = load;
 })();
