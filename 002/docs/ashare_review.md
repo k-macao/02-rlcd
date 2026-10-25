@@ -35,7 +35,7 @@
 | A 股四大指数日 K（备用源） | 腾讯证券 `web.ifzq.gtimg.cn/appstock/app/fqkline/get`（param=代码,day,,,17,qfq） | 主源失联或缺指数时自动补位；含收盘价，涨跌额/涨跌幅由相邻两日收盘价推算；不含成交额（该维度自动降级不展示） |
 | 港股三大指数日 K | 东方财富 `100.HSI` / `100.HSTECH` / `100.HSCEI`；备用腾讯 `hkHSI` / `hkHSTECH` / `hkHSCEI` | 恒生、恒生科技、国企指数，链路与 A 股相同 |
 | 美股三大指数日 K | 东方财富 `100.DJIA` / `100.SPX` / `100.IXIC`；备用腾讯 `usDJI` / `usINX` / `usIXIC` | 道指、标普、纳指，链路与 A 股相同 |
-| 涨停 / 跌停家数、连板行业分布 | 东方财富 `push2ex.eastmoney.com/getTopicZTPool` / `getTopicDTPool`（date=YYYYMMDD） | 历史涨停 / 跌停池，`tc` 为家数，`hybk` 为行业（领涨 / 领跌线索） |
+| 涨停 / 跌停家数、连板行业分布 | 东方财富 `push2ex.eastmoney.com/getTopicZTPool` / `getTopicDTPool`（date=YYYYMMDD） | 历史涨停 / 跌停池，`tc` 为家数，`hybk` 为行业（领涨 / 领跌线索）。**已翻页抓取全量（`tc` 家），行业分布不再只统计第 1 页的 5 条个股。** |
 | 涨跌家数、封板率、连板高度、板块点评、资金流向、机构观点 | 内置真实快照（当日盘后收评交叉核对） | 实时路径无法按日回溯的口径，由快照提供 |
 | 兜底 | `_ASHARE_SNAPSHOT` / `_HK_SNAPSHOT` / `_US_SNAPSHOT`（内置收盘快照，复盘日期按当前日期自动推导） | 主备源均不可用时自动回退，日期根据当前日期动态推导至最近交易日 |
 

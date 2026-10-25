@@ -4380,37 +4380,95 @@ def _get_fallback_review_date(today=None) -> str:
     return str(target)
 
 
-def _fetch_ashare_pools(review_date: str) -> dict:
-    """涨停/跌停池（按日回溯）：家数 + 涨停行业分布（领涨线索）+ 跌停行业分布（领跌线索）。"""
-    out = {"limit_up": None, "limit_down": None, "hot_sectors": [], "cold_sectors": []}
-    ymd = review_date.replace("-", "")
+def _fetch_ashare_pool_all(url: str, ymd: str, sort: str) -> tuple:
+    """翻页抓取涨停/跌停池全量。
 
-    def _sector_counts(data: dict, key: str) -> list:
+    返回 (tc, 全量股票列表)。tc 取首页接口返回的家数（如 45），若缺失则以
+    实际抓取条数代替。翻页直到抓齐 tc 条、或某页返回空、或命中防御性
+    页数上限，避免只统计第 1 页的 5 条个股。
+    """
+    page_size = 50
+    page_index = 0
+    stocks = []
+    total = None
+    max_pages = 40
+    while page_index < max_pages:
+        try:
+            data = (_fetch_json(url, {
+                "ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt",
+                "Pageindex": page_index, "pagesize": page_size, "sort": sort, "date": ymd,
+            }) or {}).get("data") or {}
+        except Exception:
+            break
+        if total is None:
+            total = data.get("tc")
+        batch = data.get("pool") or []
+        stocks.extend(batch)
+        if not batch:
+            break
+        if isinstance(total, int) and len(stocks) >= total:
+            break
+        page_index += 1
+    return total, stocks
+
+
+def _to_int_count(value, fallback: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _fetch_ashare_pools(review_date: str) -> dict:
+    """涨停/跌停池（按日回溯）：家数 + 涨停行业分布（领涨线索）+ 跌停行业分布（领跌线索）。
+
+    翻页抓齐全量（tc 家）后再统计行业分布，并把分页元数据与首页个股
+    列表一起返回，供前端“当前页/总页 + 自动翻页”展示。
+    """
+    out = {
+        "limit_up": None, "limit_down": None,
+        "hot_sectors": [], "cold_sectors": [],
+        "zt_pages": {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1},
+        "dt_pages": {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1},
+        "zt_pool": [],
+        "dt_pool": [],
+    }
+    ymd = review_date.replace("-", "")
+    page_size = 5
+
+    def _sector_counts(stocks: list) -> list:
         counts = {}
-        for stock in (data or {}).get("pool") or []:
+        for stock in stocks:
             sector = stock.get("hybk") or ""
             if sector:
                 counts[sector] = counts.get(sector, 0) + 1
         return sorted(counts, key=counts.get, reverse=True)
 
+    def _pages(total_count: int) -> dict:
+        total_pages = (total_count + page_size - 1) // page_size if total_count else 0
+        return {
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "page": 1,
+        }
+
     try:
-        zt = _fetch_json(_ASHARE_ZT_URL, {
-            "ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt",
-            "Pageindex": 0, "pagesize": 5, "sort": "fbt:asc", "date": ymd,
-        })
-        data = zt.get("data") or {}
-        out["limit_up"] = data.get("tc")
-        out["hot_sectors"] = _sector_counts(data, "zt")[:4]
+        total_zt, zt_pool = _fetch_ashare_pool_all(_ASHARE_ZT_URL, ymd, "fbt:asc")
+        count = _to_int_count(total_zt, len(zt_pool))
+        out["limit_up"] = count
+        out["zt_pages"] = _pages(count)
+        out["zt_pool"] = list(zt_pool)
+        out["hot_sectors"] = _sector_counts(zt_pool)[:4]
     except Exception:
         pass
     try:
-        dt = _fetch_json(_ASHARE_DT_URL, {
-            "ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt",
-            "Pageindex": 0, "pagesize": 5, "sort": "fund:asc", "date": ymd,
-        })
-        data = dt.get("data") or {}
-        out["limit_down"] = data.get("tc")
-        out["cold_sectors"] = _sector_counts(data, "dt")[:3]
+        total_dt, dt_pool = _fetch_ashare_pool_all(_ASHARE_DT_URL, ymd, "fund:asc")
+        count = _to_int_count(total_dt, len(dt_pool))
+        out["limit_down"] = count
+        out["dt_pages"] = _pages(count)
+        out["dt_pool"] = list(dt_pool)
+        out["cold_sectors"] = _sector_counts(dt_pool)[:3]
     except Exception:
         pass
     return out
@@ -4485,6 +4543,10 @@ def _build_ashare_market(klines: dict, today) -> dict:
                 "limit_up": pools["limit_up"], "limit_down": pools["limit_down"],
                 "broken": None, "seal_rate": None, "ladder": None,
                 "hot_sectors": pools["hot_sectors"],
+                "zt_pages": pools.get("zt_pages", {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1}),
+                "dt_pages": pools.get("dt_pages", {"page_size": 5, "total_pages": 0, "total_count": 0, "page": 1}),
+                "zt_pool": pools.get("zt_pool", []),
+                "dt_pool": pools.get("dt_pool", []),
             },
             "leaders": leaders,
             "laggards": laggards,
