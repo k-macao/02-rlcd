@@ -8,6 +8,7 @@
 - 400×300 固定网格、全页 16px、标题/数字 Bold、真实页码、双栏快讯与末栏均衡
 - FreeType 原生 MONO + 自动 hinting + 整数像素定位，不使用灰度阈值或抖动
 - 保存前逐页检查边界、字号、纯黑白像素和叠字；超额时调整快讯版位，不截句、不直接裁页
+- 快讯默认「全量推送」：抓到的标题全部排版，只有超过 48 页固件上限才按每源条数逐级收敛
 - 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 48 页
 
 产物（默认写入 aibrief/）：
@@ -15,7 +16,7 @@
   latest.png  第一页 PNG 预览
   page_*.png  每页 PNG 预览
   latest_contact_sheet.png  5 列全页校样墙
-  meta.json   生成时间、真实页数、精选口径、预检结果、SHA-256
+  meta.json   生成时间、真实页数、收录口径（全量/精选）、预检结果、SHA-256
 
 用法：
   python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 数据）
@@ -23,6 +24,7 @@
   python3 device_brief/render_brief.py --require-live --require-fresh-market
                                   # 实时源不足或行情不新鲜则失败退出（CI 用）
   python3 device_brief/render_brief.py --out-dir aibrief --pages 20
+  python3 device_brief/render_brief.py --news-per-source 3   # 只推每源 3 条精选
 """
 from __future__ import annotations
 
@@ -62,6 +64,11 @@ WIDTH = 400
 HEIGHT = 300
 MAX_PAGES = 48
 MAGIC = b"AIB1"
+# 全网快讯默认「全量推送」：抓到的标题全部排版，不按来源截断。
+# 只有在固件 48 页上限内放不下时，才沿下面的阶梯逐级收敛，
+# 并取「页数不超上限」的最大一档，尽量把内容推满。
+NEWS_PER_SOURCE_FULL = 0
+NEWS_PER_SOURCE_LADDER = (20, 16, 12, 8, 6, 5, 4, 3, 2, 1)
 LAYOUT_VERSION = "2.3-alibaba-puhuiti-16px-native-mono"
 CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
@@ -1232,41 +1239,106 @@ def draw_sectors_pages(renderer: MultiPageRenderer, summary: dict,
     return _page_count_delta(renderer, before, page_num)
 
 
-def _group_news(brief: dict, per_source: int) -> Dict[str, List[str]]:
+def _section_labels() -> Dict[str, str]:
     sections = getattr(sources, "SECTIONS", [])
-    section_map = {s["key"]: s["label"] for s in sections} if sections else {}
-    grouped: Dict[str, List[str]] = {}
+    return {s["key"]: s["label"] for s in sections} if sections else {}
+
+
+def _source_section(name: str, section_map: Dict[str, str]) -> str:
+    try:
+        meta = sources.source_meta(name)
+    except Exception:
+        meta = None
+    section_key = (meta.get("section") if meta else "finance") or "finance"
+    return section_map.get(section_key, section_key)
+
+
+def _news_entries(brief: dict) -> List[tuple]:
+    """全量快讯池：``[(板块, 来源, 来源内序号, 标题), ...]``，按来源轮转排序。
+
+    先排各来源的第 1 条，再排各来源的第 2 条……因此无论全量还是按页位截断，
+    结果都保持「各源均衡」，不会把靠前的几个来源排满、后面的整段丢掉。
+    ``brief`` 内跨来源重复标题只保留最先出现的一条。
+    """
+    section_map = _section_labels()
     seen = set()
-    for name, items in brief.items():
-        try:
-            meta = sources.source_meta(name)
-        except Exception:
-            meta = None
-        section_key = (meta.get("section") if meta else "finance") or "finance"
-        label = section_map.get(section_key, section_key)
-        target = grouped.setdefault(label, [])
-        for item in items[:max(0, per_source)]:
+    queues: List[tuple] = []
+    for name, items in (brief or {}).items():
+        titles: List[str] = []
+        for item in items or []:
             title = " ".join(str(item.get("title", "")).split())
             key = title.lower()
             if title and key not in seen:
                 seen.add(key)
-                target.append(title)
+                titles.append(title)
+        if titles:
+            queues.append((_source_section(name, section_map), name, titles))
+    entries: List[tuple] = []
+    depth = 0
+    while True:
+        added = False
+        for label, name, titles in queues:
+            if depth < len(titles):
+                entries.append((label, name, depth, titles[depth]))
+                added = True
+        if not added:
+            return entries
+        depth += 1
+
+
+def _news_pool(brief: dict) -> List[tuple]:
+    """``[(板块, 标题), ...]`` 轮转顺序的全量快讯池。"""
+    return [(label, title) for label, _name, _index, title in _news_entries(brief)]
+
+
+def _group_news(brief: dict, per_source: int = NEWS_PER_SOURCE_FULL) -> Dict[str, List[str]]:
+    """按板块分组快讯标题。
+
+    ``per_source`` 为 :data:`NEWS_PER_SOURCE_FULL`（0）或负数时表示全量：
+    抓到的每个标题都排版，不按来源截断；否则每个来源只取前 ``per_source`` 条。
+    板块内顺序与 :func:`_news_pool` 一致（各源轮转），截断时同样各源均衡。
+    """
+    full = per_source is None or per_source <= 0
+    grouped: Dict[str, List[str]] = {}
+    for label, _name, index, title in _news_entries(brief):
+        if full or index < per_source:
+            grouped.setdefault(label, []).append(title)
     return {label: titles for label, titles in grouped.items() if titles}
 
 
 def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int,
-                    total_estimate: int, news_per_source: int = 3) -> int:
+                    total_estimate: int,
+                    news_per_source: int = NEWS_PER_SOURCE_FULL,
+                    news_limit: int | None = None) -> int:
+    """排版「全网快讯」。
+
+    - ``news_limit`` 给定时：从全量快讯池按各源轮转顺序取前 ``news_limit`` 条（页位用满即止）。
+    - 否则 ``news_per_source<=0`` 表示全量推送；``>0`` 表示每源精选 N 条。
+    """
     before = len(renderer.pages)
-    available = _group_news(brief, 3)
-    grouped = available if news_per_source == 3 else _group_news(brief, news_per_source)
-    available_count = sum(len(titles) for titles in available.values())
+    full = news_per_source is None or news_per_source <= 0
+    pool = _news_pool(brief)
+    available_count = len(pool)
+    if full:
+        kept_pool = pool if news_limit is None else pool[:max(0, news_limit)]
+        grouped: Dict[str, List[str]] = {}
+        for label, title in kept_pool:
+            grouped.setdefault(label, []).append(title)
+    else:
+        grouped = _group_news(brief, news_per_source)
     included_count = sum(len(titles) for titles in grouped.values())
     renderer.layout_meta.update({
-        "news_per_source": news_per_source,
+        "news_mode": "full" if full else f"per_source_{news_per_source}",
+        "news_per_source": None if full else news_per_source,
+        "news_full": full and included_count >= available_count,
+        "news_limit": None if (not full or news_limit is None) else news_limit,
         "news_available": available_count,
         "news_included": included_count,
         "news_omitted": max(0, available_count - included_count),
     })
+    if full and news_limit is not None and news_limit <= 0:
+        # 页位全部分给分析栏目：本栏不占页，避免用「暂无快讯」白占一页。
+        return _page_count_delta(renderer, before, page_num)
     if not grouped:
         flow = PageFlow(renderer, "全网快讯", "暂无快讯")
         flow.add_entry("STATUS", "今日未获取可显示的快讯标题。", FONT_BODY)
@@ -1274,7 +1346,13 @@ def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int,
 
     number = 1
     for label, titles in grouped.items():
-        edition = f" · 精选{news_per_source}条/源" if news_per_source < 3 else f" · {len(titles)}条"
+        if full:
+            edition = (f" · 全量{len(titles)}条" if included_count >= available_count
+                       else f" · 全量{available_count}条取{included_count}条")
+        elif news_per_source < 3:
+            edition = f" · 精选{news_per_source}条/源"
+        else:
+            edition = f" · {len(titles)}条"
         flow = NewsFlow(renderer, "全网快讯", label + edition)
         for title in titles:
             flow.add_item(number, title)
@@ -1284,7 +1362,8 @@ def draw_news_pages(renderer: MultiPageRenderer, brief: dict, page_num: int,
 
 
 def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool,
-                   news_per_source: int = 3) -> MultiPageRenderer:
+                   news_per_source: int = NEWS_PER_SOURCE_FULL,
+                   news_limit: int | None = None) -> MultiPageRenderer:
     renderer = MultiPageRenderer(FONT_PATH)
     page_num = 1
     page_num = draw_daily_summary_pages(renderer, data, now, page_num, 0)
@@ -1294,32 +1373,90 @@ def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool,
     page_num = draw_heatmap_pages(renderer, data.get("heatmap"), page_num, 0)
     page_num = draw_policy_pages(renderer, data.get("policy"), page_num, 0)
     page_num = draw_sectors_pages(renderer, data.get("summary") or {}, page_num, 0)
-    draw_news_pages(renderer, data.get("brief") or {}, page_num, 0, news_per_source)
+    draw_news_pages(renderer, data.get("brief") or {}, page_num, 0,
+                    news_per_source=news_per_source, news_limit=news_limit)
     if demo and renderer.pages:
         renderer.pages[0].page_subtitle += " · 离线演示"
     renderer.finalize(now)
     return renderer
 
 
-def render_with_page_budget(data: dict, now: datetime, live: int, total: int, demo: bool,
-                            max_pages: int = MAX_PAGES) -> MultiPageRenderer:
-    """先完整排版，再在 3→2→1 条/源间调整快讯版位；分析栏目不裁剪。"""
-    max_pages = max(1, min(MAX_PAGES, max_pages or MAX_PAGES))
-    last_count = 0
-    for per_source in (3, 2, 1):
-        renderer = draw_all_pages(data, now, live, total, demo, news_per_source=per_source)
+def _build_pages(data: dict, now: datetime, live: int, total: int, demo: bool,
+                 max_pages: int, news_per_source: int, news_limit: int | None,
+                 cache: dict) -> MultiPageRenderer:
+    key = (news_per_source, news_limit)
+    if key not in cache:
+        renderer = draw_all_pages(data, now, live, total, demo,
+                                  news_per_source=news_per_source, news_limit=news_limit)
         renderer.page_limit = max_pages
+        cache[key] = renderer
+    return cache[key]
+
+
+def render_with_page_budget(data: dict, now: datetime, live: int, total: int, demo: bool,
+                            max_pages: int = MAX_PAGES,
+                            news_per_source: int | None = None) -> MultiPageRenderer:
+    """默认全量推送快讯，把固件页位用满；显式给定每源条数时按该口径精选。
+
+    全量模式下先排分析栏目，再用二分求得「页数不超过上限」的最大快讯条数：
+    每多留一条快讯就多推进一页，直到 48 页上限为止，各来源始终均衡。
+    显式 ``news_per_source>0`` 时只按该口径出图，放不下才沿阶梯向下收敛。
+    """
+    max_pages = max(1, min(MAX_PAGES, max_pages or MAX_PAGES))
+    brief = data.get("brief") or {}
+    cache: dict = {}
+    pool_size = len(_news_pool(brief))
+
+    if news_per_source is None or news_per_source <= 0:
+        # 先只排分析栏目：若连它都放不下，就没有可裁的快讯版位了。
+        analysis_only = _build_pages(data, now, live, total, demo, max_pages,
+                                     NEWS_PER_SOURCE_FULL, 0, cache)
+        if len(analysis_only.pages) > max_pages:
+            raise LayoutError(
+                f"分析栏目本身需 {len(analysis_only.pages)} 页（上限 {max_pages}）；"
+                "已停止生成，未裁切正文或覆盖上一版"
+            )
+        best = analysis_only
+        # 快讯条数越多页数不减，因此可以直接二分「放得下的最大条数」，把页位用满。
+        low, high = 0, pool_size
+        while low <= high:
+            mid = (low + high) // 2
+            candidate = _build_pages(data, now, live, total, demo, max_pages,
+                                     NEWS_PER_SOURCE_FULL, mid, cache)
+            if len(candidate.pages) <= max_pages:
+                best = candidate
+                low = mid + 1
+            else:
+                high = mid - 1
+        best.validate(max_pages)
+        included = best.layout_meta.get("news_included", 0)
+        if included >= pool_size:
+            print(f"全量推送：快讯 {included}/{pool_size} 条全部排版，共 {len(best.pages)}/{max_pages} 页")
+        else:
+            print(f"全量推送：快讯 {included}/{pool_size} 条排出 {len(best.pages)}/{max_pages} 页，"
+                  f"其余 {pool_size - included} 条留在网页研报，分析栏目与关键结论不裁剪")
+        return best
+
+    ladder = [news_per_source] + [n for n in NEWS_PER_SOURCE_LADDER if n < news_per_source]
+    last_count = 0
+    for quota in ladder:
+        renderer = _build_pages(data, now, live, total, demo, max_pages,
+                                quota, None, cache)
         last_count = len(renderer.pages)
         if last_count <= max_pages:
             renderer.validate(max_pages)
-            if per_source < 3:
-                print(f"版位自适应：快讯每源精选 {per_source} 条，分析栏目与关键结论保留，共 {last_count} 页")
+            included = renderer.layout_meta.get("news_included", 0)
+            if quota != news_per_source:
+                print(f"版位自适应：每源 {news_per_source} 条需超过 {max_pages} 页，"
+                      f"收敛为每源 {quota} 条（{included} 条），分析栏目与关键结论保留，"
+                      f"共 {last_count} 页")
             return renderer
-        print(f"排版预检：每源 {per_source} 条快讯需 {last_count} 页，超过 {max_pages} 页，调整快讯版位")
+        print(f"排版预检：每源 {quota} 条快讯需 {last_count} 页，超过 {max_pages} 页，调整快讯版位")
     raise LayoutError(
         f"分析栏目与每源 1 条快讯仍需 {last_count} 页（上限 {max_pages}）；"
         "已停止生成，未裁切正文或覆盖上一版"
     )
+
 
 # ---------------------------------------------------------------- 主流程
 def main() -> int:
@@ -1330,11 +1467,20 @@ def main() -> int:
     parser.add_argument("--require-fresh-market", action="store_true",
                         help="A 股不是最新交易日或回退快照时退出 3")
     parser.add_argument("--min-live-sources", type=int, default=20)
-    parser.add_argument("--limit", type=int, default=12)
+    parser.add_argument("--limit", type=int, default=None,
+                        help="每个来源抓取条数（默认取 002 推送口径：会员 20 条）")
     parser.add_argument("--pages", type=int, default=0, help="最大页数（0=固件上限 48）")
+    parser.add_argument("--news-per-source", type=int, default=NEWS_PER_SOURCE_FULL,
+                        help="快讯每源条数；0=全量推送（默认，放不下时自动收敛）")
     args = parser.parse_args()
     if args.pages < 0:
         parser.error("--pages 不能为负数")
+    if args.news_per_source < 0:
+        parser.error("--news-per-source 不能为负数")
+    if args.limit is None:
+        args.limit = sources.default_fetch_limit()
+    if args.limit <= 0:
+        parser.error("--limit 必须大于 0")
 
     started = time.time()
     data = collect_brief_002(limit=args.limit, demo=args.demo)
@@ -1343,7 +1489,10 @@ def main() -> int:
     demo = live == 0
     if args.demo:
         demo = True
-    print(f"采集完成：{total} 源，实时 {live} 源，用时 {time.time() - started:.1f}s，字体 {FONT_PATH.name}")
+    print(f"采集完成：{total} 源，实时 {live} 源，每源最多 {args.limit} 条，"
+          f"用时 {time.time() - started:.1f}s，字体 {FONT_PATH.name}")
+    mode = "全量推送（放不下时自动收敛）" if args.news_per_source <= 0 else f"每源 {args.news_per_source} 条精选"
+    print(f"快讯口径：{mode}")
 
     if args.require_live and live < args.min_live_sources:
         print(f"实时源不足（{live} < {args.min_live_sources}），放弃更新设备简报", file=sys.stderr)
@@ -1359,7 +1508,8 @@ def main() -> int:
     now = china_now()
     try:
         renderer = render_with_page_budget(
-            data, now, live, total, demo, max_pages=args.pages or MAX_PAGES
+            data, now, live, total, demo, max_pages=args.pages or MAX_PAGES,
+            news_per_source=args.news_per_source,
         )
     except LayoutError as exc:
         print(f"排版预检未通过：{exc}", file=sys.stderr)
@@ -1380,6 +1530,8 @@ def main() -> int:
         "market_freshness": freshness,
         "font": str(FONT_PATH.name),
         "source_repo": "002",
+        "fetch_limit": args.limit,
+        "news_mode": "full" if args.news_per_source <= 0 else f"per_source_{args.news_per_source}",
     }
 
     out_dir = Path(args.out_dir)

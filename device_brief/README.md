@@ -4,7 +4,7 @@
 
 ![设备简报首页样张（离线示例数据）](sample.png)
 
-[查看 42 页完整校样墙（离线示例数据）](sample_contact_sheet.png)
+[查看 48 页完整校样墙（离线示例数据，全量快讯用满页位）](sample_contact_sheet.png)
 
 ## 屏幕、字体与网格
 
@@ -14,6 +14,7 @@
 - **原生 1bpp 清晰渲染**：`mono_text.py` 使用 FreeType `FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT` 直接生成黑白字形，所有字形落在整数像素上，测量与绘制共用同一套整数 advance。不再经过灰度图、128 阈值、抖动或亚像素定位；页面预检只允许纯黑/纯白两类像素。面板本身是 1bpp，不能显示真正的灰阶抗锯齿，因此不制造噪点来假装平滑。
 - **杂志式版面**：统一 running header/footer、右下读取时间（不再显示页码）、阅读进度线；总结页使用指标行，行情页使用指数数据网格，热力图使用双栏数据卡，快讯使用双栏流并对末页做左右栏高度均衡。
 - **完整折行而非截句**：超长中英文标题会跨栏或跨页续排，结尾不省略。页脚只保留读取时间，页码已取消；阅读进度线仍按总页数推进。
+- **快讯全量推送**：默认把抓到的所有标题都排进去（`--news-per-source 0`），并按各来源轮转排序，任何截断点都各源均衡；只有 48 页装不下时才二分收敛到「页数不超上限的最大条数」，页眉标注「全量 N 条取 M 条」。
 
 ## 推送前逐页预检
 
@@ -26,7 +27,7 @@
 5. 全部通过后才写入二进制和 PNG；页数减少时同步清理旧 `page_*.png`，避免残页混入。
 6. 同时生成 5 列校样墙，行数按实际页数计算，便于推送前逐页目检。
 
-运行 26 项离线回归测试：
+运行 29 项离线回归测试：
 
 ```bash
 python3 -m pip install pillow freetype-py
@@ -54,7 +55,7 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-
 - `page_*.png`：每页原生 400×300 PNG。
 - `latest_combined.png`：垂直拼接总览。
 - `latest_contact_sheet.png`：5 列全页校样墙，供推送前审阅。
-- `meta.json`：北京时间生成时间、实际页数、字体、实时源、A 股新鲜度结果、快讯精选口径、安全区、校验值及 `layout_validated=true`。
+- `meta.json`：北京时间生成时间、实际页数、字体、实时源、A 股新鲜度结果、快讯口径（`news_mode` / `news_full` / `news_limit`）、安全区、校验值及 `layout_validated=true`。
 
 常用参数：
 
@@ -64,7 +65,8 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-
 | `--require-live` | 实时源少于阈值时退出 3，不更新设备图 |
 | `--require-fresh-market` | A 股不是最新可复盘交易日、接口不可用或回退旧快照时退出 3 |
 | `--min-live-sources N` | 实时源阈值，默认 20 |
-| `--limit N` | 限制每个来源抓取的条目数 |
+| `--limit N` | 每个来源抓取的条目数，默认 20（与 002 会员推送口径一致） |
+| `--news-per-source N` | 快讯每源条数；默认 `0` = 全量推送，放不下时自动收敛 |
 | `--pages N` | 本次最大页数；0 表示固件上限 48，不会直接裁掉超额页面 |
 
 退出码 `3` 表示实时源不足或行情不新鲜；退出码 `5` 表示排版预检未通过或分析内容本身超过页位。两种情况都保留上一版文件。
@@ -78,6 +80,6 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-
 5. **AI 板块机会**：机会 Top4 + 承压 Top2，每个方向保留一条代表证据及 ETF 代码。
 6. **全网快讯**：6 大板块、69 源、跨源去重、连续编号、完整标题双栏分页。
 
-设备协议最多 48 页，因此不能承诺把网页的全部长说明和每源 3 条快讯同时塞入一份负载。渲染器先完整排分析栏目，再按 **每源 3 → 2 → 1 条** 自动重排快讯；页眉明确标注“精选”，`meta.json` 记录 `news_available / news_included / news_omitted`。不会缩字、截句或直接删除超出页位的内容；每源 1 条仍超过 48 页时退出 5，不推送半成品。
+设备协议最多 48 页（PSRAM 720KB）。渲染器先完整排分析栏目，再按 **全量快讯** 用二分法寻找「页数不超过 48 的最大条数」，把页位用满：每个来源按轮转顺序出条，例如全量 287 条时可排出 104 条 / 48 页，各源纳入条数相差不超过 1 条。页眉标注“全量 N 条取 M 条”，`meta.json` 记录 `news_available / news_included / news_omitted / news_limit`。不会缩字、截句或直接删除超出页位的内容；分析栏目本身超过 48 页时退出 5，不推送半成品。若显式指定 `--news-per-source N`，则按该口径精选，放不下时沿 20 → 16 → 12 → 8 → 6 → 5 → 4 → 3 → 2 → 1 逐级收敛。
 
 > 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 **07:10、19:10（北京时间）各实时抓取一次**，先跑排版测试，再检查实时源和 A 股新鲜度，随后逐页预检、生成校样并提交；任何数据闸门失败都保留上一版。设备会在 5 分钟内获取新图，每 60 秒自动翻页，之后每 5 分钟检查更新。
