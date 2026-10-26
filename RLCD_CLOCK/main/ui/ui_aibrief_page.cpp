@@ -1,4 +1,4 @@
-// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每 20 秒自动翻页。
+// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每 30 分钟自动翻页。
 #include "ui_aibrief_page.h"
 
 #include "aibrief_contract.h"
@@ -42,7 +42,7 @@ constexpr int kAibriefBitmapFooterBaseline = 17;
 // 页脚只显示「读取 HH:MM」：前缀 + 时间两段，页码已取消。
 constexpr int kAibriefPageSegmentCount = 2;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
-constexpr const char *kAibriefHintText = "长按 KEY 返回 · 每 20 秒自动翻页";
+constexpr const char *kAibriefHintText = "长按 KEY 返回 · 每 30 分钟自动翻页";
 
 lv_obj_t *s_aibrief_canvas;
 lv_color_t *s_aibrief_canvas_buffer;
@@ -266,7 +266,7 @@ bool update_aibrief_page()
     const uint32_t drawn_version = snapshot.available ? snapshot.version : 0;
     const uint8_t current_page = snapshot.available ? snapshot.current_page : 0;
 
-    // 检查是否需要自动翻页：每 20 秒切下一页（全量 255 页时一轮约 85 分钟）
+    // 检查是否需要自动翻页：每 30 分钟切下一页（全量 255 页时一轮约 5.3 天）
     if (snapshot.available && snapshot.page_count > 1) {
         const int64_t now_us = esp_timer_get_time();
         const int64_t elapsed_us = now_us - s_aibrief_last_page_switch_us;
@@ -283,6 +283,7 @@ bool update_aibrief_page()
     if (drawn_version == s_aibrief_drawn_version && current_page == s_aibrief_drawn_page) {
         return false;
     }
+    const bool page_changed = current_page != s_aibrief_drawn_page;
     s_aibrief_drawn_version = drawn_version;
     s_aibrief_drawn_page = current_page;
 
@@ -292,7 +293,10 @@ bool update_aibrief_page()
         }
         show_placeholder(false);
         update_page_indicator();
-        s_aibrief_last_page_switch_us = esp_timer_get_time();
+        // 只有真正换页才重置停留计时；内容刷新后的重绘不打断 30 分钟节奏。
+        if (page_changed) {
+            s_aibrief_last_page_switch_us = esp_timer_get_time();
+        }
         return true;
     }
     clear_canvas();

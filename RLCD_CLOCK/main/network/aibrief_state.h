@@ -1,5 +1,5 @@
 // 提供章鱼 AI 简报页请求、位图缓存和同步状态的线程安全接口。
-// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 20 秒自动轮播，完整展示 002 全量内容。
+// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 30 分钟自动轮播，完整展示 002 全量内容。
 #pragma once
 
 #include "aibrief_contract.h"
@@ -67,7 +67,7 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
 void aibrief_publish_failure(time_t sync_time);
 bool aibrief_clear_cache();
 
-// 分页轮播：每 20 秒自动切下一页，完整展示。
+// 分页轮播：每 30 分钟自动切下一页，完整展示。
 bool aibrief_advance_page();
 bool aibrief_set_current_page(uint8_t page_index);
 uint8_t aibrief_page_count();

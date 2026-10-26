@@ -1,6 +1,6 @@
 // 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
 // last_sync 记录最近一次尝试；last_success 只在成功发布位图时前进。
-// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 20 秒轮播。
+// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 30 分钟轮播。
 // 修复：大数组改堆分配（PSRAM），避免 EXT_RAM_BSS 链接段溢出。
 #include "aibrief_state.h"
 
@@ -149,11 +149,18 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
         for (size_t i = page_count; i < static_cast<size_t>(aibrief::kMaxPages); ++i) {
             memset(bitmap_at(i), 0, aibrief::kBitmapBytes);
         }
+        // 内容更新时保留当前页（越界则回到第 1 页）：每页停留时间很长，
+        // 若每次刷新都跳回第 1 页，读者永远读不到后面的页。
+        const uint8_t keep_page =
+            s_aibrief_state.available && s_aibrief_state.current_page < page_count
+                ? s_aibrief_state.current_page
+                : 0;
         s_aibrief_state.available = true;
         s_aibrief_state.live_source = live_source;
+        s_aibrief_state.unchanged = false;
         aibrief_record_sync_time(s_aibrief_state, sync_time, true);
         s_aibrief_state.page_count = page_count;
-        s_aibrief_state.current_page = 0;
+        s_aibrief_state.current_page = keep_page;
         ++s_aibrief_state.version;
         if (s_aibrief_state.version == 0) {
             ++s_aibrief_state.version;
@@ -204,12 +211,16 @@ bool aibrief_publish_bitmaps_inplace(uint8_t page_count, bool live_source, time_
         for (size_t i = page_count; i < static_cast<size_t>(aibrief::kMaxPages); ++i) {
             memset(bitmap_at(i), 0, aibrief::kBitmapBytes);
         }
+        const uint8_t keep_page =
+            s_aibrief_state.available && s_aibrief_state.current_page < page_count
+                ? s_aibrief_state.current_page
+                : 0;
         s_aibrief_state.available = true;
         s_aibrief_state.live_source = live_source;
         s_aibrief_state.unchanged = false;
         aibrief_record_sync_time(s_aibrief_state, sync_time, true);
         s_aibrief_state.page_count = page_count;
-        s_aibrief_state.current_page = 0;
+        s_aibrief_state.current_page = keep_page;
         ++s_aibrief_state.version;
         if (s_aibrief_state.version == 0) {
             ++s_aibrief_state.version;

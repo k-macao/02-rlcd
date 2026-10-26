@@ -131,9 +131,9 @@ void test_manifest_parse()
     assert(!aibrief::parse_manifest(nullptr, 0).ok);
     assert(!aibrief::parse_manifest("", 0).ok);
 
-    // 新窗口上限：255 页 + 轮播 20 秒
+    // 新窗口上限：255 页 + 每页 30 分钟轮播
     assert(aibrief::kMaxPages == 255);
-    assert(aibrief::kPageRotateSeconds == 20);
+    assert(aibrief::kPageRotateSeconds == 30 * 60); // 每页停留 30 分钟
     assert(aibrief::kMaxBitmapBytes ==
            static_cast<size_t>(aibrief::kBitmapBytes) * 255);
 }
