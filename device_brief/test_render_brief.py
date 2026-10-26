@@ -10,6 +10,7 @@
   面板是 4.2" 400×300，不许再靠缩字号塞内容；
 - 文字必须经 FreeType 原生 MONO 在整数像素绘制，页面只允许纯黑/纯白，禁止灰阶；
 - 内容最满的一天（四指数 + 成交/涨跌停 + 领涨领跌 + 三条快讯）也不溢出 300px；
+- 快讯默认全量推送：48 页页位用满、各源均衡，只有放不下时才截断且不裁剪分析栏目；
 - 没有行情 / 没有快讯 / 没有板块信号时同样能渲染；
 - 输出仍是固件约定的 15008 字节 AIB1 负载（改排版不能动协议）。
 """
@@ -344,23 +345,76 @@ class MultiPageMagazineTest(unittest.TestCase):
         for i in range(1, 41):
             self.assertIn(f"K{i:02d}", rendered)
 
-    def test_page_budget_adapts_news_without_cutting_analysis(self):
-        brief = {
+    def _news_brief(self, source_count=12, per_source=3):
+        return {
             f"测试源{i:02d}": [
-                {"title": f"来源{i:02d} 快讯{j}"} for j in range(3)
-            ] for i in range(12)
+                {"title": f"来源{i:02d} 快讯{j}"} for j in range(per_source)
+            ] for i in range(source_count)
         }
+
+    def _news_only_data(self, brief):
         data = multi_data(brief)
         data.update({"review_ashare": None, "review_hk": None, "review_us": None,
                      "heatmap": None, "policy": None})
+        return data
+
+    def test_full_news_pushes_every_title_when_budget_allows(self):
+        brief = self._news_brief(source_count=6, per_source=4)
+        data = self._news_only_data(brief)
+        renderer = render_brief.render_with_page_budget(
+            data, NOW, 0, len(brief), False, max_pages=48
+        )
+        meta = renderer.layout_meta
+        self.assertTrue(meta["news_full"])
+        self.assertEqual(meta["news_mode"], "full")
+        self.assertEqual(meta["news_available"], 24)
+        self.assertEqual(meta["news_included"], 24)
+        self.assertEqual(meta["news_omitted"], 0)
+        rendered = "\n".join(run["text"] for sheet in renderer.pages
+                              for run in sheet.text_runs)
+        for i in range(6):
+            for j in range(4):
+                self.assertIn(f"来源{i:02d} 快讯{j}", rendered)
+        self.assertIn("全量", rendered)
+
+    def test_page_budget_fills_news_up_to_firmware_limit(self):
+        brief = self._news_brief()
+        data = self._news_only_data(brief)
         renderer = render_brief.render_with_page_budget(
             data, NOW, 0, len(brief), False, max_pages=8
         )
+        meta = renderer.layout_meta
+        # 页位用满：正好 8 页，且收录条数多于旧的「每源 1 条」口径（12 条）。
         self.assertEqual(len(renderer.pages), 8)
-        self.assertEqual(renderer.layout_meta["news_per_source"], 1)
-        self.assertEqual(renderer.layout_meta["news_included"], 12)
-        self.assertEqual(renderer.layout_meta["news_omitted"], 24)
+        self.assertEqual(meta["news_available"], 36)
+        self.assertGreater(meta["news_included"], 12)
+        self.assertEqual(meta["news_omitted"], 36 - meta["news_included"])
+        # 各源均衡：纳入条数最多的源与最少的源相差不超过 1 条。
+        counts = []
+        rendered = [run["text"] for sheet in renderer.pages for run in sheet.text_runs]
+        for i in range(12):
+            counts.append(sum(1 for text in rendered
+                              if text.startswith(f"来源{i:02d} 快讯")))
+        self.assertLessEqual(max(counts) - min(counts), 1, counts)
         self.assertEqual(renderer.pages[0].page_title, "AI 每日总结")
+
+    def test_news_pool_is_source_balanced(self):
+        brief = self._news_brief(source_count=3, per_source=3)
+        pool = [title for _label, title in render_brief._news_pool(brief)]
+        self.assertEqual(pool[:3], ["来源00 快讯0", "来源01 快讯0", "来源02 快讯0"])
+        self.assertEqual(pool[3:6], ["来源00 快讯1", "来源01 快讯1", "来源02 快讯1"])
+        self.assertEqual(len(pool), 9)
+        self.assertEqual(len(render_brief._group_news(brief, 2)["财经快讯"]), 6)
+
+    def test_explicit_news_quota_still_supported(self):
+        brief = self._news_brief()
+        data = self._news_only_data(brief)
+        renderer = render_brief.render_with_page_budget(
+            data, NOW, 0, len(brief), False, max_pages=48, news_per_source=2
+        )
+        self.assertEqual(renderer.layout_meta["news_per_source"], 2)
+        self.assertEqual(renderer.layout_meta["news_included"], 24)
+        self.assertFalse(renderer.layout_meta["news_full"])
 
     def test_demo_collection_is_fully_offline(self):
         with mock.patch.object(render_brief.sources, "collect_all",

@@ -1,4 +1,4 @@
-name: 生成章鱼AI 简报设备图
+name: 生成章鱼AI 简报设备图（全量推送）
 
 on:
   schedule:
@@ -23,6 +23,11 @@ on:
         description: "至少多少个数据源抓到实时内容才更新设备图"
         required: false
         default: "20"
+        type: string
+      news_per_source:
+        description: "快讯每源条数（0 = 全量推送，用满 48 页）"
+        required: false
+        default: "0"
         type: string
 
 permissions:
@@ -57,6 +62,7 @@ jobs:
       - name: 抓取 002 数据并渲染多页
         env:
           MIN_LIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_live_sources || '20' }}
+          NEWS_PER_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.news_per_source || '0' }}
           BRIEF_FETCH_WORKERS: "16"
         run: |
           set -euo pipefail
@@ -64,12 +70,13 @@ jobs:
             --out-dir aibrief \
             --require-live \
             --require-fresh-market \
-            --min-live-sources "$MIN_LIVE"
+            --min-live-sources "$MIN_LIVE" \
+            --news-per-source "$NEWS_PER_SOURCE"
           python3 - <<'PY'
           import json
           meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
           print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · {meta['pages']}页 · 字体 {meta.get('font','')} · 生成 {meta['generated_at']}")
-          print(f"版式 {meta.get('layout','')} · 预检 {meta.get('layout_validated')} · 快讯每源 {meta.get('news_per_source')} 条 · 收录 {meta.get('news_included')}/{meta.get('news_available')}")
+          print(f"版式 {meta.get('layout','')} · 预检 {meta.get('layout_validated')} · 快讯口径 {meta.get('news_mode')} · 全量 {meta.get('news_full')} · 收录 {meta.get('news_included')}/{meta.get('news_available')} · 截断 {meta.get('news_omitted')}")
           freshness = meta.get("market_freshness") or {}
           print(f"行情新鲜度 {freshness.get('ok')} · {freshness.get('reason','')}")
           print(f"文件大小 {meta['bytes']} bytes")
