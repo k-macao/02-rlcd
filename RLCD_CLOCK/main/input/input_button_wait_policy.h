@@ -23,6 +23,26 @@ constexpr bool button_task_can_wait_for_edge(bool edge_wakeup_ready,
            !press_tracking_active;
 }
 
+// 简报页的 BOOT 手势：短按翻下一页，长按回上一页，抖动区间不动作。
+// 与自动轮播（每 30 秒一次）共用 aibrief::page_step 的环形边界。
+enum class AibriefPageButtonAction {
+    kNone,
+    kNextPage,
+    kPreviousPage,
+};
+
+constexpr AibriefPageButtonAction aibrief_page_button_action(bool short_press,
+                                                             bool long_press)
+{
+    if (short_press) {
+        return AibriefPageButtonAction::kNextPage;
+    }
+    if (long_press) {
+        return AibriefPageButtonAction::kPreviousPage;
+    }
+    return AibriefPageButtonAction::kNone;
+}
+
 constexpr int button_task_poll_delay_ms(bool any_button_pressed,
                                         bool interactive_surface,
                                         bool low_refresh_surface)

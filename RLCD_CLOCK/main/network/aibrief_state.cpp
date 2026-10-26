@@ -309,19 +309,46 @@ bool aibrief_clear_cache()
     return true;
 }
 
-bool aibrief_advance_page()
+namespace {
+
+// 自动轮播（每 30 秒）与 BOOT 键手动翻页共用：环形换页 + 版本号自增触发重绘。
+bool step_page_locked(bool forward)
 {
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available || s_aibrief_state.page_count <= 1) {
+    const uint8_t page_count = s_aibrief_state.page_count;
+    if (page_count <= 1) {
         return false;
     }
-    s_aibrief_state.current_page =
-        (s_aibrief_state.current_page + 1) % s_aibrief_state.page_count;
+    const uint8_t current = s_aibrief_state.current_page;
+    const uint8_t next = aibrief::page_step(current, page_count, forward);
+    if (next == current) {
+        return false;
+    }
+    s_aibrief_state.current_page = next;
     ++s_aibrief_state.version;
     if (s_aibrief_state.version == 0) {
         ++s_aibrief_state.version;
     }
     return true;
+}
+
+} // namespace
+
+bool aibrief_advance_page()
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock || !s_aibrief_state.available) {
+        return false;
+    }
+    return step_page_locked(true);
+}
+
+bool aibrief_retreat_page()
+{
+    ScopedSemaphoreLock lock(s_aibrief_mutex);
+    if (!lock || !s_aibrief_state.available) {
+        return false;
+    }
+    return step_page_locked(false);
 }
 
 bool aibrief_set_current_page(uint8_t page_index)

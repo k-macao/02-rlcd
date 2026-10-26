@@ -1,4 +1,4 @@
-// 验证任意页面在无按压且 GPIO 唤醒可用时进入事件等待。
+// 验证任意页面在无按压且 GPIO 唤醒可用时进入事件等待，以及简报页的 BOOT 翻页手势。
 #include "input_button_wait_policy.h"
 
 #include <assert.h>
@@ -24,6 +24,16 @@ int main()
     static_assert(kButtonActivePollMs == 50);
     static_assert(kButtonIdlePollMs == 250);
     static_assert(kButtonLowRefreshIdlePollMs == 500);
+
+    // 简报页 BOOT 手势：短按下一页、长按上一页、抖动区间不动作。
+    assert(aibrief_page_button_action(true, false) ==
+           AibriefPageButtonAction::kNextPage);
+    assert(aibrief_page_button_action(false, true) ==
+           AibriefPageButtonAction::kPreviousPage);
+    assert(aibrief_page_button_action(false, false) == AibriefPageButtonAction::kNone);
+    // 短按与长按互斥；同时为真时以短按为准，避免一次按压翻两页。
+    assert(aibrief_page_button_action(true, true) ==
+           AibriefPageButtonAction::kNextPage);
 
     assert(button_gpio_config_retry_due(1, false));
     assert(button_gpio_config_retry_due(2, false));

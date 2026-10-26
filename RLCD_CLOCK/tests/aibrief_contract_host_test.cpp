@@ -138,6 +138,35 @@ void test_manifest_parse()
            static_cast<size_t>(aibrief::kBitmapBytes) * 255);
 }
 
+void test_manual_page_navigation()
+{
+    // BOOT 键手动翻页与自动轮播共用同一套环形索引：末页续到第 1 页，首页回退到末页。
+    assert(aibrief::next_page_index(0, 5) == 1);
+    assert(aibrief::next_page_index(4, 5) == 0);
+    assert(aibrief::previous_page_index(0, 5) == 4);
+    assert(aibrief::previous_page_index(3, 5) == 2);
+
+    // 固件页位上限 255 也要正确回绕（不能出现 256 之类的越界值）。
+    assert(aibrief::next_page_index(254, 255) == 0);
+    assert(aibrief::previous_page_index(0, 255) == 254);
+
+    // 单页或尚未取到位图：原地不动，索引始终为 0。
+    assert(aibrief::next_page_index(0, 1) == 0);
+    assert(aibrief::previous_page_index(0, 1) == 0);
+    assert(aibrief::next_page_index(7, 0) == 0);
+
+    // 越界输入按第 1 页处理，不会写出 page_count 之外的值。
+    assert(aibrief::next_page_index(9, 5) == 1);
+    assert(aibrief::previous_page_index(9, 5) == 4);
+
+    // 与自动轮播的步长一致：连按 5 次回到原页。
+    uint8_t page = 2;
+    for (int i = 0; i < 5; ++i) {
+        page = aibrief::next_page_index(page, 5);
+    }
+    assert(page == 2);
+}
+
 void test_bit_helpers()
 {
     const uint8_t bits[2] = {0x80, 0x01};
@@ -194,6 +223,7 @@ int main()
     test_rejects_bad_inputs();
     test_refresh_window();
     test_manifest_parse();
+    test_manual_page_navigation();
     test_bit_helpers();
     test_read_time_and_page_indicator();
     test_failed_sync_keeps_last_successful_read_time();
