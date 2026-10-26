@@ -502,9 +502,10 @@ class MultiPageRenderer:
             progress_x = PAGE_MARGIN + round((right - PAGE_MARGIN) * index / total_pages)
             sheet.rule(PAGE_MARGIN, FOOTER_RULE_Y, progress_x, 2)
             sheet.text(PAGE_MARGIN, 279, f"章鱼 AI · {date_text}", FONT_MIN)
-            page_text = f"读取 {self._now.strftime('%H:%M')} · {index:02d} / {total_pages:02d}"
-            sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(page_text, FONT_MIN),
-                       279, page_text, FONT_MIN)
+            # 页码已取消：右下角只保留读取时间（网页端同步去掉分页显示）。
+            read_text = f"读取 {self._now.strftime('%H:%M')}"
+            sheet.text(WIDTH - PAGE_MARGIN - sheet.measure(read_text, FONT_MIN),
+                       279, read_text, FONT_MIN)
             sheet.region = "body"
         self._finalized = True
         return self
