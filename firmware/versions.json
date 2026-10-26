@@ -1,9 +1,23 @@
 {
-  "latest": "v1.8.5",
+  "latest": "v1.8.6",
   "items": [
     {
+      "version": "v1.8.6",
+      "notes": "v1.8.6：拉取 002 仓库作为 AI 简报页，阿里巴巴普惠体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 16px，标题与数字使用 85 Bold、其他文字使用 55 Regular；真机右下页脚和未获取提示同步使用同一字体。服务器使用 FreeType 原生 MONO、自动 hinting 与整数像素定位，取消灰度阈值和抖动，提升 1bpp 笔画清晰度与稳定性。\n3. 全部内容完整显示，分页展示：单文件包含最…",
+      "app": {
+        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.6/weather_clock_v1.8.6.bin",
+        "sha256": "b084ab324c69f25ea2623bdd7efa5f124c37e387c77087721d62a50b81fcd376",
+        "size": 6326704
+      },
+      "merged": {
+        "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.6/weather_clock_v1.8.6_merged.bin",
+        "sha256": "252d04d6ffaeb0a997ab0cd46e62a2ef8fa0022a6dcae915f06f1dfc9f173d48",
+        "size": 16509951
+      }
+    },
+    {
       "version": "v1.8.5",
-      "notes": "v1.8.5：拉取 002 仓库作为 AI 简报页，阿里巴巴普惠体，全量内容多页轮播。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量内容，涵盖 AI 每日总结、A/港/美股看盘、情绪热力图、政策分析/深度/研报、板块机会、全网快讯。\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 16px，标题与数字使用 85 Bold、其他文字使用 55 Regular；真机右下页脚和未获取提示同步使用同一字体。服务器使用 FreeType 原生 MONO、自动 hinting 与整数像素定位，取消灰度阈值和抖动，提升 1bpp 笔画清晰度与稳定性。\n3. 全部内容完整显示，分页展示：单文件包含最…",
+      "notes": "v1.8.5：共 3 项更新。\n1. 数据源从 05 切换到 002（AH 政策、情绪、热力、趋势分析），抓取 69 源全量…\n2. 字体统一使用阿里巴巴普惠体 3.0（Alibaba PuHuiTi 3.0），全页 1…\n3. 全部内容完整显示，分页展示：单文件包含最…\n完整说明见源码仓库同版本 Release。",
       "app": {
         "url": "https://github.com/k-macao/02-rlcd/releases/download/v1.8.5/weather_clock_v1.8.5.bin",
         "sha256": "16f33d58f792a59a55c132979a491c584938a3f591ae776148fa9ea964b64708",
@@ -124,20 +138,6 @@
       "merged": {
         "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.15/weather_clock_v1.6.15_merged.bin",
         "sha256": "5af1a27ed597a9c91c447a69951b9cf6853962adde59f1fa3828197312637968",
-        "size": 16509951
-      }
-    },
-    {
-      "version": "v1.6.14",
-      "notes": "v1.6.14：共 1 项更新。\n1. 修复和风天气请求传输失败后保留失效 HTTP 客户端状态、导致后续接口可能读取到上一请…\n完整说明见源码仓库同版本 Release。",
-      "app": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.14/weather_clock_v1.6.14.bin",
-        "sha256": "89bbaf7cf5c88390479ec0659f76364b3bd09963cb6dd4f9639a6a04de22d5bb",
-        "size": 6311776
-      },
-      "merged": {
-        "url": "https://github.com/wickenzh/ESP32-S3-RLCD-4.2/releases/download/v1.6.14/weather_clock_v1.6.14_merged.bin",
-        "sha256": "c371a641dc19c95b3403243c31e0ac2adbda019001567f6b1d955e6a06c12226",
         "size": 16509951
       }
     }
