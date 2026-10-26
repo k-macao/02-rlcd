@@ -1,6 +1,6 @@
 // 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
 // last_sync 记录最近一次尝试；last_success 只在成功发布位图时前进。
-// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 30 分钟轮播。
+// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 30 秒轮播。
 // 修复：大数组改堆分配（PSRAM），避免 EXT_RAM_BSS 链接段溢出。
 #include "aibrief_state.h"
 

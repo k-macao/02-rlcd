@@ -1,5 +1,5 @@
 // 定义章鱼 AI 简报页 1bpp 图形负载的固定尺寸和解析规则。
-// v1.8+ 支持多页：单文件包含 1..kMaxPages 张 400x300 位图，设备每 30 分钟自动翻页。
+// v1.8+ 支持多页：单文件包含 1..kMaxPages 张 400x300 位图，设备每 30 秒自动翻页。
 #pragma once
 
 #include <stddef.h>
@@ -25,9 +25,10 @@ inline constexpr size_t kDownloadBufferBytes = kMaxPayloadBytes + 1;
 inline constexpr uint8_t kMagic[4] = {'A', 'I', 'B', '1'};
 // 设备端简报页每 5 分钟拉取一次已推送的页面（开机即联网获取）。
 inline constexpr uint32_t kMaxRefreshAgeSeconds = 5 * 60;
-// 分页自动轮播间隔：每页停留 30 分钟（1800 秒）。
-// 换页频率与数据更新解耦：内容由清单比对触发刷新，翻页只负责慢慢把整份简报读完。
-inline constexpr uint32_t kPageRotateSeconds = 30 * 60;
+// 分页自动轮播间隔：每页停留 30 秒。
+// 全量 255 页时一轮约 2.1 小时，与「每 3 小时更新一次」的节奏接近，
+// 内容更新后基本下一轮就能读到；换页频率与数据刷新彼此独立。
+inline constexpr uint32_t kPageRotateSeconds = 30;
 inline constexpr int kMaxRefreshAttempts = 2;
 inline constexpr uint32_t kRetrySettleMs = 150;
 

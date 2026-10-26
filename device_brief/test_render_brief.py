@@ -520,7 +520,7 @@ class MultiPageMagazineTest(unittest.TestCase):
                     / "aibrief_contract.h").read_text(encoding="utf-8")
         self.assertIn("inline constexpr int kMaxPages = 255;", contract)
         self.assertEqual(render_brief.MAX_PAGES, 255)
-        self.assertIn("inline constexpr uint32_t kPageRotateSeconds = 30 * 60;", contract)
+        self.assertIn("inline constexpr uint32_t kPageRotateSeconds = 30;", contract)
 
     def test_demo_collection_is_fully_offline(self):
         with mock.patch.object(render_brief.sources, "collect_all",
