@@ -494,14 +494,18 @@ class FreshnessAndScheduleTest(unittest.TestCase):
             render.assert_not_called()
             self.assertFalse(out.exists())
 
-    def test_schedule_is_twice_daily_and_requires_freshness(self):
+    def test_schedule_runs_every_three_hours_and_requires_freshness(self):
         workflow = (render_brief.ROOT / ".github" / "workflows" / "aibrief.yml").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(workflow.count("- cron:"), 2)
-        self.assertIn('- cron: "10 23 * * *"', workflow)  # 北京 07:10
-        self.assertIn('- cron: "10 11 * * *"', workflow)  # 北京 19:10
+        self.assertEqual(workflow.count("- cron:"), 1)
+        # 每 3 小时一次、每天 8 次：UTC 2,5,8,11,14,17,20,23 = 北京 10,13,16,19,22,01,04,07 点 10 分。
+        self.assertIn('- cron: "10 2-23/3 * * *"', workflow)
         self.assertIn("--require-fresh-market", workflow)
+        hours = [2, 5, 8, 11, 14, 17, 20, 23]
+        beijing = sorted((hour + 8) % 24 for hour in hours)
+        self.assertEqual(beijing, [1, 4, 7, 10, 13, 16, 19, 22])
+        self.assertEqual(len(beijing), 8)
 
     def test_generated_time_uses_beijing_timezone(self):
         now = render_brief.china_now()

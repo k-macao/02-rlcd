@@ -69,7 +69,7 @@
 - 离线模式和低电量模式下不会发起请求。
 - **长按 KEY** 返回「设置 → 网络」。
 
-图像由仓库根目录的 `aibrief/latest.bin` 提供，`device_brief/render_brief.py` 每天重建，格式与刷新策略见[章鱼 AI 简报页说明](docs/Aibrief_zh.md)。
+图像由仓库根目录的 `aibrief/latest.bin` 提供，`device_brief/render_brief.py` 每 3 小时重建一次，格式与刷新策略见[章鱼 AI 简报页说明](docs/Aibrief_zh.md)。
 
 ## 配置与联网
 

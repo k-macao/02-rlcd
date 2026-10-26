@@ -34,7 +34,7 @@ python3 -m pip install pillow freetype-py
 python3 device_brief/test_render_brief.py
 ```
 
-测试覆盖全页阿里巴巴普惠体 16px、标题/数字 Bold 与其他 Regular、MONO 字体调用、整数像素、纯黑白页面与灰阶阻断、数值串完整折行、单页/多页协议、右下读取时间（无页码）、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每日两次 schedule、北京时间及旧行情阻断发布。
+测试覆盖全页阿里巴巴普惠体 16px、标题/数字 Bold 与其他 Regular、MONO 字体调用、整数像素、纯黑白页面与灰阶阻断、数值串完整折行、单页/多页协议、右下读取时间（无页码）、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每 3 小时 schedule、北京时间及旧行情阻断发布。
 
 实现参考 [FreeType 的单色 hinting 说明](https://github.com/freetype/freetype/blob/master/include/freetype/freetype.h)与 [freetype-py 的 MONO 示例](https://github.com/rougier/freetype-py/blob/master/examples/glyph-monochrome.py)。同时对比了 [ttfautohint-py](https://github.com/fonttools/ttfautohint-py) 预处理、不同阈值及像素字体方案；预处理没有带来足够收益，像素字体则会改变既定字体并存在字符覆盖问题，因此均未采用。真机 [lv_font_conv](https://github.com/lvgl/lv_font_conv) 在 `bpp=1` 时已经使用 MONO 与自动 hinting，无需增加灰阶或子像素格式。
 
@@ -82,4 +82,4 @@ python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-
 
 设备协议最多 48 页（PSRAM 720KB）。渲染器先完整排分析栏目，再按 **全量快讯** 用二分法寻找「页数不超过 48 的最大条数」，把页位用满：每个来源按轮转顺序出条，例如全量 287 条时可排出 104 条 / 48 页，各源纳入条数相差不超过 1 条。页眉标注“全量 N 条取 M 条”，`meta.json` 记录 `news_available / news_included / news_omitted / news_limit`。不会缩字、截句或直接删除超出页位的内容；分析栏目本身超过 48 页时退出 5，不推送半成品。若显式指定 `--news-per-source N`，则按该口径精选，放不下时沿 20 → 16 → 12 → 8 → 6 → 5 → 4 → 3 → 2 → 1 逐级收敛。
 
-> 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）每天 **07:10、19:10（北京时间）各实时抓取一次**，先跑排版测试，再检查实时源和 A 股新鲜度，随后逐页预检、生成校样并提交；任何数据闸门失败都保留上一版。设备会在 5 分钟内获取新图，每 60 秒自动翻页，之后每 5 分钟检查更新。
+> 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）**每 3 小时实时抓取一次（每天 8 次：07:10 / 10:10 / 13:10 / 16:10 / 19:10 / 22:10 / 01:10 / 04:10 北京时间）**，先跑排版测试，再检查实时源和 A 股新鲜度，随后逐页预检、生成校样并提交；任何数据闸门失败都保留上一版。设备会在 5 分钟内获取新图，每 60 秒自动翻页，之后每 5 分钟检查更新。
