@@ -257,6 +257,13 @@ idf_component_register(
         tcp_transport)
 
 string(TIMESTAMP WEATHER_CLOCK_BUILD_DATE "%Y-%m-%d")
+# 运行期版本号唯一来源：顶层 PROJECT_VER。固件自报版本与 OTA 比较都读它，
+# 不再在源码里硬编码，避免工程版本升级后运行期版本仍停在旧值。
+if(NOT PROJECT_VER)
+    message(FATAL_ERROR "PROJECT_VER must be set in the top-level CMakeLists.txt")
+endif()
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    WEATHER_CLOCK_APP_VERSION="${PROJECT_VER}")
 option(WEATHER_CLOCK_WIFI_AB_TEST "Temporary 8-hour weather Wi-Fi A/B test" OFF)
 set(WEATHER_CLOCK_WIFI_AB_SLOT_MINUTES "20" CACHE STRING
     "Weather Wi-Fi A/B slot duration in minutes")

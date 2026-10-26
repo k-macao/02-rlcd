@@ -81,6 +81,17 @@ target_compile_options(weather_clock_sdl PRIVATE ${SDL2_CFLAGS_OTHER})
 target_link_options(weather_clock_sdl PRIVATE ${SDL2_LDFLAGS})
 target_link_libraries(weather_clock_sdl PRIVATE lvgl)
 
+# 模拟器同样从顶层 PROJECT_VER 取版本号，避免和固件各写一份、各自漂移。
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt" WEATHER_CLOCK_PROJECT_VER_LINE
+     REGEX "set\\(PROJECT_VER \".*\"\\)")
+string(REGEX REPLACE ".*set\\(PROJECT_VER \"([^\"]+)\"\\).*" "\\1"
+       WEATHER_CLOCK_PROJECT_VER "${WEATHER_CLOCK_PROJECT_VER_LINE}")
+if(NOT WEATHER_CLOCK_PROJECT_VER)
+    message(FATAL_ERROR "Cannot read PROJECT_VER from the top-level CMakeLists.txt")
+endif()
+target_compile_definitions(weather_clock_sdl PRIVATE
+    WEATHER_CLOCK_APP_VERSION="${WEATHER_CLOCK_PROJECT_VER}")
+
 if(EMSCRIPTEN)
     target_compile_definitions(weather_clock_sdl PRIVATE WEATHER_CLOCK_WEB_SIMULATOR=1)
     target_include_directories(weather_clock_sdl PRIVATE "${CMAKE_BINARY_DIR}")

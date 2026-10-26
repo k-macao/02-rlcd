@@ -95,6 +95,14 @@ jobs:
             echo "并提交后重试；否则请改用 $project_version 重跑本工作流。" >&2
             exit 1
           fi
+          # 运行期版本号（固件自报 / OTA 比较）必须来自 PROJECT_VER 注入。
+          # 曾经 app_metadata.cpp 硬编码 "v1.6.17"，工程版本升到 v1.8.x 后仍自报旧版，
+          # 设备每次检查更新都判定有新版本并反复下载。这里直接拦住写死的版本字面量。
+          if grep -RnE 'APP_VERSION[[:space:]]*=[[:space:]]*"v[0-9]' RLCD_CLOCK/main RLCD_CLOCK/simulator \
+               --include='*.cpp' --include='*.h'; then
+            echo "检测到硬编码的 APP_VERSION 字面量：请改用 WEATHER_CLOCK_APP_VERSION（由 PROJECT_VER 注入）。" >&2
+            exit 1
+          fi
 
       - name: 准备 OTA 端点
         env:
