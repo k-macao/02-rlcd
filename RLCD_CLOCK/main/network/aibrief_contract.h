@@ -32,6 +32,29 @@ inline constexpr uint32_t kPageRotateSeconds = 30;
 inline constexpr int kMaxRefreshAttempts = 2;
 inline constexpr uint32_t kRetrySettleMs = 150;
 
+// 环形翻页索引：自动轮播（每 30 秒）与 BOOT 键手动翻页共用同一套计算，
+// 保证两条路径的边界行为一致（末页续到第 1 页、首页回退到末页、单页不动）。
+constexpr uint8_t page_step(uint8_t current, uint8_t page_count, bool forward)
+{
+    if (page_count <= 1) {
+        return 0;
+    }
+    const uint8_t index = current < page_count ? current : 0;
+    const int stepped = forward ? (static_cast<int>(index) + 1)
+                                : (static_cast<int>(index) + page_count - 1);
+    return static_cast<uint8_t>(stepped % static_cast<int>(page_count));
+}
+
+constexpr uint8_t next_page_index(uint8_t current, uint8_t page_count)
+{
+    return page_step(current, page_count, true);
+}
+
+constexpr uint8_t previous_page_index(uint8_t current, uint8_t page_count)
+{
+    return page_step(current, page_count, false);
+}
+
 static_assert(kWidth % 8 == 0, "aibrief width must be byte aligned");
 static_assert(kBytesPerRow * 8 == kWidth, "aibrief row stride must cover width");
 static_assert(kBitmapBytes == 15000, "aibrief bitmap bytes must stay 15000");

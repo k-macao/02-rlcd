@@ -67,8 +67,9 @@ bool aibrief_publish_bitmaps(const uint8_t *bitmaps,
 void aibrief_publish_failure(time_t sync_time);
 bool aibrief_clear_cache();
 
-// 分页轮播：每 30 秒自动切下一页，完整展示。
+// 分页轮播：每 30 秒自动切下一页；BOOT 键短按前进、长按后退（同一套环形边界）。
 bool aibrief_advance_page();
+bool aibrief_retreat_page();
 bool aibrief_set_current_page(uint8_t page_index);
 uint8_t aibrief_page_count();
 uint8_t aibrief_current_page_index();

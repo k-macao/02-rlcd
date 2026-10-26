@@ -1,4 +1,5 @@
-// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每 30 秒自动翻页。
+// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每 30 秒自动翻页；
+// BOOT 键短按翻下一页、长按回上一页，手动翻页后重新开始 30 秒计时。
 #include "ui_aibrief_page.h"
 
 #include "aibrief_contract.h"
@@ -42,7 +43,7 @@ constexpr int kAibriefBitmapFooterBaseline = 17;
 // 页脚只显示「读取 HH:MM」：前缀 + 时间两段，页码已取消。
 constexpr int kAibriefPageSegmentCount = 2;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
-constexpr const char *kAibriefHintText = "长按 KEY 返回 · 每 30 秒自动翻页";
+constexpr const char *kAibriefHintText = "BOOT 翻页 · 长按 KEY 进入设置";
 
 lv_obj_t *s_aibrief_canvas;
 lv_color_t *s_aibrief_canvas_buffer;
