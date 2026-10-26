@@ -39,7 +39,8 @@ constexpr int kAibriefPageIndicatorW = 194;
 constexpr int kAibriefPageIndicatorH = 21;
 // 位图页脚从 y=279 起绘制；阿里巴巴普惠体 16px 的 Pillow ascender 为 17px。
 constexpr int kAibriefBitmapFooterBaseline = 17;
-constexpr int kAibriefPageSegmentCount = 6;
+// 页脚只显示「读取 HH:MM」：前缀 + 时间两段，页码已取消。
+constexpr int kAibriefPageSegmentCount = 2;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
 constexpr const char *kAibriefHintText = "长按 KEY 返回 · 自动每分钟翻页";
 
@@ -123,7 +124,6 @@ void update_page_indicator()
         set_obj_visible(s_aibrief_page_indicator, false);
         return;
     }
-    set_obj_visible(s_aibrief_page_indicator, true);
 
     // 单页也显示最后一次成功读取的本地时间；失败重试不改变该时间。
     struct tm local = {};
@@ -131,19 +131,19 @@ void update_page_indicator()
     if (snap.last_success > 0 && localtime_r(&snap.last_success, &local)) {
         read_time = &local;
     }
+    if (!read_time) {
+        // 还没有成功读取时间：不覆盖位图内页脚，避免留下空白遮挡。
+        set_obj_visible(s_aibrief_page_indicator, false);
+        return;
+    }
+    set_obj_visible(s_aibrief_page_indicator, true);
+
     AibriefReadIndicatorParts parts;
-    format_aibrief_read_indicator_parts(
-        read_time,
-        static_cast<unsigned>(snap.current_page + 1),
-        static_cast<unsigned>(snap.page_count),
-        parts);
+    format_aibrief_read_indicator_parts(read_time, parts);
     const char *texts[kAibriefPageSegmentCount] = {
-        parts.prefix, parts.read_time, parts.separator,
-        parts.current_page, parts.page_separator, parts.page_count,
+        parts.prefix, parts.read_time,
     };
     const lv_font_t *fonts[kAibriefPageSegmentCount] = {
-        &aibrief_text_16, &aibrief_digit_bold_16,
-        &aibrief_text_16, &aibrief_digit_bold_16,
         &aibrief_text_16, &aibrief_digit_bold_16,
     };
     int widths[kAibriefPageSegmentCount] = {};

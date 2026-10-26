@@ -118,27 +118,23 @@ void test_read_time_and_page_indicator()
     struct tm local = {};
     local.tm_hour = 7;
     local.tm_min = 9;
-    format_aibrief_read_indicator(text, sizeof(text), &local, 1, 28);
-    assert(strcmp(text, "读取 07:09 · 01 / 28") == 0);
+    format_aibrief_read_indicator(text, sizeof(text), &local);
+    assert(strcmp(text, "读取 07:09") == 0);
     AibriefReadIndicatorParts parts;
-    format_aibrief_read_indicator_parts(&local, 1, 28, parts);
+    format_aibrief_read_indicator_parts(&local, parts);
     assert(strcmp(parts.prefix, "读取 ") == 0);
     assert(strcmp(parts.read_time, "07:09") == 0);
-    assert(strcmp(parts.separator, " · ") == 0);
-    assert(strcmp(parts.current_page, "01") == 0);
-    assert(strcmp(parts.page_separator, " / ") == 0);
-    assert(strcmp(parts.page_count, "28") == 0);
-    format_aibrief_read_indicator(text, sizeof(text), &local, 1, 1);
-    assert(strcmp(text, "读取 07:09 · 01 / 01") == 0);
-    format_aibrief_read_indicator(text, sizeof(text), nullptr, 1, 28);
-    assert(strcmp(text, "01 / 28") == 0);
+    // 页码已取消：页脚不得再出现 "NN / MM"。
+    assert(strstr(text, " / ") == nullptr);
+    format_aibrief_read_indicator(text, sizeof(text), nullptr);
+    assert(strcmp(text, "") == 0);
 
     // 两位字段必须始终保持固定长度；异常输入饱和到显示上限。
     local.tm_hour = -1;
     local.tm_min = 90;
-    format_aibrief_read_indicator(text, sizeof(text), &local, 100, 255);
-    assert(strcmp(text, "读取 00:59 · 99 / 99") == 0);
-    format_aibrief_read_indicator(nullptr, 0, &local, 1, 28);
+    format_aibrief_read_indicator(text, sizeof(text), &local);
+    assert(strcmp(text, "读取 00:59") == 0);
+    format_aibrief_read_indicator(nullptr, 0, &local);
 }
 
 void test_failed_sync_keeps_last_successful_read_time()

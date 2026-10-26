@@ -282,17 +282,19 @@ def manual_renderer(page_count):
 
 
 class MultiPageMagazineTest(unittest.TestCase):
-    def test_every_page_has_real_number_and_passes_preflight(self):
+    def test_every_page_has_read_time_and_passes_preflight(self):
         renderer = render_brief.draw_all_pages(multi_data(), NOW, 51, 69, False)
         renderer.validate()
         total = len(renderer.pages)
         self.assertGreater(total, 1)
-        for index, sheet in enumerate(renderer.pages, 1):
+        for sheet in renderer.pages:
             self.assertEqual(sheet.image.size, (400, 300))
             self.assertTrue(any(r["region"] == "body" and r["text"].strip()
                                 for r in sheet.text_runs))
             footer = [r["text"] for r in sheet.text_runs if r["region"] == "footer"]
-            self.assertIn(f"读取 11:17 · {index:02d} / {total:02d}", footer)
+            self.assertIn("读取 11:17", footer)
+            # 页码已取消：页脚不得再出现 "NN / MM"。
+            self.assertFalse(any(" / " in text for text in footer))
             self.assertTrue(all(r["size"] == 16 for r in sheet.text_runs))
             title_run = next(r for r in sheet.text_runs
                              if r["region"] == "header" and r["text"] == sheet.page_title)
