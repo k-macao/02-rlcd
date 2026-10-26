@@ -258,6 +258,64 @@ def multi_data(brief=None):
         "buckets": [{"tag": "央行 · 流动性", "net": 1, "sources": 3,
                      "mentions": 5, "stance": "偏鸽"}],
     }
+    deep_layer = {
+        "kb": {
+            "note": "知识库 18 条政策条目（央行报告 / 财政部文件）· 检索式 612 字 · 命中 1 条",
+            "hits": [{
+                "id": "MFCOM-DUALUSE-202412", "date": "2024-12", "issuer": "国务院 / 商务部",
+                "doctype": "行政法规", "title": "两用物项出口管制条例施行",
+                "market_effect": "管制与反制属于典型的供给侧扰动，短期利好相关资源的定价权方。",
+            }],
+            "comparison": ["历史对照：本次信号取向偏鹰，与历史方向一致。"],
+        },
+        "modifiers": {
+            "hits": [{"word": "从严", "sense": "监管口径：执法尺度与违规成本同步抬升",
+                      "strength": -1.5, "market": "合规成本上升，小市值与题材股承压。"}],
+        },
+        "sentiment": {
+            "overall": {"label": "中性", "score": 0.05, "positive": 3, "negative": 3,
+                        "neutral": 4, "total": 10},
+            "official": {"label": "偏多", "score": 0.31, "positive": 2, "negative": 0,
+                         "neutral": 1, "total": 3},
+            "market": {"label": "偏空", "score": -0.28, "positive": 1, "negative": 3,
+                       "neutral": 3, "total": 7},
+            "gap": 0.324,
+            "items": [{"title": "联创光电面临多重危机", "source": "财联社 深度", "score": -3}],
+        },
+        "graph": {
+            "chains": [{
+                "bucket": "地缘与贸易政策", "subject": "白宫 / 商务部 / 外交部",
+                "industries": ["半导体设备", "存储芯片"], "upstream": ["出口管制清单"],
+                "midstream": ["供应链改道与转口"], "downstream": ["终端成本"],
+                "direction": "净空", "net": -7, "mentions": 43, "sources": 21,
+                "nature": "结构性", "horizon": "6-36 个月",
+            }],
+        },
+        "reasoning": {
+            "confidence": "高",
+            "steps": [{"no": "01", "label": "宏观背景", "text": "政策面热度集中在地缘与贸易政策。",
+                       "evidence": [{"source": "MKTNews 快讯", "text": "Iran FM: talks"}]}],
+        },
+        "models": {
+            "shock": -0.689,
+            "series": {"name": "合成演示序列", "source": "synthetic", "points": 60,
+                       "note": "无实时行情：使用确定性合成序列演示模型链路。"},
+            "lstm": {"direction": "上行", "summary": "10 日累计 +0.43%（上行）。"},
+            "prophet": {"summary": "样本内趋势 +5.83%，拟合 R²=0.969。"},
+        },
+        "research": {
+            "title": "政策影响研报 · 地缘与贸易政策、货币政策",
+            "rating": "政策承压（偏空）", "rating_note": "收紧 / 管制取向且政策面净空占优",
+            "abstract": "当日政策面覆盖 47 个数据源、123 条提及。",
+            "horizon": "短期 1-4 周 · 中期 1-6 个月 · 长期 6-36 个月",
+            "beneficiaries": ["全球风险资产", "贵金属"],
+            "pressured": [{"industry": "地缘与贸易政策", "note": "政策净空维度，估值与情绪受压"}],
+            "long_term": [{"industry": "半导体设备", "direction": "净空", "nature": "结构性",
+                           "horizon": "6-36 个月", "impact": "沿供应链改道传导。"}],
+            "risks": ["高估值方向存在二次调整风险"],
+            "watch_window": "政策窗口期 · 预期差 +0.32",
+        },
+    }
     return {
         "summary": FULL_SUMMARY,
         "review_ashare": FULL_REVIEW,
@@ -265,6 +323,7 @@ def multi_data(brief=None):
         "review_us": FULL_REVIEW,
         "heatmap": heatmap,
         "policy": policy,
+        "policy_deep_layer": deep_layer,
         "brief": brief if brief is not None else {
             "测试源": [{"title": title} for title in HEADLINES],
         },
@@ -354,8 +413,9 @@ class MultiPageMagazineTest(unittest.TestCase):
 
     def _news_only_data(self, brief):
         data = multi_data(brief)
+        # 只留快讯，方便校验页位分配（政策深度/研报属于分析栏目，另有专门用例）。
         data.update({"review_ashare": None, "review_hk": None, "review_us": None,
-                     "heatmap": None, "policy": None})
+                     "heatmap": None, "policy": None, "policy_deep_layer": None})
         return data
 
     def test_full_news_pushes_every_title_when_budget_allows(self):
@@ -415,6 +475,52 @@ class MultiPageMagazineTest(unittest.TestCase):
         self.assertEqual(renderer.layout_meta["news_per_source"], 2)
         self.assertEqual(renderer.layout_meta["news_included"], 24)
         self.assertFalse(renderer.layout_meta["news_full"])
+
+    def test_policy_deep_and_research_pages_are_rendered(self):
+        data = multi_data()
+        renderer = render_brief.draw_all_pages(data, NOW, 51, 69, False)
+        renderer.validate()
+        titles = [sheet.page_title for sheet in renderer.pages]
+        self.assertIn("AI 政策深度", titles)
+        self.assertIn("AI 政策研报", titles)
+        rendered = "\n".join(run["text"] for sheet in renderer.pages
+                              for run in sheet.text_runs)
+        # 网页两栏的关键信息都要落到设备图上，且字典条目不能打印成 {'a': 'b'}。
+        for text in ("知识库", "传导图谱", "推理链", "Prophet", "LSTM",
+                     "受益 全球风险资产", "承压 地缘与贸易政策"):
+            self.assertIn(text, rendered)
+        self.assertNotIn("{'", rendered)
+        self.assertNotIn("':", rendered)
+
+    def test_policy_deep_sections_are_skipped_without_data(self):
+        data = multi_data()
+        data["policy_deep_layer"] = None
+        renderer = render_brief.draw_all_pages(data, NOW, 51, 69, False)
+        renderer.validate()
+        titles = [sheet.page_title for sheet in renderer.pages]
+        self.assertNotIn("AI 政策深度", titles)
+        self.assertNotIn("AI 政策研报", titles)
+
+    def test_manifest_matches_payload_and_parses_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            manual_renderer(2).save(out, {"generated_at": "2026-10-27 04:03:00"})
+            text = (out / "version.txt").read_text(encoding="utf-8")
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            info = render_brief.parse_manifest(text)
+            self.assertEqual(info["sha256"], meta["sha256"])
+            self.assertEqual(int(info["pages"]), 2)
+            self.assertEqual(int(info["bytes"]), meta["bytes"])
+            self.assertEqual(int(info["manifest"]), render_brief.MANIFEST_VERSION)
+            self.assertLess(len(text), 320)  # 设备清单上限 320 字节
+            self.assertEqual(render_brief.parse_manifest(""), {})
+
+    def test_page_cap_matches_firmware_uint8_field(self):
+        contract = (render_brief.ROOT / "RLCD_CLOCK" / "main" / "network"
+                    / "aibrief_contract.h").read_text(encoding="utf-8")
+        self.assertIn("inline constexpr int kMaxPages = 255;", contract)
+        self.assertEqual(render_brief.MAX_PAGES, 255)
+        self.assertIn("inline constexpr uint32_t kPageRotateSeconds = 30;", contract)
 
     def test_demo_collection_is_fully_offline(self):
         with mock.patch.object(render_brief.sources, "collect_all",
