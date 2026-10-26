@@ -8,8 +8,8 @@
 - 400×300 固定网格、全页 16px、标题/数字 Bold、真实页码、双栏快讯与末栏均衡
 - FreeType 原生 MONO + 自动 hinting + 整数像素定位，不使用灰度阈值或抖动
 - 保存前逐页检查边界、字号、纯黑白像素和叠字；超额时调整快讯版位，不截句、不直接裁页
-- 快讯默认「全量推送」：抓到的标题全部排版，只有超过 48 页固件上限才按每源条数逐级收敛
-- 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 48 页
+- 快讯默认「全量推送」：抓到的标题全部排版，255 页装不下才按每源条数逐级收敛
+- 单文件包含多页：AIB1 + 宽高 + N*15000 字节位图，固件支持最多 255 页
 
 产物（默认写入 aibrief/）：
   latest.bin  8 字节头 + N*15000 字节 1bpp 位图（MSB first，1=黑），N=页数
@@ -17,6 +17,7 @@
   page_*.png  每页 PNG 预览
   latest_contact_sheet.png  5 列全页校样墙
   meta.json   生成时间、真实页数、收录口径（全量/精选）、预检结果、SHA-256
+  version.txt 设备条件请求用的小清单（sha256 / 页数 / 字节数），内容不变就不下载
 
 用法：
   python3 device_brief/render_brief.py                 # 抓取 + 渲染（002 数据）
@@ -62,14 +63,19 @@ from mono_text import MonoFont, get_mono_font  # noqa: E402
 
 WIDTH = 400
 HEIGHT = 300
-MAX_PAGES = 48
+# 固件 page_count 是 uint8，协议硬上限就是 255 页（3,825,000 字节位图 ≈ 3.65MB）。
+MAX_PAGES = 255
 MAGIC = b"AIB1"
+# 设备先拉这个几十字节的小清单比对新旧 sha256，只有内容变了才下载整包；
+# 否则每 5 分钟整包重下会同时浪费流量并把轮播重置回第 1 页。
+MANIFEST_NAME = "version.txt"
+MANIFEST_VERSION = 1
 # 全网快讯默认「全量推送」：抓到的标题全部排版，不按来源截断。
 # 只有在固件 48 页上限内放不下时，才沿下面的阶梯逐级收敛，
 # 并取「页数不超上限」的最大一档，尽量把内容推满。
 NEWS_PER_SOURCE_FULL = 0
 NEWS_PER_SOURCE_LADDER = (20, 16, 12, 8, 6, 5, 4, 3, 2, 1)
-LAYOUT_VERSION = "2.3-alibaba-puhuiti-16px-native-mono"
+LAYOUT_VERSION = "2.4-alibaba-puhuiti-16px-native-mono-255p"
 CN_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
@@ -119,7 +125,22 @@ LEADING_MIN = 20
 # 数字及与其组成一个数值串的符号使用 Bold；其余字符使用 Regular。
 _NUMERIC_RUN = re.compile(r"[+-]?\d+(?:[.,:/-]\d+)*%?")
 
-# ---------------------------------------------------------------- 数据收集（002）
+def build_policy_deep_layer(brief: dict, policy: dict | None) -> dict | None:
+    """组装「AI 政策深度 / AI 政策研报」所需的深度层（知识库 + 舆情 + 传导 + 推理 + 模型）。
+
+    ``sources.analyze_policy_deep()`` 内部只用本地政策知识库与可选时序模型，
+    不额外联网；失败时返回 ``None``，设备图只是少这两栏，不影响其它页面。
+    """
+    if not policy:
+        return None
+    try:
+        series = sources.get_policy_series(None)
+        return sources.analyze_policy_deep(policy, brief, series, top_k=3)
+    except Exception as exc:  # pragma: no cover - 依赖 002 内部结构
+        print(f"政策深度层生成失败：{exc}", file=sys.stderr)
+        return None
+
+
 def collect_brief_002(limit: int = 12, demo: bool = False):
     """采集 002 数据；``demo=True`` 时完全离线，不触碰任何网络接口。"""
     if demo:
@@ -140,6 +161,8 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
             "heatmap": summary.get("heatmap") or sources.analyze_keyword_heatmap(brief, top_n=40),
             "policy": summary.get("policy") or sources.analyze_policy(brief, deep=False),
             "policy_deep": None,
+            "policy_deep_layer": build_policy_deep_layer(
+                brief, summary.get("policy") or sources.analyze_policy(brief, deep=False)),
             "market_freshness": {
                 "ok": False,
                 "source": "snapshot",
@@ -194,6 +217,7 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
         policy_deep = sources.analyze_policy(brief, deep=True)
     except Exception as exc:
         print(f"政策分析失败：{exc}", file=sys.stderr)
+    policy_deep_layer = build_policy_deep_layer(brief, policy)
 
     return {
         "brief": brief,
@@ -207,6 +231,7 @@ def collect_brief_002(limit: int = 12, demo: bool = False):
         "heatmap": heatmap,
         "policy": policy,
         "policy_deep": policy_deep,
+        "policy_deep_layer": policy_deep_layer,
         "market_freshness": market_freshness,
     }
 
@@ -453,6 +478,43 @@ class Sheet:
     def save(self, out_dir: Path, meta: dict) -> None:
         self.save_single(out_dir, meta)
 
+def manifest_text(sha256: str, pages: int, size: int, generated_at: str = "") -> str:
+    """设备条件请求用的极简清单：一行几个 key=value，几十字节即可判断要不要下载整包。"""
+    fields = [
+        f"manifest={MANIFEST_VERSION}",
+        f"sha256={sha256}",
+        f"pages={pages}",
+        f"bytes={size}",
+    ]
+    if generated_at:
+        fields.append(f"generated_at={generated_at}")
+    return " ".join(fields) + "\n"
+
+
+def parse_manifest(text: str) -> dict:
+    """解析清单文本；格式不对时返回空 dict，设备端按「未知」处理并回退整包下载。"""
+    out: dict = {}
+    for token in str(text or "").replace("\n", " ").split():
+        if "=" not in token:
+            continue
+        key, _, value = token.partition("=")
+        out[key.strip()] = value.strip()
+    return out
+
+
+def write_manifest(out_dir: Path, meta: dict) -> Path:
+    """把 sha256 / 页数 / 字节数写到 ``version.txt``，供设备先比对再决定是否下载。"""
+    text = manifest_text(
+        str(meta.get("sha256") or ""),
+        _int(meta.get("pages")),
+        _int(meta.get("bytes")),
+        str(meta.get("generated_at") or ""),
+    )
+    path = Path(out_dir) / MANIFEST_NAME
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 class LayoutError(RuntimeError):
     """任一页未通过预检时阻止写入设备负载。"""
 
@@ -627,6 +689,7 @@ class MultiPageRenderer:
             "page_titles": [p.page_title for p in self.pages],
         })
         (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_manifest(out_dir, meta)
         print(f"已逐页预检并生成 {len(self.pages)} 页，{out_dir}/latest.bin ({len(payload)} bytes)")
 
 # ---------------------------------------------------------------- 兼容旧接口（用于测试）
@@ -1197,6 +1260,224 @@ def draw_policy_pages(renderer: MultiPageRenderer, policy: dict | None,
     return _page_count_delta(renderer, before, page_num)
 
 
+def _num(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _text_item(value, key: str = "industry", limit: int = 0) -> str:
+    """把深度层里的「字符串 / 字典」条目统一成一行文本。
+
+    002 的政策条目既可能是纯字符串，也可能是 ``{industry, note/driver/impact, ...}``；
+    这里按 ``key`` 优先取主字段，再拼上其余非空短字段，避免直接打印成 ``{'a': 'b'}``。
+    """
+    if isinstance(value, dict):
+        parts: List[str] = []
+        primary = _clip(value.get(key) or value.get("industry") or value.get("tag"), limit)
+        if primary:
+            parts.append(primary)
+        for field in ("direction", "nature", "horizon", "note", "impact", "driver"):
+            if field == key:
+                continue
+            text = _clip(value.get(field), limit or 160)
+            if text:
+                parts.append(text)
+        return " · ".join(parts)
+    return _clip(value, limit)
+
+
+def _clip(text, limit: int = 0) -> str:
+    """压缩空白；``limit>0`` 时按字符截断并补省略号（仅用于证据类长文，标题不截）。"""
+    value = " ".join(str(text or "").split())
+    if limit and len(value) > limit:
+        return value[: max(1, limit - 1)] + "…"
+    return value
+
+
+def draw_policy_deep_pages(renderer: MultiPageRenderer, deep: dict | None,
+                           page_num: int, total_estimate: int) -> int:
+    """「AI 政策深度」：知识库历史对照 + 舆情/术语口径 + 传导图谱 + 四步推理链。
+
+    对应 002 网页的同名栏目；全部字段来自 ``sources.analyze_policy_deep()``。
+    """
+    before = len(renderer.pages)
+    if not deep:
+        return _page_count_delta(renderer, before, page_num)
+
+    kb = deep.get("kb") or {}
+    modifiers = deep.get("modifiers") or {}
+    sentiment = deep.get("sentiment") or {}
+    graph = deep.get("graph") or {}
+    reasoning = deep.get("reasoning") or {}
+
+    # ── 知识库检索与历史对照
+    hits = [hit for hit in (kb.get("hits") or []) if isinstance(hit, dict)]
+    flow = PageFlow(renderer, "AI 政策深度", "知识库对照" if hits else "知识库")
+    if not hits:
+        flow.add_entry("STATUS", "当日未检索到可对照的历史政策条目。", FONT_BODY)
+    if kb.get("note"):
+        flow.add_text(_clip(kb.get("note")), FONT_META, LEADING_META, gap=4)
+    for index, hit in enumerate(hits[:3], 1):
+        title = _clip(hit.get("title"), 40)
+        issuer = _clip(hit.get("issuer") or hit.get("dimension"), 24)
+        flow.add_rich([
+            {"text": f"{index:02d}  {_clip(hit.get('date'), 12)}  {issuer}", "size": FONT_BODY,
+             "leading": LEADING_BODY, "bold": True},
+            {"text": f"{_clip(hit.get('doctype'), 10)}《{title}》", "size": FONT_META,
+             "leading": LEADING_META, "indent": 24},
+            {"text": _clip(hit.get("market_effect") or hit.get("summary")), "size": FONT_MIN,
+             "leading": LEADING_MIN, "indent": 24},
+        ], gap=3, separator=True)
+    for comparison in [c for c in (kb.get("comparison") or []) if c][:3]:
+        flow.add_text(_clip(comparison), FONT_MIN, LEADING_MIN, gap=4)
+
+    # ── 舆情情感与修饰词术语口径
+    flow = PageFlow(renderer, "AI 政策深度", "舆情 · 术语口径")
+    for label, key in (("综合", "overall"), ("官媒", "official"), ("市场", "market")):
+        bucket = sentiment.get(key) or {}
+        if not bucket:
+            continue
+        flow.add_rich([
+            {"text": f"{label}  {bucket.get('label') or '中性'}  {_num(bucket.get('score')):+.2f}",
+             "size": FONT_BODY, "leading": LEADING_BODY, "bold": True},
+            {"text": (f"正向 {_int(bucket.get('positive'))} · 负向 {_int(bucket.get('negative'))}"
+                      f" · 中性 {_int(bucket.get('neutral'))} · 合计 {_int(bucket.get('total'))}"),
+             "size": FONT_META, "leading": LEADING_META, "indent": 24},
+        ], gap=2, separator=True)
+    if sentiment.get("gap") is not None:
+        flow.add_text(f"官媒与市场解读差 {_num(sentiment.get('gap')):+.2f}"
+                      "（正值＝官方口径更乐观）", FONT_META, LEADING_META, gap=5)
+    items = [item for item in (sentiment.get("items") or []) if isinstance(item, dict)]
+    for item in items[:5]:
+        source = _clip(item.get("source"), 12)
+        flow.add_text(f"· {source}｜{_clip(item.get('title'), 60)}", FONT_MIN, LEADING_MIN, gap=2)
+    for index, hit in enumerate([h for h in (modifiers.get("hits") or []) if isinstance(h, dict)][:3], 1):
+        flow.add_rich([
+            {"text": f"{index:02d}  「{_clip(hit.get('word'), 12)}」  强度 "
+                     f"{_num(hit.get('strength')):+.1f}", "size": FONT_BODY,
+             "leading": LEADING_BODY, "bold": True},
+            {"text": _clip(hit.get("sense")), "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+            {"text": _clip(hit.get("market")), "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+        ], gap=2, separator=True)
+
+    # ── 政策传导图谱
+    chains = [c for c in (graph.get("chains") or []) if isinstance(c, dict)]
+    flow = PageFlow(renderer, "AI 政策深度", "政策传导图谱")
+    if not chains:
+        flow.add_entry("STATUS", "当日暂无政策传导链样本。", FONT_BODY)
+    for index, chain in enumerate(chains[:4], 1):
+        industries = "、".join(str(x) for x in (chain.get("industries") or [])[:5])
+        flow.add_rich([
+            {"text": f"{index:02d}  {_clip(chain.get('bucket'), 20)}  "
+                     f"{chain.get('direction') or '中性'}净{_int(chain.get('net')):+d}",
+             "size": FONT_BODY, "leading": LEADING_BODY, "bold": True},
+            {"text": f"{_clip(chain.get('subject'), 24)} → {industries}", "size": FONT_META,
+             "leading": LEADING_META, "indent": 24},
+            {"text": "上游 " + "、".join(str(x) for x in (chain.get("upstream") or [])[:4]),
+             "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+            {"text": "中游 " + "、".join(str(x) for x in (chain.get("midstream") or [])[:4]),
+             "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+            {"text": "下游 " + "、".join(str(x) for x in (chain.get("downstream") or [])[:4]),
+             "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+            {"text": (f"{_clip(chain.get('nature'), 8)} · {_clip(chain.get('horizon'), 12)} · "
+                      f"{_int(chain.get('mentions'))}条提及 · {_int(chain.get('sources'))}源命中"),
+             "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+        ], gap=2, separator=True)
+
+    # ── 四步推理链
+    steps = [step for step in (reasoning.get("steps") or []) if isinstance(step, dict)]
+    flow = PageFlow(renderer, "AI 政策深度",
+                    f"推理链 · 置信度 {_clip(reasoning.get('confidence'), 6) or '—'}")
+    if not steps:
+        flow.add_entry("STATUS", "当日暂无推理链样本。", FONT_BODY)
+    for step in steps[:5]:
+        evidence = [e for e in (step.get("evidence") or []) if isinstance(e, dict)]
+        paragraphs = [
+            {"text": f"{_clip(step.get('no'), 3) or '—'}  {_clip(step.get('label'), 12)}",
+             "size": FONT_BODY, "leading": LEADING_BODY, "bold": True},
+            {"text": _clip(step.get("text")), "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+        ]
+        if evidence:
+            item = evidence[0]
+            prefix = _clip(item.get("source"), 12)
+            paragraphs.append({"text": f"· {prefix}｜{_clip(item.get('text'), 70)}",
+                               "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24})
+        flow.add_rich(paragraphs, gap=3, separator=True)
+    return _page_count_delta(renderer, before, page_num)
+
+
+def draw_research_pages(renderer: MultiPageRenderer, deep: dict | None,
+                        page_num: int, total_estimate: int) -> int:
+    """「AI 政策研报」：结论与受益/承压方向 + 长逻辑与风险 + 时序模型读数。"""
+    before = len(renderer.pages)
+    research = (deep or {}).get("research") or {}
+    models = (deep or {}).get("models") or {}
+    if not research and not models:
+        return _page_count_delta(renderer, before, page_num)
+
+    flow = PageFlow(renderer, "AI 政策研报", _clip(research.get("rating"), 14) or "政策影响研报")
+    if research:
+        flow.add_text(_clip(research.get("title")), FONT_BODY, LEADING_BODY, bold=True, gap=4)
+        if research.get("rating_note"):
+            flow.add_text(_clip(research.get("rating_note")), FONT_META, LEADING_META, gap=4)
+        if research.get("abstract"):
+            flow.add_text(_clip(research.get("abstract")), FONT_MIN, LEADING_MIN, gap=5)
+        if research.get("horizon"):
+            flow.add_text("周期 " + _clip(research.get("horizon"), 60), FONT_MIN, LEADING_MIN, gap=4)
+        beneficiaries = [_text_item(x) for x in (research.get("beneficiaries") or [])]
+        pressured = [_text_item(x) for x in (research.get("pressured") or [])]
+        beneficiaries = [x for x in beneficiaries if x]
+        pressured = [x for x in pressured if x]
+        if beneficiaries:
+            flow.add_text("受益 " + "、".join(beneficiaries[:5]), FONT_MIN, LEADING_MIN, gap=2)
+        if pressured:
+            flow.add_text("承压 " + "、".join(pressured[:5]), FONT_MIN, LEADING_MIN, gap=4)
+        for index, point in enumerate([x for x in (research.get("long_term") or []) if x][:4], 1):
+            flow.add_rich([
+                {"text": f"{index:02d}  {_text_item(point, 'industry', 40)}", "size": FONT_META,
+                 "leading": LEADING_META, "bold": True},
+                {"text": _text_item(point, "impact", 160) or _text_item(point, "driver", 120),
+                 "size": FONT_MIN, "leading": LEADING_MIN, "indent": 24},
+            ], gap=2)
+        for risk in [x for x in (research.get("risks") or []) if x][:3]:
+            flow.add_text("风险 · " + _clip(risk), FONT_MIN, LEADING_MIN, gap=2)
+        if research.get("watch_window"):
+            flow.add_text("窗口 " + _clip(research.get("watch_window"), 90), FONT_MIN,
+                          LEADING_MIN, gap=2)
+
+    if models:
+        series = models.get("series") or {}
+        flow = PageFlow(renderer, "AI 政策研报",
+                        "时序模型 · " + (_clip(series.get("name"), 12) or "序列"))
+        if series:
+            flow.add_text(f"序列 {_clip(series.get('name'), 20)} · 来源 "
+                          f"{_clip(series.get('source'), 10)} · {_int(series.get('points'))} 个交易日",
+                          FONT_META, LEADING_META, gap=4)
+            if series.get("note"):
+                flow.add_text(_clip(series.get("note")), FONT_MIN, LEADING_MIN, gap=5)
+        if models.get("shock") is not None:
+            flow.add_text(f"政策情景偏移 {_num(models.get('shock')):+.2f}"
+                          "（负值＝偏紧情景，压制估值）", FONT_META, LEADING_META, gap=5)
+        prophet = models.get("prophet") or {}
+        if prophet:
+            flow.add_rich([
+                {"text": "Prophet 式分解", "size": FONT_BODY, "leading": LEADING_BODY, "bold": True},
+                {"text": _clip(prophet.get("summary")), "size": FONT_MIN,
+                 "leading": LEADING_MIN, "indent": 24},
+            ], gap=3, separator=True)
+        lstm = models.get("lstm") or {}
+        if lstm:
+            flow.add_rich([
+                {"text": f"LSTM · {_clip(lstm.get('direction'), 8) or '—'}",
+                 "size": FONT_BODY, "leading": LEADING_BODY, "bold": True},
+                {"text": _clip(lstm.get("summary")), "size": FONT_MIN,
+                 "leading": LEADING_MIN, "indent": 24},
+            ], gap=3, separator=True)
+    return _page_count_delta(renderer, before, page_num)
+
+
 def _sector_paragraphs(item: dict, index: int, pressure: bool = False) -> List[dict]:
     tag = str(item.get("tag") or "未命名")
     net = _int(item.get("net"))
@@ -1372,6 +1653,8 @@ def draw_all_pages(data: dict, now: datetime, live: int, total: int, demo: bool,
     page_num = draw_market_pages(renderer, data.get("review_us"), "美股", page_num, 0)
     page_num = draw_heatmap_pages(renderer, data.get("heatmap"), page_num, 0)
     page_num = draw_policy_pages(renderer, data.get("policy"), page_num, 0)
+    page_num = draw_policy_deep_pages(renderer, data.get("policy_deep_layer"), page_num, 0)
+    page_num = draw_research_pages(renderer, data.get("policy_deep_layer"), page_num, 0)
     page_num = draw_sectors_pages(renderer, data.get("summary") or {}, page_num, 0)
     draw_news_pages(renderer, data.get("brief") or {}, page_num, 0,
                     news_per_source=news_per_source, news_limit=news_limit)

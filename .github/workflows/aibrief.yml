@@ -103,6 +103,7 @@ jobs:
           name: aibrief-device-image
           path: |
             aibrief/latest.bin
+            aibrief/version.txt
             aibrief/latest.png
             aibrief/latest_combined.png
             aibrief/latest_contact_sheet.png

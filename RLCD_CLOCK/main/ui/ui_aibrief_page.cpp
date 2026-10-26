@@ -1,4 +1,4 @@
-// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每分钟自动翻页。
+// 构建章鱼 AI 简报辅助页：把多页 1bpp 位图解码到全屏 LVGL canvas，每 20 秒自动翻页。
 #include "ui_aibrief_page.h"
 
 #include "aibrief_contract.h"
@@ -42,7 +42,7 @@ constexpr int kAibriefBitmapFooterBaseline = 17;
 // 页脚只显示「读取 HH:MM」：前缀 + 时间两段，页码已取消。
 constexpr int kAibriefPageSegmentCount = 2;
 constexpr const char *kAibriefEmptyText = "章鱼AI 简报尚未获取";
-constexpr const char *kAibriefHintText = "长按 KEY 返回 · 自动每分钟翻页";
+constexpr const char *kAibriefHintText = "长按 KEY 返回 · 每 20 秒自动翻页";
 
 lv_obj_t *s_aibrief_canvas;
 lv_color_t *s_aibrief_canvas_buffer;
@@ -266,7 +266,7 @@ bool update_aibrief_page()
     const uint32_t drawn_version = snapshot.available ? snapshot.version : 0;
     const uint8_t current_page = snapshot.available ? snapshot.current_page : 0;
 
-    // 检查是否需要自动翻页：每 60 秒切下一页
+    // 检查是否需要自动翻页：每 20 秒切下一页（全量 255 页时一轮约 85 分钟）
     if (snapshot.available && snapshot.page_count > 1) {
         const int64_t now_us = esp_timer_get_time();
         const int64_t elapsed_us = now_us - s_aibrief_last_page_switch_us;

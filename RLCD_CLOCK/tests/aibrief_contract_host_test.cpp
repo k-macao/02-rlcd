@@ -4,6 +4,7 @@
 #include "ui_aibrief_page_format.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <vector>
@@ -49,7 +50,7 @@ void test_parses_valid_payload()
     assert(bitmaps[aibrief::kBitmapBytes] == 1);
     assert(bitmaps[aibrief::kBitmapBytes * 2] == 2);
 
-    // 48 页上限
+    // 固件页位上限（255 页 = uint8 上限）
     payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages);
     bitmaps.assign(aibrief::kBitmapBytes * aibrief::kMaxPages, 0);
     out_pages = 0;
@@ -101,6 +102,40 @@ void test_refresh_window()
     assert(!aibrief::refresh_due(1000, 1000, true));
     assert(aibrief::refresh_due(1, 1 + aibrief::kMaxRefreshAgeSeconds, true));
     assert(aibrief::refresh_due(1000, 999, true));
+}
+
+void test_manifest_parse()
+{
+    const char *text =
+        "manifest=1 sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        " pages=104 bytes=1560008 generated_at=2026-10-27 04:03:00\n";
+    aibrief::ManifestInfo info = aibrief::parse_manifest(text, strlen(text));
+    assert(info.ok);
+    assert(info.has_sha);
+    assert(strcmp(info.sha256,
+                  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef") == 0);
+    assert(info.pages == 104);
+    assert(info.bytes == 1560008);
+
+    // 缺 sha256 / sha 非法 / 页数越界 / 超长 → 不可用于条件请求
+    const char *no_sha = "manifest=1 pages=10 bytes=150008\n";
+    assert(!aibrief::parse_manifest(no_sha, strlen(no_sha)).ok);
+    const char *bad_sha = "sha256=zzzz pages=10\n";
+    assert(!aibrief::parse_manifest(bad_sha, strlen(bad_sha)).ok);
+    char too_many[160] = {};
+    snprintf(too_many, sizeof(too_many),
+             "sha256=%s pages=%d bytes=1\n",
+             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+             aibrief::kMaxPages + 1);
+    assert(!aibrief::parse_manifest(too_many, strlen(too_many)).ok);
+    assert(!aibrief::parse_manifest(nullptr, 0).ok);
+    assert(!aibrief::parse_manifest("", 0).ok);
+
+    // 新窗口上限：255 页 + 轮播 20 秒
+    assert(aibrief::kMaxPages == 255);
+    assert(aibrief::kPageRotateSeconds == 20);
+    assert(aibrief::kMaxBitmapBytes ==
+           static_cast<size_t>(aibrief::kBitmapBytes) * 255);
 }
 
 void test_bit_helpers()
@@ -158,6 +193,7 @@ int main()
     test_parses_valid_payload();
     test_rejects_bad_inputs();
     test_refresh_window();
+    test_manifest_parse();
     test_bit_helpers();
     test_read_time_and_page_indicator();
     test_failed_sync_keeps_last_successful_read_time();
