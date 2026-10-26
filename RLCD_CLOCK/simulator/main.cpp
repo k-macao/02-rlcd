@@ -42,7 +42,11 @@ static time_t g_web_time = 0;
 #else
 static constexpr int kWindowScale = 2;
 #endif
-static const char *APP_VERSION = "v1.6.17";
+// 版本号由构建系统从顶层 PROJECT_VER 注入，模拟器与固件保持同一份来源。
+#ifndef WEATHER_CLOCK_APP_VERSION
+#error "WEATHER_CLOCK_APP_VERSION must be provided by simulator/CMakeLists.txt"
+#endif
+static const char *APP_VERSION = WEATHER_CLOCK_APP_VERSION;
 
 static SdlPreviewBackend g_sdl_preview(kDisplayWidth, kDisplayHeight);
 static sdl_preview_progress::Canvas g_work_page_day_progress;
