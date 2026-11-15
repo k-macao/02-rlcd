@@ -17,7 +17,7 @@
 #include "network_diagnostics_state.h"
 #include "network_runtime_events.h"
 #include "offline_mode_state.h"
-#include "aibrief_service.h"
+#include "market_panel_service.h"
 #include "aibrief_state.h"
 #include "ota_services.h"
 #include "pomodoro_services.h"
@@ -95,7 +95,7 @@ constexpr size_t kSettingsFeedbackTextSize = 32;
 #define FACTORY_RESET_CONFIRM_REQUESTED_LOG "factory reset confirmation requested"
 #define FACTORY_RESET_REQUESTED_LOG "factory reset requested from settings"
 #define SYSTEM_INFO_REQUESTED_LOG "system info requested from settings"
-#define AIBRIEF_PAGE_REQUESTED_LOG "aibrief page requested from settings"
+#define AIBRIEF_PAGE_REQUESTED_LOG "market panel page requested from settings"
 
 uint8_t toggled_work_page_mask(uint8_t current_mask, int page)
 {
@@ -262,7 +262,7 @@ void handle_network_settings_action(int selected)
         }
         settings_page_clear();
         aibrief_page_request();
-        request_aibrief_refresh();
+        request_market_panel_refresh();
         notify_ui_task();
         ESP_LOGI(TAG, "%s", AIBRIEF_PAGE_REQUESTED_LOG);
     }

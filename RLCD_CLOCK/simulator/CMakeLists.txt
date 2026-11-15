@@ -121,6 +121,26 @@ target_link_libraries(aggregate_clock_view_test PRIVATE lvgl)
 add_executable(aibrief_contract_test "../tests/aibrief_contract_host_test.cpp")
 target_include_directories(aibrief_contract_test PRIVATE "../main/network" "../main/ui")
 
+# 行情数据面板：解析 / 合并 / 数字格式与服务器渲染器共用同一批实测响应，
+# 设备端自绘结果与服务器位图逐像素比对（fixtures 见 device_brief/fixtures）。
+set(MARKET_PANEL_FIXTURE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../device_brief/fixtures")
+
+add_executable(market_panel_contract_test "../tests/market_panel_contract_host_test.cpp")
+target_include_directories(market_panel_contract_test PRIVATE "../main/network")
+target_compile_definitions(market_panel_contract_test PRIVATE
+    "MARKET_PANEL_FIXTURE_DIR=\"${MARKET_PANEL_FIXTURE_DIR}\"")
+
+add_executable(market_panel_view_test
+    "../tests/market_panel_view_host_test.cpp"
+    "../main/ui/ui_market_panel_render.cpp"
+    "../main/assets/market_panel_text_16.c"
+    "../main/assets/market_panel_bold_16.c")
+target_include_directories(market_panel_view_test PRIVATE
+    "../main/network" "../main/ui" "../main/assets")
+target_compile_definitions(market_panel_view_test PRIVATE
+    "MARKET_PANEL_FIXTURE_DIR=\"${MARKET_PANEL_FIXTURE_DIR}\"")
+target_link_libraries(market_panel_view_test PRIVATE lvgl)
+
 add_executable(settings_visual_style_test "../tests/settings_visual_style_host_test.cpp")
 target_include_directories(settings_visual_style_test PRIVATE "../main/ui" "../components/app_bsp")
 target_link_libraries(settings_visual_style_test PRIVATE lvgl)

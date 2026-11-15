@@ -6,6 +6,8 @@ Weather is now selectable: QWeather remains the default, while the optional Open
 
 This is a low-power weather clock firmware project built around the **ESP32-S3** and a **4.2-inch RLCD display**. It combines an always-readable clock, local temperature and humidity sensing, online weather data, a calendar, picture display, audio reminders, Xiaozhi AI, and OTA updates in one desktop device.
 
+> **The home screen of this repository's current firmware (v1.8.7) is a one-page global market panel**: the latest level, percentage change, volume and turnover of 12 indices across mainland China, Hong Kong, the US, Korea and Japan. The device fetches public quote endpoints directly once a minute. The earlier multi-page AI brief (summaries, news, policy analysis) has been removed, and the clock work pages are not shown. Short-press BOOT to refresh immediately; hold KEY to open settings (provisioning and OTA still work) and return to the panel when settings close. See the [market panel notes (Chinese)](docs/Aibrief_zh.md).
+
 ## Quick Links
 
 **LVGL is the project's primary UI framework.** It manages page layouts, text, menus, and status widgets, while large clock digits, images, and charts use LVGL Canvas and custom drawing. The RLCD driver handles monochrome output and prioritizes partial refreshes to balance readability and power consumption.

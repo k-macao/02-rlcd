@@ -40,7 +40,7 @@ inline constexpr EventBits_t kNtpSyncCompletedBit = 1U << 17;
 // It lets a pending Wi-Fi connection wait release high-power ownership without
 // borrowing or consuming the shared network-runtime change edge.
 inline constexpr EventBits_t kXiaozhiPageStateChangedBit = 1U << 18;
-// 章鱼 AI 简报是一次独立的 HTTPS 下载窗口，可被页面退出或低电量取消。
+// 行情数据面板的刷新是一次独立的 HTTPS 窗口（沿用原 AI 简报的事件位），可被离线或低电量取消。
 inline constexpr EventBits_t kAibriefSyncBit = 1U << 19;
 
 bool app_event_group_ready();

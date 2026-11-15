@@ -1,10 +1,9 @@
-// 下载、校验并发布章鱼 AI 简报页位图（二进制安全，不经文本解码）。
-// v1.8+ 支持多页：单文件包含多张 400x300 位图，设备每 30 秒轮播一页。
+// 下载、校验并发布服务器渲染的行情面板位图（二进制安全，不经文本解码）。
+// 这是行情面板的兜底通道：设备直连行情接口失败时由 market_panel_service 调用。
 #include "aibrief_service.h"
 
 #include "aibrief_contract.h"
 #include "aibrief_state.h"
-#include "app_event_group.h"
 #include "app_metadata.h"
 #include "app_network_config.h"
 #include "network_http_transaction_lock.h"
@@ -28,11 +27,12 @@ namespace {
 #define AIBRIEF_UNCHANGED_LOG "aibrief unchanged pages=%u"
 #define AIBRIEF_MANIFEST_LOG "aibrief manifest pages=%u bytes=%u sha=%s"
 #define AIBRIEF_MANIFEST_FAILED_LOG "aibrief manifest unavailable err=%s"
+#define AIBRIEF_MANIFEST_OVERSIZED_LOG "aibrief payload too large pages=%u bytes=%u, skipped"
 
 constexpr const char *kAibriefRejectedLog = "aibrief bitmap rejected";
-// 全量包可达 3.65MB，按 30s 读超时容易在弱网下中断，放宽到 60s。
-constexpr int kAibriefHttpTimeoutMs = 60 * 1000;
-constexpr int kAibriefManifestTimeoutMs = 15 * 1000;
+// 负载只有一页（15008 字节），清单几十字节：用短超时，网络不通时尽快让出联网窗口。
+constexpr int kAibriefHttpTimeoutMs = 15 * 1000;
+constexpr int kAibriefManifestTimeoutMs = 10 * 1000;
 
 struct DownloadContext {
     uint8_t *data = nullptr;
@@ -58,54 +58,6 @@ esp_err_t download_event_handler(esp_http_client_event_t *event)
     memcpy(ctx->data + ctx->received, event->data, incoming);
     ctx->received += incoming;
     return ESP_OK;
-}
-
-esp_err_t http_get_binary(const char *url,
-                          uint8_t *out,
-                          size_t capacity,
-                          size_t *received)
-{
-    if (received) {
-        *received = 0;
-    }
-    if (!url || !out || capacity == 0 || !received) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (!acquire_network_http_transaction_lock(
-            pdMS_TO_TICKS(kAibriefHttpTimeoutMs))) {
-        ESP_LOGW(TAG, "%s", AIBRIEF_LOCK_FAILED_LOG);
-        return ESP_ERR_TIMEOUT;
-    }
-    DownloadContext ctx;
-    ctx.data = out;
-    ctx.capacity = capacity;
-    esp_http_client_config_t config = {};
-    config.url = url;
-    config.event_handler = download_event_handler;
-    config.user_data = &ctx;
-    config.timeout_ms = kAibriefHttpTimeoutMs;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
-    esp_err_t result = ESP_FAIL;
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGW(TAG, "%s", AIBRIEF_CLIENT_INIT_FAILED_LOG);
-        result = ESP_ERR_NO_MEM;
-    } else {
-        (void)esp_http_client_set_header(client, "Accept", "application/octet-stream");
-        const esp_err_t err = esp_http_client_perform(client);
-        const int status = esp_http_client_get_status_code(client);
-        if (err == ESP_OK && status == 200 && !ctx.overflow) {
-            result = ESP_OK;
-            *received = ctx.received;
-        } else {
-            ESP_LOGW(TAG, AIBRIEF_HTTP_STATUS_FORMAT, status,
-                     static_cast<unsigned>(ctx.received));
-            result = err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : err;
-        }
-        esp_http_client_cleanup(client);
-    }
-    release_network_http_transaction_lock();
-    return result;
 }
 
 // 清单很小（几十字节），单独用短超时拉取，失败就回退整包下载。
@@ -159,7 +111,7 @@ esp_err_t http_get_text(const char *url,
 }
 
 // 流式下载：边收边写进位图缓存，8 字节信封先校验魔数与尺寸，
-// 因此不再需要第二份同样大小的下载缓冲（省 3.65MB PSRAM）。
+// 因此不需要第二份同样大小的下载缓冲。
 struct StreamContext {
     uint8_t *bitmaps = nullptr;
     size_t capacity = 0;
@@ -274,12 +226,18 @@ bool settle_before_retry()
 
 namespace {
 
-// 先拉清单，拿到本次发布的 sha256；内容与上次一致时直接跳过整包下载
-// （省流量、不重置轮播），返回 true 表示本轮无需下载。
-bool manifest_gate(time_t now, aibrief::ManifestInfo *out_info, bool *out_unchanged)
+// 先拉清单，拿到本次发布的 sha256；内容与上次一致时直接跳过整包下载，
+// 返回 true 表示本轮无需下载。清单声明的负载超出设备上限时置 *out_oversized。
+bool manifest_gate(time_t now,
+                   aibrief::ManifestInfo *out_info,
+                   bool *out_unchanged,
+                   bool *out_oversized)
 {
     if (out_unchanged) {
         *out_unchanged = false;
+    }
+    if (out_oversized) {
+        *out_oversized = false;
     }
     char text[aibrief::kManifestMaxBytes + 1] = {};
     size_t length = 0;
@@ -292,6 +250,15 @@ bool manifest_gate(time_t now, aibrief::ManifestInfo *out_info, bool *out_unchan
         return false;
     }
     const aibrief::ManifestInfo info = aibrief::parse_manifest(text, length);
+    if (info.oversized) {
+        // 例如服务器上还是旧版的多页简报：设备只认单页的行情面板，不必下载。
+        ESP_LOGW(TAG, AIBRIEF_MANIFEST_OVERSIZED_LOG, static_cast<unsigned>(info.pages),
+                 static_cast<unsigned>(info.bytes));
+        if (out_oversized) {
+            *out_oversized = true;
+        }
+        return false;
+    }
     if (!info.ok) {
         return false;
     }
@@ -330,8 +297,13 @@ bool perform_aibrief_update()
 
     aibrief::ManifestInfo manifest;
     bool unchanged = false;
-    if (manifest_gate(now, &manifest, &unchanged) && unchanged) {
+    bool oversized = false;
+    if (manifest_gate(now, &manifest, &unchanged, &oversized) && unchanged) {
         return true;
+    }
+    if (oversized) {
+        aibrief_publish_failure(now);
+        return false;
     }
 
     for (int attempt = 1; attempt <= aibrief::kMaxRefreshAttempts; ++attempt) {
@@ -375,47 +347,8 @@ bool perform_aibrief_update()
             break;
         }
     }
-    // 半途失败：缓存里可能只有一部分页，作废并回到占位提示，等下一轮重下。
+    // 半途失败：缓存里可能只写了一部分，作废，等下一轮重下。
     aibrief_invalidate_bitmaps();
     aibrief_publish_failure(now);
     return false;
-}
-
-void request_aibrief_refresh()
-{
-    app_event_group_set_bits(kAibriefSyncBit);
-}
-
-void request_aibrief_refresh_if_due()
-{
-    if (!aibrief_cache_refresh_due()) {
-        return;
-    }
-    time_t now = 0;
-    time(&now);
-    const AibriefSnapshot snapshot = aibrief_snapshot_load();
-    if (!snapshot.available || snapshot.last_sync <= 0) {
-        // 尚无可用缓存时按刷新周期节流重试，掉线也不会每轮都踢网络任务。
-        static time_t s_last_cacheless_request = 0;
-        const bool throttled = s_last_cacheless_request != 0 &&
-                               now >= s_last_cacheless_request &&
-                               static_cast<uint32_t>(now - s_last_cacheless_request) <
-                                   aibrief::kMaxRefreshAgeSeconds;
-        if (throttled) {
-            return;
-        }
-        s_last_cacheless_request = now;
-    }
-    request_aibrief_refresh();
-}
-
-bool aibrief_cache_refresh_due()
-{
-    const AibriefSnapshot snapshot = aibrief_snapshot_load();
-    time_t now = 0;
-    time(&now);
-    return aibrief::refresh_due(
-        static_cast<uint32_t>(snapshot.last_sync > 0 ? snapshot.last_sync : 0),
-        static_cast<uint32_t>(now > 0 ? now : 0),
-        snapshot.available);
 }

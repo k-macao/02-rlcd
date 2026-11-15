@@ -20,8 +20,7 @@ Saved Wi-Fi credentials alone are not a complete weather configuration. Use your
 
 | Button | Work page | Settings |
 | --- | --- | --- |
-| Short BOOT press | Next enabled page; next page on the Octopus AI brief screen | Confirm or change the selected item |
-| Long BOOT press | Previous page on the Octopus AI brief screen | Not applicable |
+| Short BOOT press | Next enabled page; refresh quotes immediately on the market panel | Confirm or change the selected item |
 | Short KEY press | Open settings | Move selection |
 | Hold KEY | Follow the current screen prompt | Back one level, then back to the work page |
 

@@ -13,8 +13,7 @@ API Host is your QWeather account's assigned domain, not a key or API path. For 
 
 ## Use the buttons
 
-- Short **BOOT**: next work page; confirm within settings; next page on the Octopus AI brief screen.
-- Hold **BOOT**: previous page on the Octopus AI brief screen.
+- Short **BOOT**: next work page; confirm within settings; refresh quotes immediately on the market panel.
 - Short **KEY**: open settings; move the selection.
 - Hold **KEY**: back one level or leave settings.
 - While an alarm or focus-completion sound plays, either button stops it.

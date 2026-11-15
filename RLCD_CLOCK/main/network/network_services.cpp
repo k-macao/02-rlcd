@@ -11,6 +11,7 @@
 #include "chime_runtime_state.h"
 #include "daily_saying_state.h"
 #include "daily_saying_service.h"
+#include "market_panel_service.h"
 #include "ota_runtime_state.h"
 #include "runtime_health.h"
 
@@ -578,16 +579,15 @@ static bool execute_network_diagnostics_window(
     return true;
 }
 
+// 行情数据面板的联网窗口：界面任务按每分钟的节奏请求（见 market_panel_service），
+// 这里每次请求都连网取一轮行情，不再另做缓存新鲜度判断。
 static bool execute_aibrief_window(
     const NetworkSyncAvailability &scheduled_runtime,
     const NetworkSyncRequestSnapshot &requests)
 {
-    if (!aibrief_cache_refresh_due()) {
-        finish_aibrief_sync(requests, true);
-        return true;
-    }
     NetworkAwakeLockGuard awake_lock;
     bool ok = false;
+    bool connected = false;
     if (!awake_lock.locked() || !start_wifi_radio(false)) {
         ESP_LOGW(TAG,
                  "%s",
@@ -610,10 +610,15 @@ static bool execute_aibrief_window(
                 finish_network_radio_session(awake_lock);
                 return false;
             }
-            ok = perform_aibrief_update();
+            connected = true;
+            ok = perform_market_panel_window_update();
         }
     }
     finish_network_radio_session(awake_lock);
+    if (!connected) {
+        // 没连上 Wi-Fi 也算一次失败：连续失败后刷新周期退避，避免每分钟空转射频。
+        market_panel_note_window_unavailable();
+    }
     finish_aibrief_sync(requests, ok);
     return true;
 }
