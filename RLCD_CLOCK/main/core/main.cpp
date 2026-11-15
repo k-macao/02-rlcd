@@ -18,6 +18,7 @@
 #include "custom_assets_internal.h"
 #include "daily_saying_state_internal.h"
 #include "manual_weather_city_state_internal.h"
+#include "market_panel_state.h"
 #include "network_credentials_state_internal.h"
 #include "network_diagnostics_state_internal.h"
 #include "network_boot_sync.h"
@@ -77,6 +78,7 @@
 #define MAIN_BATTERY_RUNTIME_STATE_INIT_FAILED_LOG_FORMAT "battery runtime state initialization failed"
 #define MAIN_INFO_PAGE_STATE_INIT_FAILED_LOG_FORMAT "info page state initialization failed"
 #define MAIN_AIBRIEF_STATE_INIT_FAILED_LOG_FORMAT "aibrief state initialization failed"
+#define MAIN_MARKET_PANEL_STATE_INIT_FAILED_LOG_FORMAT "market panel state initialization failed"
 #define MAIN_SETTINGS_ACTIVITY_STATE_INIT_FAILED_LOG_FORMAT "settings activity state initialization failed"
 #define MAIN_SETTINGS_FEEDBACK_STATE_INIT_FAILED_LOG_FORMAT "settings feedback state initialization failed"
 #define MAIN_WORK_PAGE_CATALOG_INIT_FAILED_LOG_FORMAT "work page catalog initialization failed"
@@ -135,6 +137,7 @@ constexpr AppInitializerSpec kCoreRuntimeStateInitializers[] = {
     {battery_runtime_state_init, MAIN_BATTERY_RUNTIME_STATE_INIT_FAILED_LOG_FORMAT},
     {info_page_state_init, MAIN_INFO_PAGE_STATE_INIT_FAILED_LOG_FORMAT},
     {aibrief_state_init, MAIN_AIBRIEF_STATE_INIT_FAILED_LOG_FORMAT},
+    {market_panel_state_init, MAIN_MARKET_PANEL_STATE_INIT_FAILED_LOG_FORMAT},
     {settings_activity_state_init, MAIN_SETTINGS_ACTIVITY_STATE_INIT_FAILED_LOG_FORMAT},
     {settings_feedback_state_init, MAIN_SETTINGS_FEEDBACK_STATE_INIT_FAILED_LOG_FORMAT},
     {work_page_catalog_init, MAIN_WORK_PAGE_CATALOG_INIT_FAILED_LOG_FORMAT},

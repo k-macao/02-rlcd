@@ -26,8 +26,9 @@
 #include "sensor_time.h"
 #include "ui_battery.h"
 #include "ui_battery_blink.h"
-#include "aibrief_service.h"
 #include "aibrief_state.h"
+#include "market_panel_service.h"
+#include "offline_mode_state.h"
 #include "ui_aibrief_page.h"
 #include "ui_aux_pages.h"
 #include "ui_settings_page.h"
@@ -109,9 +110,6 @@ void show_aibrief_aux_page(VisibleAuxiliaryPage &visible_auxiliary_page)
     }
     show_page(auxiliary_page_root(AuxiliaryPage::kAibrief));
     visible_auxiliary_page = VisibleAuxiliaryPage::kAibrief;
-    if (aibrief_cache_refresh_due()) {
-        request_aibrief_refresh();
-    }
 }
 
 void show_settings_aux_page(VisibleAuxiliaryPage &visible_auxiliary_page)
@@ -176,10 +174,10 @@ void ui_task(void *)
     int low_battery_resume_page = kWorkPageWeatherClock;
     bool low_battery_resume_pending = false;
     uint8_t lvgl_lock_failures = 0;
-    // 简报页是固件的常驻主页：开机即请求联网拉取并显示已有的 AI 简报页，
+    // 行情面板是固件的常驻主页：开机即请求联网取第一轮行情，
     // 不再进入天气时钟等时钟工作页（长按 KEY 可进入设置）。
     aibrief_page_request();
-    request_aibrief_refresh();
+    request_market_panel_refresh();
     regular_app_task_mark_ready(RegularAppTaskId::kUi);
 
     for (;;) {
@@ -348,8 +346,8 @@ void ui_task(void *)
                  settings_requested ||
                  !aibrief_page_requested() ||
                  active_page != kWorkPageWeatherClock)) {
-                // 低电量只保留常驻的简报页（静态图最省电），清掉其余辅助页；
-                // 中间帧不会被刷新，简报分支随后接管显示，时钟工作页不出现。
+                // 低电量只保留常驻的行情面板（停止联网、画面静止最省电），清掉其余辅助页；
+                // 中间帧不会被刷新，面板分支随后接管显示，时钟工作页不出现。
                 info_page_clear();
                 network_diag_page_clear();
                 settings_page_clear();
@@ -479,9 +477,10 @@ void ui_task(void *)
             }
             if (aibrief_requested && !settings_requested &&
                 !runtime_surfaces.setup_portal_active) {
-                if (!battery.low_battery_mode) {
-                    // 简报页常驻：缓存过期即自动重新拉取，每 5 分钟推送一次页面。
-                    request_aibrief_refresh_if_due();
+                if (!battery.low_battery_mode && !offline_mode_enabled_load()) {
+                    // 行情面板常驻：每分钟请求一轮行情；连续失败后自动退避到 5 分钟。
+                    // 低电量与离线模式不联网，页脚会写明「暂停更新」。
+                    request_market_panel_refresh_if_due();
                 }
                 bool aibrief_changed = false;
                 if (visible_auxiliary_page != VisibleAuxiliaryPage::kAibrief) {
@@ -607,9 +606,9 @@ void ui_task(void *)
                 restore_active_work_page_after_aux(false);
             }
 
-            // 简报页是常驻主页：辅助页（设置等）退出后不落回时钟工作页。
+            // 行情面板是常驻主页：辅助页（设置等）退出后不落回时钟工作页。
             // restore_active_work_page_after_aux 只是切了根对象、尚未刷新，
-            // 这里直接丢弃中间帧，回到事件循环由简报分支重新接管显示。
+            // 这里直接丢弃中间帧，回到事件循环由面板分支重新接管显示。
             if (aibrief_page_requested() && !settings_requested &&
                 !runtime_surfaces.setup_portal_active) {
                 Lvgl_unlock();

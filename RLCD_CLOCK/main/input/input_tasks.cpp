@@ -8,8 +8,10 @@
 #include "battery_runtime_state.h"
 #include "input_button_config.h"
 #include "input_button_wait_policy.h"
+#include "market_panel_service.h"
 #include "network_diagnostics_state.h"
 #include "network_sync_requests.h"
+#include "offline_mode_state.h"
 #include "ota_services.h"
 #include "pomodoro_services.h"
 #include "runtime_health.h"
@@ -37,7 +39,7 @@
 #define BUTTON_EDGE_WAKEUP_READY_LOG_FORMAT "button edge wakeup ready"
 #define BUTTON_SWITCH_WORK_PAGE_LOG_FORMAT "switch work page: %d"
 #define BUTTON_SHOW_SETTINGS_LOG_FORMAT "key button clicked, showing settings page"
-#define BUTTON_AIBRIEF_PAGE_LOG_FORMAT "boot button: aibrief page %u/%u (%s)"
+#define BUTTON_MARKET_PANEL_REFRESH_LOG_FORMAT "boot button: market panel refresh requested"
 
 namespace {
 constexpr int kButtonDebounceMs = 18;
@@ -105,24 +107,18 @@ void handle_settings_key_long_or_busy()
     set_settings_feedback(kSettingsBusyFeedbackText, kButtonBusyFeedbackMs);
 }
 
-void handle_aibrief_page_button(TickType_t held)
+void handle_market_panel_button(TickType_t held)
 {
-    const AibriefPageButtonAction action = aibrief_page_button_action(
+    const MarketPanelButtonAction action = market_panel_button_action(
         button_press_is_short(held), button_press_is_long(held));
-    if (action == AibriefPageButtonAction::kNone) {
-        // 抖动区间：不翻页。
+    if (action != MarketPanelButtonAction::kRefreshNow || offline_mode_enabled_load()) {
+        // 长按、抖动区间或离线模式：不联网。
         return;
     }
-    const bool forward = action == AibriefPageButtonAction::kNextPage;
-    const bool moved = forward ? aibrief_advance_page() : aibrief_retreat_page();
-    if (!moved) {
-        return;
+    // 两次手动刷新至少间隔 10 秒，连按不会连续打行情接口。
+    if (request_market_panel_refresh()) {
+        ESP_LOGI(TAG, BUTTON_MARKET_PANEL_REFRESH_LOG_FORMAT);
     }
-    ESP_LOGI(TAG, BUTTON_AIBRIEF_PAGE_LOG_FORMAT,
-             static_cast<unsigned>(aibrief_current_page_index() + 1),
-             static_cast<unsigned>(aibrief_page_count()),
-             forward ? "next" : "prev");
-    notify_ui_task();
 }
 
 void IRAM_ATTR notify_button_edge(void *)
@@ -281,8 +277,8 @@ void button_task(void *)
                        !network_diag_page_requested() &&
                        !setup_portal_active_load() &&
                        !battery_low_mode_load()) {
-                // 简报页：BOOT 短按翻到下一页、长按回上一页；尚未取到位图时两个动作都不生效。
-                handle_aibrief_page_button(now - boot_pressed_since);
+                // 行情面板页：BOOT 短按立即刷新一轮行情（低电量时不联网，不响应）。
+                handle_market_panel_button(now - boot_pressed_since);
             } else if (boot_pressed_since != 0 &&
                        !info_page_requested() &&
                        !network_diag_page_requested() &&
@@ -341,8 +337,8 @@ void button_task(void *)
                        aibrief_page_requested() &&
                        !settings_page_requested() &&
                        button_press_is_long(now - key_pressed_since)) {
-                // 简报页常驻：长按 KEY 打开设置但不退出简报页，
-                // 设置关闭后仍回到简报页，不再落回时钟工作页。
+                // 行情面板常驻：长按 KEY 打开设置但不退出面板页，
+                // 设置关闭后仍回到行情面板，不再落回时钟工作页。
                 return_to_system_settings_item(kNetworkSettingsAibriefItem, now);
                 key_long_handled = true;
                 notify_ui_task();

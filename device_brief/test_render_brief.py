@@ -1,622 +1,826 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""render_brief.py 排版回归测试（不联网，全部用本地样例数据）。
+"""全球行情数据面板的回归测试（不联网，全部用 fixtures/ 里留档的实测响应）。
 
     python3 -m pip install pillow freetype-py
     python3 device_brief/test_render_brief.py
 
-回归重点（2026-10 大字版改版后立下的规矩）：
-- 全页文字统一为阿里巴巴普惠体 16px，标题/数值串使用 Bold，其余文字使用 Regular；
-  面板是 4.2" 400×300，不许再靠缩字号塞内容；
-- 文字必须经 FreeType 原生 MONO 在整数像素绘制，页面只允许纯黑/纯白，禁止灰阶；
-- 内容最满的一天（四指数 + 成交/涨跌停 + 领涨领跌 + 三条快讯）也不溢出 300px；
-- 快讯默认全量推送：48 页页位用满、各源均衡，只有放不下时才截断且不裁剪分析栏目；
-- 没有行情 / 没有快讯 / 没有板块信号时同样能渲染；
-- 输出仍是固件约定的 15008 字节 AIB1 负载（改排版不能动协议）。
+回归重点：
+- 四个行情接口的解析、单位换算与多源合并规则（改接口字段必须先改这里）；
+- 点位 / 涨跌幅 / 成交量三种数字格式的边界值；
+- 面板排版：400×300、全页 16px、只有纯黑 / 纯白、不叠字、不越界、
+  页脚右侧给设备留白；
+- 设备负载仍是固件约定的 AIB1 单页 15008 字节，行情不变就不重写文件；
+- 行情不足时不覆盖上一版；
+- 服务器渲染器与固件各有一份的常量（版面坐标、固定文字、接口地址、行顺序、
+  阈值）必须逐项相同，fixtures/ 里的跨语言期望值与基准图必须是最新的。
 """
 from __future__ import annotations
 
+import hashlib
+import io
 import json
+import re
 import struct
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import fixtures_tool  # noqa: E402
+import market_quotes as mq  # noqa: E402
 import render_brief  # noqa: E402
 
-NOW = datetime(2026, 10, 17, 11, 17)
-
-FULL_SUMMARY = {
-    "bias": "中性", "bull": 41, "bear": 59, "signals": 105,
-    "headline": "市场分歧加大，美联储与AI 算力轮动频繁，多空力量接近，方向尚待明朗。",
-    "sectors_up": ["美联储", "消费", "AI 算力"],
-    "sectors_down": ["地缘", "贵金属"],
-    "opportunity_sectors": [
-        {"tag": "美联储", "net": 3, "sources": 22},
-        {"tag": "消费", "net": 1, "sources": 13},
-    ],
-    "pressure_sectors": [{"tag": "地缘", "net": -9, "sources": 20}],
-    "flow": "资金净流入集中在美联储、消费；回避地缘",
-}
-
-FULL_REVIEW = {
-    "date": "2026-10-16", "source": "tencent",
-    "indices": [
-        {"name": "上证指数", "close": 3715.28, "pct": 0.24},
-        {"name": "深证成指", "close": 11602.46, "pct": -0.12},
-        {"name": "创业板指", "close": 2772.36, "pct": -0.39},
-        {"name": "科创50", "close": 1358.55, "pct": -0.96},
-    ],
-    "turnover": {"amount": 12345},
-    "breadth": {"limit_up": 61, "limit_down": 10},
-    "leaders": [{"name": "汽车整车"}, {"name": "食品饮料"}],
-    "laggards": [{"name": "贵金属"}],
-}
-
-HEADLINES = [
-    "Chinese premier Li Qiang attended the opening ceremony of the 2026 "
-    "World Traditional Medicine Congress and delivered remarks, Xinhua reported.",
-    "央行开展 3800 亿元逆回购操作 维护流动性合理充裕",
-    "NBU Governor Pyshnyi said Russia's unwarranted aggression must stop.",
-]
+ROOT = render_brief.ROOT
+FIRMWARE = ROOT / "RLCD_CLOCK" / "main"
+ALL_SOURCES = (mq.SOURCE_TENCENT, mq.SOURCE_SINA, mq.SOURCE_NAVER_KR, mq.SOURCE_NAVER_JP)
 
 
-def draw(summary=FULL_SUMMARY, review=FULL_REVIEW, headlines=HEADLINES,
-         demo=False):
-    return render_brief.draw_sheet(summary, None, review, headlines,
-                                   NOW, 51, 69, demo)
+def panel_from(*sources: str) -> mq.PanelData:
+    """只用指定数据源的 fixtures 组装面板，模拟其余数据源失败。"""
+    return mq.build_panel({source: mq.fixture_text(source) for source in sources})
 
 
-def lowest_ink_row(sheet) -> int:
-    """图上最靠下的一行黑色像素（0 起）。"""
-    img = sheet.image
-    for y in range(img.height - 1, -1, -1):
-        if img.crop((0, y, img.width, y + 1)).getextrema()[0] < 128:
-            return y
-    return -1
+def cells_by_key(panel: mq.PanelData) -> dict:
+    return {row.spec.key: render_brief.row_cells(row) for row in panel.rows}
 
 
-class FontSize16Test(unittest.TestCase):
-    def test_named_sizes_are_16px(self):
-        for name in ("FONT_TITLE", "FONT_SECTION", "FONT_BODY",
-                     "FONT_SMALL", "FONT_META", "FONT_MIN"):
-            self.assertEqual(getattr(render_brief, name), 16, name)
-
-    def test_all_drawn_text_is_16px(self):
-        sizes = []
-        original = render_brief.Sheet.text
-
-        def recording(self_sheet, x, y, text, size=16, bold=False,
-                      fill=render_brief.BLACK):
-            sizes.append(size)
-            return original(self_sheet, x, y, text, size, bold, fill)
-
-        with mock.patch.object(render_brief.Sheet, "text", recording):
-            draw()
-        self.assertTrue(sizes, "draw_sheet 没有画任何文字？")
-        self.assertEqual(set(sizes), {16}, sizes)
+def run_main(argv: list[str]) -> tuple[int, str, str]:
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        try:
+            code = render_brief.main(argv)
+        except SystemExit as exc:  # argparse 用 SystemExit 报参数错误
+            code = int(exc.code or 0)
+    return code, out.getvalue(), err.getvalue()
 
 
-class TypographyTest(unittest.TestCase):
-    def test_alibaba_regular_and_bold_files(self):
-        sheet = render_brief.Sheet()
-        regular = sheet.font(16)
-        bold = sheet.font(16, bold=True)
-        self.assertEqual(regular.getname(), ("Alibaba PuHuiTi 3.0", "55 Regular"))
-        self.assertEqual(bold.getname(), ("Alibaba PuHuiTi 3.0", "85 Bold"))
-        self.assertIsNot(regular, bold)
-        self.assertIs(sheet._font(True, 16), bold)
+class QuoteParsingTest(unittest.TestCase):
+    """实测响应（2026-11-13 收盘）→ 面板 12 行。期望值是人工核对过的字面量。"""
 
-    def test_digits_and_titles_bold_and_other_text_regular(self):
-        sheet = render_brief.Sheet()
-        regular = sheet.font(16)
-        bold = sheet.font(16, bold=True)
-        self.assertEqual(list(sheet._runs("涨幅 +12.5%")),
-                         [(False, "涨幅 "), (True, "+12.5%")])
+    def test_fixture_panel_matches_reviewed_values(self):
+        panel = mq.demo_panel()
+        self.assertEqual(panel.live_rows, 12)
+        self.assertEqual(panel.sources, {source: True for source in ALL_SOURCES})
+        self.assertEqual(cells_by_key(panel), {
+            "sh000001": ("3,634.35", "-0.59%", "472亿", "7,706亿"),
+            "sz399001": ("10,968.79", "-2.05%", "559亿", "8,851亿"),
+            "sz399006": ("2,426.08", "-3.32%", "170亿", "4,353亿"),
+            "hkHSI": ("23,637.60", "-1.55%", "115亿", "1,959亿"),
+            "hkHSTECH": ("3,813.19", "-3.02%", "15.2亿", "663亿"),
+            "usDJI": ("52,347.55", "+0.10%", "6.45亿", "--"),
+            "usIXIC": ("25,136.27", "-0.91%", "77.4亿", "--"),
+            "usINX": ("7,561.67", "-0.40%", "27.3亿", "--"),
+            "KOSPI": ("5,290.53", "-0.98%", "2.48亿", "16.7万亿"),
+            "KOSDAQ": ("699.66", "+0.45%", "4.55亿", "5.79万亿"),
+            "N225": ("61,142.35", "+0.53%", "17.9亿", "--"),
+            "TOPX": ("3,941.57", "+0.11%", "27.4亿", "--"),
+        })
+        self.assertEqual(render_brief.header_time_text(panel), "11-14 06:15")
+        self.assertEqual(render_brief.footer_left_text(panel), "两市成交 1.66万亿")
 
-        calls = []
-        original = render_brief.MonoFont.render
-
-        def recording(self_font, draw, x, y, text, fill):
-            calls.append((self_font, text, x, y, fill))
-            return original(self_font, draw, x, y, text, fill)
-
-        with mock.patch.object(render_brief.MonoFont, "render", recording):
-            sheet.text(0, 0, "正文 123", 16)
-            sheet.text(0, 20, "标题 123", 16, bold=True)
-        self.assertEqual(len(calls), 4)
-        self.assertIs(calls[0][0], regular)
-        self.assertIs(calls[1][0], bold)
-        self.assertIs(calls[2][0], bold)
-        self.assertIs(calls[3][0], bold)
-        self.assertTrue(all(isinstance(call[2], int) and isinstance(call[3], int)
-                            for call in calls))
-
-    def test_native_mono_pixels_and_shared_metrics(self):
-        sheet = render_brief.Sheet()
-        font = sheet.font(16)
-        text = "阅读清晰 AI 123"
-        layout = font.layout(text)
-        self.assertEqual(font.measure(text), layout.advance)
-        self.assertTrue(all(isinstance(p.x, int) and isinstance(p.y, int)
-                            for p in layout.placements))
-        self.assertTrue(all(p.glyph.image.mode == "1" for p in layout.placements))
-        sheet.text(12, 48, text, 16)
-        self.assertEqual(sum(sheet.image.histogram()[1:255]), 0)
-        self.assertEqual(sheet.measure(text, 16), layout.advance)
-
-
-class LayoutTest(unittest.TestCase):
-    def test_fullest_day_fits_and_fills_page(self):
-        sheet = draw()
-        bottom = lowest_ink_row(sheet)
-        self.assertLessEqual(bottom, render_brief.HEIGHT - 4)
-        # 也不能只画半页就收工（快讯区被误删之类的回归）。
-        self.assertGreaterEqual(bottom, 250)
-
-    def test_missing_market_headlines_and_sectors(self):
-        summary = {"bias": "中性", "bull": 50, "signals": 0, "headline": ""}
-        sheet = draw(summary=summary, review=None, headlines=[])
-        self.assertLessEqual(lowest_ink_row(sheet), render_brief.HEIGHT - 4)
-
-    def test_partial_indices_and_demo_flag(self):
-        review = {"date": "2026-10-16", "source": "eastmoney",
-                  "indices": FULL_REVIEW["indices"][:1]}
-        sheet = draw(review=review, demo=True)
-        self.assertLessEqual(lowest_ink_row(sheet), render_brief.HEIGHT - 4)
-
-
-class SectorLineTest(unittest.TestCase):
-    def setUp(self):
-        self.sheet = render_brief.Sheet(render_brief.FONT_PATH)
-        self.width = 346
-
-    def test_net_and_sources_shown_when_they_fit(self):
-        summary = {
-            "opportunity_sectors": [FULL_SUMMARY["opportunity_sectors"][0]],
-            "pressure_sectors": FULL_SUMMARY["pressure_sectors"],
-        }
-        line = render_brief.sector_line(self.sheet, summary, self.width)
-        self.assertIn("美联储+3·22源", line)
-        self.assertIn("地缘-9·20源", line)
-
-    def test_long_tags_degrade_without_overflowing(self):
-        summary = {
-            "opportunity_sectors": [
-                {"tag": "AI 算力", "net": 12, "sources": 38},
-                {"tag": "半导体", "net": 8, "sources": 31},
-            ],
-            "pressure_sectors": [{"tag": "贵金属", "net": -14, "sources": 29}],
-        }
-        line = render_brief.sector_line(self.sheet, summary, self.width)
-        self.assertLessEqual(
-            self.sheet.measure(line, render_brief.FONT_BODY), self.width)
-
-    def test_fallbacks(self):
-        plain = {"sectors_up": ["消费"], "sectors_down": ["地产"]}
-        self.assertIn("利好 消费",
-                      render_brief.sector_line(self.sheet, plain, self.width))
+    def test_rows_follow_the_requested_market_order(self):
         self.assertEqual(
-            render_brief.sector_line(self.sheet, {}, self.width), "暂无明确方向")
+            [(spec.market, spec.name) for spec in mq.PANEL_ROWS],
+            [("A", "上证指数"), ("A", "深证成指"), ("A", "创业板指"),
+             ("港", "恒生指数"), ("港", "恒生科技"),
+             ("美", "道琼斯"), ("美", "纳斯达克"), ("美", "标普500"),
+             ("韩", "KOSPI"), ("韩", "KOSDAQ"),
+             ("日", "日经225"), ("日", "东证指数")])
+        self.assertEqual(mq.MARKET_ORDER, ("A", "港", "美", "韩", "日"))
+        self.assertEqual(
+            [group[0] for group in render_brief.market_groups(mq.demo_panel())],
+            list(mq.MARKET_ORDER))
+
+    def test_tencent_units(self):
+        quotes = mq.parse_tencent(mq.fixture_text(mq.SOURCE_TENCENT))
+        sh = quotes["sh000001"]
+        # 沪深：成交量 手 → 股，成交额 万元 → 元。
+        self.assertAlmostEqual(sh.volume, 472_293_657 * 100)
+        self.assertAlmostEqual(sh.turnover, 77_061_417 * 1e4)
+        self.assertEqual(sh.time, datetime(2026, 11, 13, 16, 14, 27, tzinfo=mq.TZ_CN))
+        # 港股指数：腾讯只有成交额（万港元），没有成交股数。
+        hsi = quotes["hkHSI"]
+        self.assertIsNone(hsi.volume)
+        self.assertAlmostEqual(hsi.turnover, 195_857_007_140.0, delta=1e4)
+        # 美股指数：只有成交股数；成交额字段是无意义值，必须丢弃。
+        dji = quotes["usDJI"]
+        self.assertAlmostEqual(dji.volume, 645_244_111.0)
+        self.assertIsNone(dji.turnover)
+        # 美股时间是美国东部时间（11 月为冬令时 UTC-5）。
+        self.assertEqual(dji.time.astimezone(timezone.utc),
+                         datetime(2026, 11, 13, 21, 43, 26, tzinfo=timezone.utc))
+        # 环球指数：只有点位与涨跌幅。
+        for key in ("gzN225", "gzKS11", "gzKOSDAQ"):
+            self.assertGreater(quotes[key].last, 0)
+            self.assertIsNone(quotes[key].volume)
+            self.assertIsNone(quotes[key].turnover)
+
+    def test_sina_and_naver_units(self):
+        sina = mq.parse_sina_hk(mq.fixture_text(mq.SOURCE_SINA))
+        self.assertEqual(set(sina), {"hkHSI", "hkHSTECH"})
+        self.assertAlmostEqual(sina["hkHSI"].volume, 11_525_719_783.0)
+        # 新浪成交额单位是千港元，换算后应与腾讯同一量级。
+        self.assertAlmostEqual(sina["hkHSI"].turnover, 195_857_007_140.0, delta=1e9)
+
+        kr = mq.parse_naver(mq.fixture_text(mq.SOURCE_NAVER_KR))
+        self.assertEqual(set(kr), {"KOSPI", "KOSDAQ"})
+        self.assertAlmostEqual(kr["KOSPI"].volume, 247_829_000.0)
+        self.assertAlmostEqual(kr["KOSPI"].turnover, 16_718_835e6)
+        self.assertEqual(kr["KOSPI"].source, mq.SOURCE_NAVER_KR)
+
+        jp = mq.parse_naver(mq.fixture_text(mq.SOURCE_NAVER_JP))
+        self.assertEqual(set(jp), {"N225", "TOPX"})
+        self.assertAlmostEqual(jp["N225"].volume, 1_785_916_000.0)
+        # 日本指数的成交额字段不可信，一律不用。
+        self.assertIsNone(jp["N225"].turnover)
+        self.assertIsNone(jp["TOPX"].turnover)
+        self.assertEqual(jp["N225"].source, mq.SOURCE_NAVER_JP)
+
+    def test_garbage_input_yields_no_rows(self):
+        for parser in (mq.parse_tencent, mq.parse_sina_hk, mq.parse_naver):
+            for text in ("", "<html>502 Bad Gateway</html>", "{}", "[]", "null",
+                         'v_sh000001="1~2~3";', 'var hq_str_rt_hkHSI="";',
+                         '{"datas": "oops"}', '{"datas": [1, null, {}]}'):
+                self.assertEqual(parser(text), {}, (parser.__name__, text))
+        self.assertEqual(mq.parse_naver(None), {})
+
+    def test_dirty_values_drop_the_row(self):
+        text = mq.fixture_text(mq.SOURCE_TENCENT)
+        line = next(item for item in text.split(";") if "v_sh000001=" in item)
+        fields = line.split("~")
+
+        def with_field(index: int, value: str) -> dict:
+            changed = list(fields)
+            changed[index] = value
+            return mq.parse_tencent("~".join(changed) + ";")
+
+        self.assertIn("sh000001", with_field(3, fields[3]))
+        self.assertNotIn("sh000001", with_field(3, "0.00"))      # 点位为 0
+        self.assertNotIn("sh000001", with_field(3, "-1"))        # 负点位
+        self.assertNotIn("sh000001", with_field(3, "N/A"))
+        self.assertNotIn("sh000001", with_field(3, "1e5"))       # 只接受纯十进制
+        self.assertNotIn("sh000001", with_field(3, "nan"))
+        self.assertNotIn("sh000001", with_field(32, "50.01"))    # 涨跌幅离谱
+        self.assertNotIn("sh000001", with_field(32, ""))
+        self.assertIn("sh000001", with_field(32, "-50"))
+        # 成交量缺失只影响那一格，行情行仍然有效。
+        quote = with_field(36, "")["sh000001"]
+        self.assertIsNone(quote.volume)
+        self.assertIsNotNone(quote.turnover)
+        # 时间写法不对：行有效，时间未知。
+        self.assertIsNone(with_field(30, "2026-11-13")["sh000001"].time)
 
 
-class WrapAndPayloadTest(unittest.TestCase):
-    def test_english_headline_uses_pixel_width_not_char_count(self):
-        sheet = render_brief.Sheet(render_brief.FONT_PATH)
-        line = sheet.wrap(HEADLINES[0], render_brief.FONT_SMALL,
-                          render_brief.CONTENT_W - 10, 1)[0]
-        # 旧版按 38 个字符硬截；按像素折行后英文一行能装下更多。
-        self.assertGreater(len(line), 38)
-        self.assertLessEqual(
-            sheet.measure(line, render_brief.FONT_SMALL),
-            render_brief.CONTENT_W - 10)
+class MergeRulesTest(unittest.TestCase):
+    def test_tencent_only_keeps_prices_but_not_volumes(self):
+        panel = panel_from(mq.SOURCE_TENCENT)
+        cells = cells_by_key(panel)
+        self.assertEqual(panel.live_rows, 11)
+        self.assertEqual(panel.sources[mq.SOURCE_TENCENT], True)
+        self.assertEqual(panel.sources[mq.SOURCE_SINA], False)
+        # A 股、美股完全不受影响。
+        self.assertEqual(cells["sh000001"], ("3,634.35", "-0.59%", "472亿", "7,706亿"))
+        self.assertEqual(cells["usINX"], ("7,561.67", "-0.40%", "27.3亿", "--"))
+        # 港股少了新浪的成交股数。
+        self.assertEqual(cells["hkHSI"], ("23,637.60", "-1.55%", "--", "1,959亿"))
+        # 日韩只剩腾讯环球指数的点位。
+        self.assertEqual(cells["KOSPI"][2:], ("--", "--"))
+        self.assertNotEqual(cells["KOSPI"][0], "--")
+        self.assertEqual(cells["N225"][2:], ("--", "--"))
+        self.assertNotEqual(cells["N225"][0], "--")
+        # 东证指数只信 Naver。
+        self.assertEqual(cells["TOPX"], ("--", "--", "--", "--"))
 
-    def test_numeric_tokens_are_not_split_between_lines(self):
-        sheet = render_brief.Sheet(render_brief.FONT_PATH)
-        text = "成交额 3,172 亿"
-        lines = sheet.wrap_all(text, 16, 100)
-        self.assertEqual("".join(lines), text)
-        self.assertTrue(any("3,172" in line for line in lines), lines)
-        self.assertTrue(all("3," not in line or "3,172" in line for line in lines), lines)
-        date_lines = sheet.wrap_all("日期 2026-10-24 后", 16, 90)
-        self.assertTrue(any("2026-10-24" in line for line in date_lines), date_lines)
+    def test_without_tencent_the_panel_is_not_live(self):
+        panel = panel_from(mq.SOURCE_SINA, mq.SOURCE_NAVER_KR, mq.SOURCE_NAVER_JP)
+        self.assertEqual(panel.live_rows, 6)
+        self.assertLess(panel.live_rows, render_brief.DEFAULT_MIN_ROWS)
+        cells = cells_by_key(panel)
+        # 腾讯缺行时港股整行用新浪（点位、涨跌幅、成交量、成交额都有）。
+        self.assertEqual(cells["hkHSI"], ("23,637.60", "-1.55%", "115亿", "1,959亿"))
+        self.assertEqual(cells["sh000001"], ("--", "--", "--", "--"))
+        self.assertEqual(render_brief.footer_left_text(panel), "两市成交 --")
 
-    def test_payload_contract_unchanged(self):
-        sheet = draw()
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp)
-            sheet.save(out, {"generated_at": "test"})
-            payload = (out / "latest.bin").read_bytes()
-            self.assertEqual(len(payload), 15008)
-            self.assertEqual(payload[:4], b"AIB1")
-            self.assertEqual(struct.unpack("<HH", payload[4:8]), (400, 300))
-            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-            self.assertEqual(meta["bytes"], 15008)
-            self.assertTrue((out / "latest.png").exists())
+    def test_hk_volume_comes_from_sina(self):
+        tencent = mq.Quote(last=100.0, pct=1.0, turnover=5e9, source=mq.SOURCE_TENCENT)
+        sina = mq.Quote(last=101.0, pct=2.0, volume=3e8, turnover=6e9, source=mq.SOURCE_SINA)
+        merged = mq._merge_hk(tencent, sina)
+        self.assertEqual((merged.last, merged.pct, merged.volume, merged.turnover),
+                         (100.0, 1.0, 3e8, 5e9))
+        self.assertEqual(mq._merge_hk(None, sina), sina)
+        self.assertFalse(mq._merge_hk(None, None).valid)
+        # 腾讯没给成交额时用新浪的。
+        tencent.turnover = None
+        self.assertEqual(mq._merge_hk(tencent, sina).turnover, 6e9)
 
+    def test_n225_source_selection(self):
+        moment = datetime(2026, 11, 13, 14, 0, tzinfo=mq.TZ_CN)
+        naver = mq.Quote(last=61000.0, pct=0.5, volume=1.7e9, status="OPEN",
+                         time=moment, source=mq.SOURCE_NAVER_JP)
+        tencent = mq.Quote(last=61100.0, pct=0.66, source=mq.SOURCE_TENCENT)
+        # 盘中：腾讯实时点位 + Naver 成交量。
+        merged = mq._merge_n225(naver, tencent)
+        self.assertEqual((merged.last, merged.pct, merged.volume), (61100.0, 0.66, 1.7e9))
+        # 收盘后：Naver 的官方收盘价。
+        naver.status = "CLOSE"
+        self.assertIs(mq._merge_n225(naver, tencent), naver)
+        # 两源相差超过 3%：腾讯的环球指数源异常，改信 Naver。
+        naver.status = "OPEN"
+        tencent.last = 61000.0 * 1.031
+        self.assertIs(mq._merge_n225(naver, tencent), naver)
+        tencent.last = 61000.0 * 1.029
+        self.assertEqual(mq._merge_n225(naver, tencent).last, tencent.last)
+        # 只有一个源。
+        self.assertIs(mq._merge_n225(None, tencent), tencent)
+        self.assertIs(mq._merge_n225(naver, None), naver)
+        self.assertFalse(mq._merge_n225(None, None).valid)
 
-# ---------------------------------------------------------------- 多页杂志版回归
-def multi_data(brief=None):
-    heatmap = {
-        "headline": "测试热力图",
-        "keywords": [
-            {"display": "AI", "heat": 88, "net": 3, "sentiment_label": "偏多",
-             "sources": 4, "mentions": 9,
-             "etf_pair": [{"code": "03438.HK"}, {"code": "03140.HK"}]},
-            {"display": "黄金", "heat": 42, "net": -1, "sentiment_label": "偏空",
-             "sources": 2, "mentions": 3,
-             "etf_pair": [{"code": "02840.HK"}, {"code": "03566.HK"}]},
-        ],
-    }
-    policy = {
-        "headline": "政策信号保持中性，等待后续确认。", "stance": "中性",
-        "buckets": [{"tag": "央行 · 流动性", "net": 1, "sources": 3,
-                     "mentions": 5, "stance": "偏鸽"}],
-    }
-    deep_layer = {
-        "kb": {
-            "note": "知识库 18 条政策条目（央行报告 / 财政部文件）· 检索式 612 字 · 命中 1 条",
-            "hits": [{
-                "id": "MFCOM-DUALUSE-202412", "date": "2024-12", "issuer": "国务院 / 商务部",
-                "doctype": "行政法规", "title": "两用物项出口管制条例施行",
-                "market_effect": "管制与反制属于典型的供给侧扰动，短期利好相关资源的定价权方。",
-            }],
-            "comparison": ["历史对照：本次信号取向偏鹰，与历史方向一致。"],
-        },
-        "modifiers": {
-            "hits": [{"word": "从严", "sense": "监管口径：执法尺度与违规成本同步抬升",
-                      "strength": -1.5, "market": "合规成本上升，小市值与题材股承压。"}],
-        },
-        "sentiment": {
-            "overall": {"label": "中性", "score": 0.05, "positive": 3, "negative": 3,
-                        "neutral": 4, "total": 10},
-            "official": {"label": "偏多", "score": 0.31, "positive": 2, "negative": 0,
-                         "neutral": 1, "total": 3},
-            "market": {"label": "偏空", "score": -0.28, "positive": 1, "negative": 3,
-                       "neutral": 3, "total": 7},
-            "gap": 0.324,
-            "items": [{"title": "联创光电面临多重危机", "source": "财联社 深度", "score": -3}],
-        },
-        "graph": {
-            "chains": [{
-                "bucket": "地缘与贸易政策", "subject": "白宫 / 商务部 / 外交部",
-                "industries": ["半导体设备", "存储芯片"], "upstream": ["出口管制清单"],
-                "midstream": ["供应链改道与转口"], "downstream": ["终端成本"],
-                "direction": "净空", "net": -7, "mentions": 43, "sources": 21,
-                "nature": "结构性", "horizon": "6-36 个月",
-            }],
-        },
-        "reasoning": {
-            "confidence": "高",
-            "steps": [{"no": "01", "label": "宏观背景", "text": "政策面热度集中在地缘与贸易政策。",
-                       "evidence": [{"source": "MKTNews 快讯", "text": "Iran FM: talks"}]}],
-        },
-        "models": {
-            "shock": -0.689,
-            "series": {"name": "合成演示序列", "source": "synthetic", "points": 60,
-                       "note": "无实时行情：使用确定性合成序列演示模型链路。"},
-            "lstm": {"direction": "上行", "summary": "10 日累计 +0.43%（上行）。"},
-            "prophet": {"summary": "样本内趋势 +5.83%，拟合 R²=0.969。"},
-        },
-        "research": {
-            "title": "政策影响研报 · 地缘与贸易政策、货币政策",
-            "rating": "政策承压（偏空）", "rating_note": "收紧 / 管制取向且政策面净空占优",
-            "abstract": "当日政策面覆盖 47 个数据源、123 条提及。",
-            "horizon": "短期 1-4 周 · 中期 1-6 个月 · 长期 6-36 个月",
-            "beneficiaries": ["全球风险资产", "贵金属"],
-            "pressured": [{"industry": "地缘与贸易政策", "note": "政策净空维度，估值与情绪受压"}],
-            "long_term": [{"industry": "半导体设备", "direction": "净空", "nature": "结构性",
-                           "horizon": "6-36 个月", "impact": "沿供应链改道传导。"}],
-            "risks": ["高估值方向存在二次调整风险"],
-            "watch_window": "政策窗口期 · 预期差 +0.32",
-        },
-    }
-    return {
-        "summary": FULL_SUMMARY,
-        "review_ashare": FULL_REVIEW,
-        "review_hk": FULL_REVIEW,
-        "review_us": FULL_REVIEW,
-        "heatmap": heatmap,
-        "policy": policy,
-        "policy_deep_layer": deep_layer,
-        "brief": brief if brief is not None else {
-            "测试源": [{"title": title} for title in HEADLINES],
-        },
-    }
+    def test_kr_prefers_naver(self):
+        naver = mq.Quote(last=5290.0, pct=-1.0, volume=2e8, turnover=1e13)
+        tencent = mq.Quote(last=5291.0, pct=-0.9)
+        self.assertIs(mq._merge_kr(naver, tencent), naver)
+        self.assertIs(mq._merge_kr(None, tencent), tencent)
+        self.assertFalse(mq._merge_kr(None, None).valid)
+
+    def test_as_of_is_the_newest_quote_time(self):
+        panel = mq.demo_panel()
+        newest = max(row.quote.time for row in panel.rows if row.quote.time)
+        self.assertEqual(panel.as_of, newest)
+        self.assertEqual(mq.fmt_as_of(None), "--")
+        empty = mq.build_panel({})
+        self.assertIsNone(empty.as_of)
+        self.assertEqual(empty.live_rows, 0)
+
+    def test_collect_panel_isolates_source_failures(self):
+        def fetch(url, encoding="utf-8", headers=None):
+            if url == mq.NAVER_KR_URL:
+                raise OSError("simulated timeout")
+            if url == mq.SINA_HK_URL:
+                # 新浪必须带 Referer，否则接口返回 403。
+                self.assertEqual(headers, {"Referer": mq.SINA_REFERER})
+            for source, source_url, *_ in mq.SOURCES:
+                if source_url == url:
+                    return mq.fixture_text(source)
+            raise AssertionError(url)
+
+        panel = mq.collect_panel(fetch)
+        self.assertFalse(panel.demo)
+        self.assertEqual(panel.sources[mq.SOURCE_NAVER_KR], False)
+        self.assertEqual(panel.sources[mq.SOURCE_TENCENT], True)
+        self.assertEqual(panel.live_rows, 12)   # 韩国两行退回腾讯的点位
+        self.assertEqual(cells_by_key(panel)["KOSPI"][2:], ("--", "--"))
 
 
-def manual_renderer(page_count):
-    renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
-    for index in range(page_count):
-        sheet = renderer.new_page("排版校样", "TEST")
-        sheet.text(render_brief.PAGE_MARGIN, render_brief.BODY_TOP,
-                   f"第 {index + 1} 页正文", render_brief.FONT_BODY)
-        renderer.add_page(sheet)
-    renderer.finalize(NOW)
-    return renderer
+class NumberFormatTest(unittest.TestCase):
+    def test_price(self):
+        self.assertEqual(mq.fmt_price(61142.345), "61,142.35")
+        self.assertEqual(mq.fmt_price(699.66), "699.66")
+        self.assertEqual(mq.fmt_price(1234567.891), "1,234,567.89")
+        for bad in (None, 0.0, -1.0, float("nan"), float("inf"), 1e9):
+            self.assertEqual(mq.fmt_price(bad), "--")
+
+    def test_pct_always_signed(self):
+        self.assertEqual(mq.fmt_pct(0.53), "+0.53%")
+        self.assertEqual(mq.fmt_pct(-2.05), "-2.05%")
+        self.assertEqual(mq.fmt_pct(0.0), "0.00%")
+        self.assertEqual(mq.fmt_pct(-0.004), "0.00%")   # 四舍五入后为零不带负号
+        self.assertEqual(mq.fmt_pct(0.005), "+0.01%")
+        for bad in (None, float("nan"), float("-inf"), 1e6):
+            self.assertEqual(mq.fmt_pct(bad), "--")
+
+    def test_cn_number_units(self):
+        self.assertEqual(mq.fmt_cn_number(9999.0), "9,999")
+        self.assertEqual(mq.fmt_cn_number(9999.5), "1.00万")
+        self.assertEqual(mq.fmt_cn_number(12345.0), "1.23万")
+        self.assertEqual(mq.fmt_cn_number(999500.0), "100万")
+        self.assertEqual(mq.fmt_cn_number(99995000.0), "1.00亿")
+        self.assertEqual(mq.fmt_cn_number(6.45244111e8), "6.45亿")
+        self.assertEqual(mq.fmt_cn_number(15.17e8), "15.2亿")
+        self.assertEqual(mq.fmt_cn_number(472.29e8), "472亿")
+        self.assertEqual(mq.fmt_cn_number(9999.4e8), "9,999亿")
+        self.assertEqual(mq.fmt_cn_number(9999.5e8), "1.00万亿")
+        self.assertEqual(mq.fmt_cn_number(1.655668e12), "1.66万亿")
+        self.assertEqual(mq.fmt_cn_number(16.718835e12), "16.7万亿")
+        for bad in (None, 0.0, -5.0, float("nan"), float("inf"), 1e18):
+            self.assertEqual(mq.fmt_cn_number(bad), "--")
+
+    def test_number_parser_is_strict(self):
+        self.assertEqual(mq._to_float("3,634.35"), 3634.35)
+        self.assertEqual(mq._to_float(" -0.59 "), -0.59)
+        self.assertEqual(mq._to_float("+.5"), 0.5)
+        self.assertEqual(mq._to_float(12), 12.0)
+        for bad in (None, "", "-", "1e5", "inf", "nan", "0x10", "12 34", "1.2.3", "--"):
+            self.assertIsNone(mq._to_float(bad), bad)
 
 
-class MultiPageMagazineTest(unittest.TestCase):
-    def test_every_page_has_read_time_and_passes_preflight(self):
-        renderer = render_brief.draw_all_pages(multi_data(), NOW, 51, 69, False)
-        renderer.validate()
-        total = len(renderer.pages)
-        self.assertGreater(total, 1)
-        for sheet in renderer.pages:
-            self.assertEqual(sheet.image.size, (400, 300))
-            self.assertTrue(any(r["region"] == "body" and r["text"].strip()
-                                for r in sheet.text_runs))
-            footer = [r["text"] for r in sheet.text_runs if r["region"] == "footer"]
-            self.assertIn("读取 11:17", footer)
-            # 页码已取消：页脚不得再出现 "NN / MM"。
-            self.assertFalse(any(" / " in text for text in footer))
-            self.assertTrue(all(r["size"] == 16 for r in sheet.text_runs))
-            title_run = next(r for r in sheet.text_runs
-                             if r["region"] == "header" and r["text"] == sheet.page_title)
-            self.assertTrue(title_run["bold"])
+class PanelRenderTest(unittest.TestCase):
+    def setUp(self):
+        self.panel = mq.build_panel({source: mq.fixture_text(source) for source in ALL_SOURCES})
+        self.sheet = render_brief.draw_panel(self.panel)
 
-    def test_long_english_headline_is_fully_paginated(self):
-        title = "Market outlook " + "alpha beta gamma delta " * 80 + "final unique tail"
-        renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
-        render_brief.draw_news_pages(renderer, {"测试源": [{"title": title}]}, 1, 0)
-        renderer.finalize(NOW)
-        renderer.validate()
-        self.assertGreater(len(renderer.pages), 1)
-        rendered = "".join(
-            run["text"] for sheet in renderer.pages for run in sheet.text_runs
-            if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL
-            and run["text"] != "001"
-        )
-        self.assertEqual(rendered, " ".join(title.split()))
-        self.assertTrue(rendered.endswith("final unique tail"))
-        self.assertNotIn("…", rendered)
-        title_runs = [run for sheet in renderer.pages for run in sheet.text_runs
-                      if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL
-                      and run["text"] != "001"]
-        self.assertTrue(title_runs)
-        self.assertTrue(all(run["bold"] for run in title_runs))
-        for sheet in renderer.pages:
-            body_x = [run["bbox"][0] for run in sheet.text_runs
-                      if run["region"] == "body" and run["size"] == render_brief.FONT_SMALL]
-            self.assertTrue(any(x < 200 for x in body_x))
-            self.assertTrue(any(x >= 200 for x in body_x), "超长标题末页不应只剩单侧一栏")
+    def test_full_panel_passes_layout_validation(self):
+        render_brief.validate(self.sheet)
+        self.assertEqual(self.sheet.image.size, (400, 300))
+        # 只有纯黑 / 纯白。
+        histogram = self.sheet.image.histogram()
+        self.assertEqual(sum(histogram[1:255]), 0)
+        self.assertGreater(histogram[0], 5000)
+        # 全页 16px。
+        self.assertEqual({run["size"] for run in self.sheet.text_runs}, {16})
+        # 标题 + 行情时间 + 5 个列标题 + 5 个市场标签 + 12 行 × 5 格 + 页脚 = 73 段文字。
+        self.assertEqual(len(self.sheet.text_runs), 2 + 5 + 5 + 12 * 5 + 1)
 
-    def test_all_forty_heat_keywords_are_kept(self):
-        data = multi_data()
-        data["heatmap"]["keywords"] = [
-            {"display": f"K{i:02d}", "heat": i, "net": 0,
-             "sentiment_label": "中性", "etf_pair": [{"code": "03000.HK"}]}
-            for i in range(1, 41)
+    def test_every_degraded_panel_still_validates(self):
+        combos = [
+            (),
+            (mq.SOURCE_TENCENT,),
+            (mq.SOURCE_SINA,),
+            (mq.SOURCE_NAVER_KR, mq.SOURCE_NAVER_JP),
+            (mq.SOURCE_TENCENT, mq.SOURCE_SINA),
+            (mq.SOURCE_TENCENT, mq.SOURCE_NAVER_JP),
         ]
-        renderer = render_brief.MultiPageRenderer(render_brief.FONT_PATH)
-        render_brief.draw_heatmap_pages(renderer, data["heatmap"], 1, 0)
-        renderer.finalize(NOW)
-        renderer.validate()
-        self.assertEqual(len(renderer.pages), 5)
-        rendered = "\n".join(
-            run["text"] for sheet in renderer.pages for run in sheet.text_runs
-        )
-        for i in range(1, 41):
-            self.assertIn(f"K{i:02d}", rendered)
+        for sources in combos:
+            sheet = render_brief.draw_panel(panel_from(*sources))
+            render_brief.validate(sheet)
+            self.assertEqual(len(sheet.to_bitmap()), 15000, sources)
 
-    def _news_brief(self, source_count=12, per_source=3):
-        return {
-            f"测试源{i:02d}": [
-                {"title": f"来源{i:02d} 快讯{j}"} for j in range(per_source)
-            ] for i in range(source_count)
-        }
+    def test_widest_cells_do_not_collide(self):
+        panel = self.panel
+        for row in panel.rows:
+            row.quote = mq.Quote(last=888888.88, pct=-48.88, volume=9.999e11,
+                                 turnover=9.999e15,
+                                 time=datetime(2026, 12, 28, 23, 58, tzinfo=mq.TZ_CN))
+        sheet = render_brief.draw_panel(panel, "离线模式 暂停更新")
+        render_brief.validate(sheet)
+        self.assertEqual(render_brief.row_cells(panel.rows[0]),
+                         ("888,888.88", "-48.88%", "9,999亿", "9,999万亿"))
 
-    def _news_only_data(self, brief):
-        data = multi_data(brief)
-        # 只留快讯，方便校验页位分配（政策深度/研报属于分析栏目，另有专门用例）。
-        data.update({"review_ashare": None, "review_hk": None, "review_us": None,
-                     "heatmap": None, "policy": None, "policy_deep_layer": None})
-        return data
+    def test_overlapping_text_is_rejected(self):
+        self.sheet.text(render_brief.NAME_X, render_brief.row_y(0), "叠字")
+        with self.assertRaises(render_brief.LayoutError):
+            render_brief.validate(self.sheet)
 
-    def test_full_news_pushes_every_title_when_budget_allows(self):
-        brief = self._news_brief(source_count=6, per_source=4)
-        data = self._news_only_data(brief)
-        renderer = render_brief.render_with_page_budget(
-            data, NOW, 0, len(brief), False, max_pages=48
-        )
-        meta = renderer.layout_meta
-        self.assertTrue(meta["news_full"])
-        self.assertEqual(meta["news_mode"], "full")
-        self.assertEqual(meta["news_available"], 24)
-        self.assertEqual(meta["news_included"], 24)
-        self.assertEqual(meta["news_omitted"], 0)
-        rendered = "\n".join(run["text"] for sheet in renderer.pages
-                              for run in sheet.text_runs)
-        for i in range(6):
-            for j in range(4):
-                self.assertIn(f"来源{i:02d} 快讯{j}", rendered)
-        self.assertIn("全量", rendered)
+    def test_text_outside_the_canvas_is_rejected(self):
+        self.sheet.text(390, 150, "越界文字")
+        with self.assertRaises(render_brief.LayoutError):
+            render_brief.validate(self.sheet)
 
-    def test_page_budget_fills_news_up_to_firmware_limit(self):
-        brief = self._news_brief()
-        data = self._news_only_data(brief)
-        renderer = render_brief.render_with_page_budget(
-            data, NOW, 0, len(brief), False, max_pages=8
-        )
-        meta = renderer.layout_meta
-        # 页位用满：正好 8 页，且收录条数多于旧的「每源 1 条」口径（12 条）。
-        self.assertEqual(len(renderer.pages), 8)
-        self.assertEqual(meta["news_available"], 36)
-        self.assertGreater(meta["news_included"], 12)
-        self.assertEqual(meta["news_omitted"], 36 - meta["news_included"])
-        # 各源均衡：纳入条数最多的源与最少的源相差不超过 1 条。
-        counts = []
-        rendered = [run["text"] for sheet in renderer.pages for run in sheet.text_runs]
-        for i in range(12):
-            counts.append(sum(1 for text in rendered
-                              if text.startswith(f"来源{i:02d} 快讯")))
-        self.assertLessEqual(max(counts) - min(counts), 1, counts)
-        self.assertEqual(renderer.pages[0].page_title, "AI 每日总结")
+    def test_footer_right_is_left_blank_for_the_device(self):
+        x0, y0, x1, y1 = render_brief.DEVICE_OVERLAY_BOX
+        region = self.sheet.image.crop((x0, y0, x1, y1))
+        self.assertEqual(region.getextrema(), (255, 255))
+        # 文档预览 / 固件基准图可以把状态文字画进去，位置在这块区域内。
+        with_status = render_brief.draw_panel(self.panel, "每分钟更新")
+        render_brief.validate(with_status)
+        self.assertEqual(with_status.image.crop((x0, y0, x1, y1)).getextrema(), (0, 255))
+        status_run = with_status.text_runs[-1]
+        self.assertEqual(status_run["text"], "每分钟更新")
+        self.assertGreaterEqual(status_run["bbox"][0], x0)
+        self.assertLessEqual(status_run["bbox"][2], x1)
 
-    def test_news_pool_is_source_balanced(self):
-        brief = self._news_brief(source_count=3, per_source=3)
-        pool = [title for _label, title in render_brief._news_pool(brief)]
-        self.assertEqual(pool[:3], ["来源00 快讯0", "来源01 快讯0", "来源02 快讯0"])
-        self.assertEqual(pool[3:6], ["来源00 快讯1", "来源01 快讯1", "来源02 快讯1"])
-        self.assertEqual(len(pool), 9)
-        self.assertEqual(len(render_brief._group_news(brief, 2)["财经快讯"]), 6)
+    def test_header_is_white_on_black(self):
+        bitmap = self.sheet.to_bitmap()
+        self.assertEqual(bitmap[0], 0xFF)                       # 左上角是黑条
+        self.assertEqual(bitmap[50 * render_brief.HEADER_BAR_BOTTOM], 0xFF)
+        self.assertEqual(bitmap[50 * (render_brief.HEADER_BAR_BOTTOM + 1)], 0x00)
+        self.assertEqual(bitmap[-1], 0x00)                      # 右下角留白
 
-    def test_explicit_news_quota_still_supported(self):
-        brief = self._news_brief()
-        data = self._news_only_data(brief)
-        renderer = render_brief.render_with_page_budget(
-            data, NOW, 0, len(brief), False, max_pages=48, news_per_source=2
-        )
-        self.assertEqual(renderer.layout_meta["news_per_source"], 2)
-        self.assertEqual(renderer.layout_meta["news_included"], 24)
-        self.assertFalse(renderer.layout_meta["news_full"])
+    def test_demo_panel_is_labelled(self):
+        demo = render_brief.draw_panel(mq.demo_panel())
+        render_brief.validate(demo)
+        self.assertEqual(demo.text_runs[0]["text"], "全球行情 · 离线演示")
+        self.assertEqual(self.sheet.text_runs[0]["text"], "全球行情")
 
-    def test_policy_deep_and_research_pages_are_rendered(self):
-        data = multi_data()
-        renderer = render_brief.draw_all_pages(data, NOW, 51, 69, False)
-        renderer.validate()
-        titles = [sheet.page_title for sheet in renderer.pages]
-        self.assertIn("AI 政策深度", titles)
-        self.assertIn("AI 政策研报", titles)
-        rendered = "\n".join(run["text"] for sheet in renderer.pages
-                              for run in sheet.text_runs)
-        # 网页两栏的关键信息都要落到设备图上，且字典条目不能打印成 {'a': 'b'}。
-        for text in ("知识库", "传导图谱", "推理链", "Prophet", "LSTM",
-                     "受益 全球风险资产", "承压 地缘与贸易政策"):
-            self.assertIn(text, rendered)
-        self.assertNotIn("{'", rendered)
-        self.assertNotIn("':", rendered)
-
-    def test_policy_deep_sections_are_skipped_without_data(self):
-        data = multi_data()
-        data["policy_deep_layer"] = None
-        renderer = render_brief.draw_all_pages(data, NOW, 51, 69, False)
-        renderer.validate()
-        titles = [sheet.page_title for sheet in renderer.pages]
-        self.assertNotIn("AI 政策深度", titles)
-        self.assertNotIn("AI 政策研报", titles)
-
-    def test_manifest_matches_payload_and_parses_back(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp)
-            manual_renderer(2).save(out, {"generated_at": "2026-10-27 04:03:00"})
-            text = (out / "version.txt").read_text(encoding="utf-8")
-            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-            info = render_brief.parse_manifest(text)
-            self.assertEqual(info["sha256"], meta["sha256"])
-            self.assertEqual(int(info["pages"]), 2)
-            self.assertEqual(int(info["bytes"]), meta["bytes"])
-            self.assertEqual(int(info["manifest"]), render_brief.MANIFEST_VERSION)
-            self.assertLess(len(text), 320)  # 设备清单上限 320 字节
-            self.assertEqual(render_brief.parse_manifest(""), {})
-
-    def test_page_cap_matches_firmware_uint8_field(self):
-        contract = (render_brief.ROOT / "RLCD_CLOCK" / "main" / "network"
-                    / "aibrief_contract.h").read_text(encoding="utf-8")
-        self.assertIn("inline constexpr int kMaxPages = 255;", contract)
-        self.assertEqual(render_brief.MAX_PAGES, 255)
-        self.assertIn("inline constexpr uint32_t kPageRotateSeconds = 30;", contract)
-
-    def test_demo_collection_is_fully_offline(self):
-        with mock.patch.object(render_brief.sources, "collect_all",
-                               side_effect=AssertionError("demo 不应联网")):
-            data = render_brief.collect_brief_002(demo=True)
-        self.assertEqual(len(data["brief"]), 69)
-        self.assertEqual(data["review_ashare"]["source"], "snapshot")
-
-    def test_save_removes_stale_pages_and_writes_contact_sheet(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp)
-            manual_renderer(2).save(out, {"test": True})
-            self.assertTrue((out / "page_02.png").exists())
-            manual_renderer(1).save(out, {"test": True})
-            self.assertFalse((out / "page_02.png").exists())
-            self.assertTrue((out / "latest_contact_sheet.png").exists())
-            self.assertEqual(len((out / "latest.bin").read_bytes()), 15008)
-            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-            self.assertEqual(meta["pages"], 1)
-            self.assertTrue(meta["layout_validated"])
-
-    def test_overlap_blocks_save_before_creating_output(self):
-        renderer = manual_renderer(1)
-        sheet = renderer.pages[0]
-        sheet.text(render_brief.PAGE_MARGIN, render_brief.BODY_TOP,
-                   "叠压文字", render_brief.FONT_BODY)
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "must-not-exist"
-            with self.assertRaises(render_brief.LayoutError):
-                renderer.save(out, {})
-            self.assertFalse(out.exists())
-
-    def test_gray_pixels_block_save(self):
-        renderer = manual_renderer(1)
-        renderer.pages[0].image.putpixel((0, 0), 128)
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "must-not-exist"
-            with self.assertRaisesRegex(render_brief.LayoutError, "灰阶像素"):
-                renderer.save(out, {})
-            self.assertFalse(out.exists())
+    def test_numeric_runs_use_bold(self):
+        runs = lambda text: list(self.sheet._runs(text))  # noqa: E731
+        self.assertEqual(runs("472亿"), [(True, "472"), (False, "亿")])
+        self.assertEqual(runs("标普500"), [(False, "标普"), (True, "500")])
+        self.assertEqual(runs("11-14 06:15"), [(True, "11-14"), (False, " "), (True, "06:15")])
+        self.assertEqual(runs("+0.53%"), [(True, "+0.53%")])
+        self.assertEqual(runs("--"), [(False, "--")])
+        self.assertEqual(runs("两市成交 1.66万亿"),
+                         [(False, "两市成交 "), (True, "1.66"), (False, "万亿")])
 
 
-class FreshnessAndScheduleTest(unittest.TestCase):
-    def test_live_collection_reuses_market_freshness_result(self):
-        market = {
-            "date": "2026-10-23", "source": "eastmoney", "indices": [],
-            "turnover": {}, "breadth": {}, "leaders": [], "laggards": [],
-        }
-        freshness = {"ok": True, "source": "eastmoney", "reason": "测试：最新"}
-        with (mock.patch.object(render_brief.sources, "collect_all", return_value={}),
-              mock.patch.object(render_brief.sources, "analyze_brief", return_value={}),
-              mock.patch.object(render_brief.sources, "collect_market_for_push",
-                                return_value=(market, freshness)) as collect_market,
-              mock.patch.object(render_brief.sources, "get_ashare_market",
-                                side_effect=AssertionError("不应重复抓取 A 股日 K")),
-              mock.patch.object(render_brief.sources, "get_hk_market", return_value={}),
-              mock.patch.object(render_brief.sources, "get_us_market", return_value={}),
-              mock.patch.object(render_brief.sources, "analyze_keyword_heatmap", return_value={}),
-              mock.patch.object(render_brief.sources, "analyze_policy", return_value={})):
-            data = render_brief.collect_brief_002()
-        collect_market.assert_called_once_with()
-        self.assertIs(data["market_ashare"], market)
-        self.assertIs(data["market_freshness"], freshness)
+class PayloadTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.out = Path(self.tmp.name) / "aibrief"
+        self.panel = panel_from(*ALL_SOURCES)
+        self.now = datetime(2026, 11, 14, 6, 20, tzinfo=mq.TZ_CN)
 
-    def test_stale_market_blocks_render_and_output(self):
-        data = multi_data({"live-source": [{"title": "unique live headline"}]})
-        data["market_freshness"] = {
-            "ok": False, "source": "snapshot", "reason": "测试：旧快照",
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "must-not-exist"
-            argv = ["render_brief.py", "--require-fresh-market", "--out-dir", str(out)]
-            with (mock.patch.object(render_brief, "collect_brief_002", return_value=data),
-                  mock.patch.object(render_brief, "render_with_page_budget") as render,
-                  mock.patch.object(sys, "argv", argv)):
-                self.assertEqual(render_brief.main(), 3)
-            render.assert_not_called()
-            self.assertFalse(out.exists())
+    def save(self, panel=None, now=None):
+        panel = panel or self.panel
+        with redirect_stdout(io.StringIO()):
+            return render_brief.save(render_brief.draw_panel(panel), self.out,
+                                     render_brief.panel_meta(panel, now or self.now))
 
-    def test_schedule_runs_every_three_hours_and_requires_freshness(self):
-        workflow = (render_brief.ROOT / ".github" / "workflows" / "aibrief.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertEqual(workflow.count("- cron:"), 1)
-        # 每 3 小时一次、每天 8 次：UTC 2,5,8,11,14,17,20,23 = 北京 10,13,16,19,22,01,04,07 点 10 分。
-        self.assertIn('- cron: "10 2-23/3 * * *"', workflow)
-        self.assertIn("--require-fresh-market", workflow)
-        hours = [2, 5, 8, 11, 14, 17, 20, 23]
-        beijing = sorted((hour + 8) % 24 for hour in hours)
-        self.assertEqual(beijing, [1, 4, 7, 10, 13, 16, 19, 22])
-        self.assertEqual(len(beijing), 8)
+    def test_payload_is_a_single_aib1_page(self):
+        meta = self.save()
+        payload = (self.out / "latest.bin").read_bytes()
+        self.assertEqual(len(payload), 15008)
+        self.assertEqual(payload[:4], b"AIB1")
+        self.assertEqual(struct.unpack("<HH", payload[4:8]), (400, 300))
+        self.assertEqual(meta["pages"], 1)
+        self.assertEqual(meta["bytes"], 15008)
+        self.assertEqual(meta["sha256"], hashlib.sha256(payload).hexdigest())
+        # 位图与 fixtures 里的基准图（固件自绘的比对对象）是同一张。
+        golden = (mq.FIXTURE_DIR / "panel_plain.pbm").read_bytes()
+        self.assertEqual(payload[8:], golden[len(b"P4\n400 300\n"):])
+
+    def test_manifest_matches_the_payload(self):
+        meta = self.save()
+        text = (self.out / "version.txt").read_text(encoding="utf-8")
+        self.assertTrue(text.endswith("\n"))
+        self.assertLess(len(text), 320)           # 固件清单缓冲上限
+        manifest = render_brief.parse_manifest(text)
+        self.assertEqual(manifest["manifest"], "1")
+        self.assertEqual(manifest["sha256"], meta["sha256"])
+        self.assertEqual(manifest["pages"], "1")
+        self.assertEqual(manifest["bytes"], "15008")
+        self.assertEqual(render_brief.parse_manifest("garbage"), {})
+
+    def test_meta_describes_every_row(self):
+        self.save()
+        meta = json.loads((self.out / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["panel"], "market")
+        self.assertEqual(meta["live_rows"], 12)
+        self.assertEqual(meta["total_rows"], 12)
+        self.assertEqual(meta["as_of"], "2026-11-14 06:15:59")
+        self.assertEqual(meta["generated_at"], "2026-11-14 06:20:00")
+        self.assertEqual(meta["layout"], render_brief.LAYOUT_VERSION)
+        self.assertTrue(meta["layout_validated"])
+        self.assertFalse(meta["demo"])
+        self.assertEqual([row["key"] for row in meta["rows"]],
+                         [spec.key for spec in mq.PANEL_ROWS])
+        self.assertEqual(meta["rows"][0]["cells"], ["3,634.35", "-0.59%", "472亿", "7,706亿"])
+        self.assertEqual(meta["rows"][3]["source"], mq.SOURCE_TENCENT)
+        self.assertEqual(meta["rows"][8]["source"], mq.SOURCE_NAVER_KR)
+
+    def test_unchanged_quotes_do_not_rewrite_files(self):
+        first = self.save()
+        self.assertFalse(first["unchanged"])
+        names = sorted(path.name for path in self.out.iterdir())
+        self.assertEqual(names, ["latest.bin", "latest.png", "meta.json", "version.txt"])
+        before = {name: (self.out / name).read_bytes() for name in names}
+        # 5 分钟后再跑一次、行情没变：文件逐字节不变（meta 里的生成时间也不更新）。
+        second = self.save(now=datetime(2026, 11, 14, 6, 25, tzinfo=mq.TZ_CN))
+        self.assertTrue(second["unchanged"])
+        self.assertEqual(before, {name: (self.out / name).read_bytes() for name in names})
+
+    def test_changed_quotes_replace_the_payload(self):
+        first = self.save()
+        self.panel.rows[0].quote.last += 1.0
+        second = self.save()
+        self.assertFalse(second["unchanged"])
+        self.assertNotEqual(first["sha256"], second["sha256"])
+        manifest = render_brief.parse_manifest(
+            (self.out / "version.txt").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["sha256"], second["sha256"])
+
+    def test_a_missing_file_is_restored(self):
+        self.save()
+        (self.out / "version.txt").unlink()
+        meta = self.save()
+        self.assertFalse(meta["unchanged"])
+        self.assertTrue((self.out / "version.txt").is_file())
+
+    def test_leftovers_of_the_old_multi_page_brief_are_removed(self):
+        self.out.mkdir(parents=True)
+        leftovers = ["page_01.png", "page_255.png", "latest_combined.png",
+                     "latest_contact_sheet.png"]
+        for name in leftovers:
+            (self.out / name).write_bytes(b"old")
+        (self.out / "README.txt").write_text("keep", encoding="utf-8")
+        self.save()
+        for name in leftovers:
+            self.assertFalse((self.out / name).exists(), name)
+        self.assertTrue((self.out / "README.txt").is_file())
+        # 行情没变的那一轮也会清理（旧文件可能是之后才被放回来的）。
+        (self.out / "page_02.png").write_bytes(b"old")
+        self.assertTrue(self.save()["unchanged"])
+        self.assertFalse((self.out / "page_02.png").exists())
+
+    def test_invalid_layout_writes_nothing(self):
+        sheet = render_brief.draw_panel(self.panel)
+        sheet.text(render_brief.NAME_X, render_brief.row_y(3), "叠字")
+        with self.assertRaises(render_brief.LayoutError):
+            render_brief.save(sheet, self.out, {})
+        self.assertFalse(self.out.exists())
+
+
+class CommandLineTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.out = Path(self.tmp.name) / "out"
+
+    def test_demo_render(self):
+        code, stdout, _ = run_main(["--demo", "--out-dir", str(self.out)])
+        self.assertEqual(code, 0)
+        self.assertIn("12/12 行有效", stdout)
+        self.assertEqual((self.out / "latest.bin").stat().st_size, 15008)
+        meta = json.loads((self.out / "meta.json").read_text(encoding="utf-8"))
+        self.assertTrue(meta["demo"])
+
+    def test_demo_data_never_counts_as_live(self):
+        code, _, stderr = run_main(["--demo", "--require-live", "--out-dir", str(self.out)])
+        self.assertEqual(code, 3)
+        self.assertIn("保留上一版", stderr)
+        self.assertFalse(self.out.exists())
+
+    def test_live_render_with_all_sources(self):
+        with mock.patch.object(mq, "collect_panel", return_value=panel_from(*ALL_SOURCES)):
+            code, _, _ = run_main(["--require-live", "--out-dir", str(self.out)])
+        self.assertEqual(code, 0)
+        self.assertEqual((self.out / "latest.bin").stat().st_size, 15008)
+
+    def test_one_failed_auxiliary_source_still_updates(self):
+        panel = panel_from(mq.SOURCE_TENCENT)   # 11 行有效
+        with mock.patch.object(mq, "collect_panel", return_value=panel):
+            code, _, _ = run_main(["--require-live", "--out-dir", str(self.out)])
+        self.assertEqual(code, 0)
+
+    def test_too_few_live_rows_keeps_the_previous_image(self):
+        self.out.mkdir()
+        (self.out / "latest.bin").write_bytes(b"previous")
+        panel = panel_from(mq.SOURCE_SINA, mq.SOURCE_NAVER_KR, mq.SOURCE_NAVER_JP)
+        with mock.patch.object(mq, "collect_panel", return_value=panel):
+            code, _, stderr = run_main(["--require-live", "--out-dir", str(self.out)])
+        self.assertEqual(code, 3)
+        self.assertIn("6 < 9", stderr)
+        self.assertEqual((self.out / "latest.bin").read_bytes(), b"previous")
+        self.assertEqual([path.name for path in self.out.iterdir()], ["latest.bin"])
+
+    def test_min_rows_can_be_tightened(self):
+        panel = panel_from(mq.SOURCE_TENCENT)
+        with mock.patch.object(mq, "collect_panel", return_value=panel):
+            code, _, _ = run_main(["--require-live", "--min-rows", "12",
+                                   "--out-dir", str(self.out)])
+        self.assertEqual(code, 3)
+        for bad in ("0", "13"):
+            code, _, _ = run_main(["--demo", "--min-rows", bad, "--out-dir", str(self.out)])
+            self.assertEqual(code, 2)
+
+    def test_layout_failure_exits_5_without_output(self):
+        original = render_brief.draw_panel
+
+        def broken(panel, footer_right=""):
+            sheet = original(panel, footer_right)
+            sheet.text(render_brief.NAME_X, render_brief.row_y(0), "叠字")
+            return sheet
+
+        with mock.patch.object(render_brief, "draw_panel", broken):
+            code, _, stderr = run_main(["--demo", "--out-dir", str(self.out)])
+        self.assertEqual(code, 5)
+        self.assertIn("排版预检未通过", stderr)
+        self.assertFalse(self.out.exists())
 
     def test_generated_time_uses_beijing_timezone(self):
         now = render_brief.china_now()
         self.assertEqual(now.utcoffset().total_seconds(), 8 * 60 * 60)
         self.assertEqual(now.tzinfo.key, "Asia/Shanghai")
+
+
+def read_firmware(relative: str) -> str:
+    return (FIRMWARE / relative).read_text(encoding="utf-8")
+
+
+def cpp_int_constants(source: str) -> dict:
+    """提取 ``inline constexpr int kName = <整数或已知常量的加减>;``。"""
+    values: dict = {}
+    pattern = re.compile(r"inline constexpr (?:int|uint\d+_t|size_t) (k\w+) = ([^;]+);")
+    for name, expression in pattern.findall(source):
+        expression = expression.strip()
+        if not re.fullmatch(r"[\w\s+\-*()]+", expression):
+            continue
+        try:
+            values[name] = int(eval(expression, {"__builtins__": {}}, dict(values)))  # noqa: S307
+        except Exception:  # noqa: BLE001 - 不是纯整数表达式的常量与本测试无关
+            continue
+    return values
+
+
+def cpp_string_constants(source: str) -> dict:
+    """提取 ``inline constexpr const char *kName = "…";``（支持相邻字面量拼接）。"""
+    values: dict = {}
+    pattern = re.compile(r'inline constexpr const char \*(k\w+) =((?:\s*"(?:[^"\\]|\\.)*")+);')
+    for name, literals in pattern.findall(source):
+        values[name] = "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', literals))
+    return values
+
+
+def cpp_macro_strings(source: str) -> dict:
+    """提取 ``#define NAME "…" "…"``（支持反斜杠续行与相邻字面量拼接）。"""
+    values: dict = {}
+    joined = source.replace("\\\n", " ")
+    for name, rest in re.findall(r'^#define (\w+)((?:\s+"[^"\n]*")+)\s*$', joined, re.M):
+        values[name] = "".join(re.findall(r'"([^"\n]*)"', rest))
+    return values
+
+
+class FirmwareParityTest(unittest.TestCase):
+    """服务器渲染器与固件各写了一遍的东西必须逐项相同。"""
+
+    def test_layout_constants_match_the_firmware(self):
+        layout = cpp_int_constants(read_firmware("ui/ui_market_panel_layout.h"))
+        expected = {
+            "kWidth": render_brief.WIDTH,
+            "kHeight": render_brief.HEIGHT,
+            "kTextBaseline": render_brief.TEXT_BASELINE,
+            "kInkTop": render_brief.INK_TOP,
+            "kInkBottom": render_brief.INK_BOTTOM,
+            "kHeaderBarBottom": render_brief.HEADER_BAR_BOTTOM,
+            "kHeaderTextY": render_brief.HEADER_TEXT_Y,
+            "kPageLeft": render_brief.PAGE_LEFT,
+            "kPageRight": render_brief.PAGE_RIGHT,
+            "kColumnHeaderY": render_brief.COLUMN_HEADER_Y,
+            "kColumnRuleY": render_brief.COLUMN_RULE_Y,
+            "kRowTop": render_brief.ROW_TOP,
+            "kRowPitch": render_brief.ROW_PITCH,
+            "kTagX0": render_brief.TAG_X0,
+            "kTagX1": render_brief.TAG_X1,
+            "kTagPadTop": render_brief.TAG_PAD_TOP,
+            "kNameX": render_brief.NAME_X,
+            "kPriceRight": render_brief.PRICE_RIGHT,
+            "kPctRight": render_brief.PCT_RIGHT,
+            "kVolumeRight": render_brief.VOLUME_RIGHT,
+            "kTurnoverRight": render_brief.TURNOVER_RIGHT,
+            "kFooterRuleY": render_brief.FOOTER_RULE_Y,
+            "kFooterTextY": render_brief.FOOTER_TEXT_Y,
+            "kSeparatorStep": 2,
+        }
+        for name, value in expected.items():
+            self.assertEqual(layout.get(name), value, name)
+        self.assertEqual(
+            (layout["kFooterStatusLeft"], layout["kFooterTextY"],
+             layout["kFooterStatusRight"], layout["kHeight"]),
+            render_brief.DEVICE_OVERLAY_BOX)
+
+    def test_fixed_texts_match_the_firmware(self):
+        texts = cpp_string_constants(read_firmware("ui/ui_market_panel_layout.h"))
+        self.assertEqual(texts["kTitleText"], render_brief.TITLE_TEXT)
+        self.assertEqual(
+            (texts["kColumnName"], texts["kColumnPrice"], texts["kColumnPct"],
+             texts["kColumnVolume"], texts["kColumnTurnover"]),
+            render_brief.COLUMN_TITLES)
+        contract = cpp_string_constants(read_firmware("network/market_panel_contract.h"))
+        self.assertEqual(contract["kEmptyCell"], mq.EMPTY_CELL)
+        self.assertEqual(contract["kTwoMarketLabel"], mq.TWO_MARKET_LABEL)
+        # 基准图里用到的两条状态文字就是固件页脚真正会写的文字。
+        statuses = {status for _, _, status in fixtures_tool.PANEL_IMAGES if status}
+        self.assertIn(texts["kStatusEveryMinute"], statuses)
+        self.assertIn("12" + texts["kStatusStaleSuffix"], statuses)
+
+    def test_rows_match_the_firmware(self):
+        source = read_firmware("network/market_panel_contract.h")
+        table = source[source.index("inline constexpr RowSpec kRows"):]
+        table = table[:table.index("};")]
+        rows = re.findall(r'\{"([^"]+)",\s*Market::k(\w+),\s*"([^"]+)"\}', table)
+        markets = {"AShare": "A", "HongKong": "港", "UnitedStates": "美",
+                   "Korea": "韩", "Japan": "日"}
+        self.assertEqual(
+            [(key, markets[market], name) for key, market, name in rows],
+            [(spec.key, spec.market, spec.name) for spec in mq.PANEL_ROWS])
+        labels = re.search(r"kMarketLabels\[kMarketCount\] = \{([^}]*)\}", source).group(1)
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', labels)), mq.MARKET_ORDER)
+
+    def test_thresholds_match_the_firmware(self):
+        source = read_firmware("network/market_panel_contract.h")
+        constants = cpp_int_constants(source)
+        self.assertEqual(constants["kRowCount"], len(mq.PANEL_ROWS))
+        self.assertEqual(constants["kMinLiveRows"], render_brief.DEFAULT_MIN_ROWS)
+        self.assertEqual(constants["kRefreshSeconds"], 60)      # 每分钟更新一次
+
+        def cpp_double(name: str) -> float:
+            return float(re.search(
+                rf"inline constexpr double {name} = ([0-9.e+-]+);", source).group(1))
+
+        self.assertEqual(cpp_double("kMaxAbsPct"), mq.MAX_ABS_PCT)
+        self.assertEqual(cpp_double("kN225SourceTolerance"), mq.N225_SOURCE_TOLERANCE)
+        self.assertEqual(cpp_double("kMaxPriceValue"), mq.MAX_PRICE_VALUE)
+        self.assertEqual(cpp_double("kMaxPctValue"), mq.MAX_PCT_VALUE)
+        self.assertEqual(cpp_double("kMaxAmountValue"), mq.MAX_AMOUNT_VALUE)
+
+    def test_quote_urls_match_the_firmware(self):
+        macros = cpp_macro_strings(read_firmware("core/app_network_config.h"))
+        self.assertEqual(macros["WEATHER_CLOCK_MARKET_TENCENT_URL"], mq.TENCENT_URL)
+        self.assertEqual(macros["WEATHER_CLOCK_MARKET_SINA_HK_URL"], mq.SINA_HK_URL)
+        self.assertEqual(macros["WEATHER_CLOCK_MARKET_SINA_REFERER"], mq.SINA_REFERER)
+        self.assertEqual(macros["WEATHER_CLOCK_MARKET_NAVER_KR_URL"], mq.NAVER_KR_URL)
+        self.assertEqual(macros["WEATHER_CLOCK_MARKET_NAVER_JP_URL"], mq.NAVER_JP_URL)
+        service = read_firmware("network/market_panel_service.cpp")
+        agent = re.search(r"kQuoteUserAgent =((?:\s*\"[^\"]*\")+);", service).group(1)
+        self.assertEqual("".join(re.findall(r'"([^"]*)"', agent)), mq.USER_AGENT)
+        # 设备的位图兜底地址指向本脚本写出的两个文件。
+        self.assertTrue(macros["WEATHER_CLOCK_AIBRIEF_URL"].endswith("/aibrief/latest.bin"))
+        self.assertTrue(
+            macros["WEATHER_CLOCK_AIBRIEF_MANIFEST_URL"].endswith("/aibrief/version.txt"))
+
+    def test_payload_fits_the_firmware_page_limit(self):
+        constants = cpp_int_constants(read_firmware("network/aibrief_contract.h"))
+        self.assertEqual(constants["kWidth"], render_brief.WIDTH)
+        self.assertEqual(constants["kHeight"], render_brief.HEIGHT)
+        self.assertGreaterEqual(constants["kMaxPages"], render_brief.PANEL_PAGES)
+        self.assertEqual(render_brief.PANEL_PAGES, 1)
+
+    def test_device_font_lists_cover_the_panel_text(self):
+        """固件字库只收面板用到的字：服务器这边每一段文字都必须在清单里。"""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "gen_market_panel_fonts",
+            ROOT / "RLCD_CLOCK" / "tools" / "gen_market_panel_fonts.py")
+        generator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(generator)
+        ascii_chars = {chr(code) for code in range(0x20, 0x7F)}
+        regular = set(generator.REGULAR_TEXT) | ascii_chars
+        bold = set(generator.BOLD_TEXT)
+
+        sheet = render_brief.Sheet()
+        sheets = [
+            render_brief.draw_panel(panel_from(*sources), status)
+            for _, sources, status in fixtures_tool.PANEL_IMAGES
+        ]
+        for drawn in sheets:
+            for run in drawn.text_runs:
+                if run["bold"]:
+                    self.assertLessEqual(set(run["text"]), bold, run["text"])
+                    continue
+                for numeric, segment in sheet._runs(run["text"]):
+                    allowed = bold if numeric else regular
+                    self.assertLessEqual(set(segment), allowed, run["text"])
+
+        # 生成的字库文件与清单同步（Opts 注释里记着实际收录的码点）。
+        for name, _font, ascii_range, text, _purpose in generator.FONTS:
+            header = (FIRMWARE / "assets" / f"{name}.c").read_text(encoding="utf-8")[:6000]
+            opts = re.search(r"-r (\S+)", header).group(1)
+            expected = generator.codepoint_ranges(text)
+            if ascii_range:
+                expected = f"{ascii_range},{expected}"
+            self.assertEqual(opts, expected, name)
+
+    def test_cross_language_fixtures_are_current(self):
+        """expected_cells / format_cases / time_cases / panel_*.pbm 由当前实现生成。
+
+        固件主机测试读这些文件：这里保证它们没有过期，那边保证固件算出同样的结果。
+        """
+        self.assertEqual(fixtures_tool.stale_files(), [])
+
+
+class WorkflowTest(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (ROOT / ".github" / "workflows" / "aibrief.yml").read_text(
+            encoding="utf-8")
+
+    def has(self, needle: str) -> bool:
+        return needle in self.workflow
+
+    def test_schedule_runs_every_five_minutes(self):
+        self.assertEqual(self.workflow.count("- cron:"), 1)
+        self.assertTrue(self.has('- cron: "*/5 * * * *"'))
+
+    def test_workflow_uses_the_current_command_line(self):
+        for needle in ("device_brief/test_render_brief.py", "device_brief/render_brief.py",
+                       "--require-live", "--min-rows"):
+            self.assertTrue(self.has(needle), needle)
+        # 旧版多页简报的参数已经不存在。
+        for stale in ("--require-fresh-market", "--min-live-sources", "--news-per-source"):
+            self.assertFalse(self.has(stale), stale)
+        # 命令行里出现的每个参数渲染器都认识。
+        with redirect_stdout(io.StringIO()) as usage:
+            with self.assertRaises(SystemExit):
+                render_brief.main(["--help"])
+        for option in re.findall(r"(?<![\w-])--[a-z][a-z-]+", self.workflow):
+            if option in ("--disable-pip-version-check", "--depth", "--cached", "--quiet",
+                          "--hard"):
+                continue   # pip / git 自己的参数
+            self.assertIn(option, usage.getvalue(), option)
+
+    def test_parity_inputs_trigger_the_workflow(self):
+        """测试会读的渲染器文件和固件文件改动时，工作流必须被触发。"""
+        for path in ("device_brief/render_brief.py", "device_brief/market_quotes.py",
+                     "device_brief/mono_text.py", "device_brief/fixtures_tool.py",
+                     "device_brief/fixtures/**", "device_brief/fonts/**",
+                     "RLCD_CLOCK/main/ui/ui_market_panel_layout.h",
+                     "RLCD_CLOCK/main/network/market_panel_contract.h",
+                     "RLCD_CLOCK/main/network/market_panel_service.cpp",
+                     "RLCD_CLOCK/main/network/aibrief_contract.h",
+                     "RLCD_CLOCK/main/core/app_network_config.h",
+                     "RLCD_CLOCK/main/assets/market_panel_*.c",
+                     "RLCD_CLOCK/tools/gen_market_panel_fonts.py"):
+            self.assertTrue(self.has(f'- "{path}"'), path)
+
+    def test_only_the_default_branch_publishes(self):
+        self.assertTrue(self.has("github.event.repository.default_branch"))
+        self.assertTrue(self.has("if: env.PUBLISH == 'true'"))
 
 
 if __name__ == "__main__":

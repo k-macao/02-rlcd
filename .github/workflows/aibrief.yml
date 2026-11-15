@@ -1,53 +1,62 @@
-name: 生成章鱼AI 简报设备图（全量推送）
+name: 生成行情数据面板设备图
+
+# 设备主页是「全球行情」数据面板。新固件每分钟直连行情接口，在设备上自绘面板；
+# 这个工作流每 5 分钟用同样的数据源渲染一张同款位图，供旧固件显示，
+# 并在设备直连行情接口失败时兜底。行情没有变化时不产生提交。
 
 on:
   schedule:
-    # 每 3 小时实时抓取一次，每天 8 次：
-    # 北京时间 07:10 / 10:10 / 13:10 / 16:10 / 19:10 / 22:10 / 01:10 / 04:10
-    # （UTC 23:10 / 02:10 / 05:10 / 08:10 / 11:10 / 14:10 / 17:10 / 20:10）。
-    - cron: "10 2-23/3 * * *"
+    # 每 5 分钟一次（GitHub 的定时任务在高峰期可能延后，属于平台行为）。
+    - cron: "*/5 * * * *"
   push:
     branches: ["**"]
-    # 仅在自身或渲染器变更时触发：排版改动（如字号）应立即换图，不等下一次定时任务；
-    # 日常靠定时任务与手动触发，避免和 OTA 清单提交抢写 main。
+    # 渲染器、数据层或版面有改动时立即跑一遍测试并换图，不等下一次定时任务。
+    # 固件里与渲染器各有一份的常量（版面、接口地址、字库清单）改动时也要跑测试比对。
     paths:
       - ".github/workflows/aibrief.yml"
       - "device_brief/render_brief.py"
+      - "device_brief/market_quotes.py"
       - "device_brief/mono_text.py"
+      - "device_brief/fixtures_tool.py"
       - "device_brief/test_render_brief.py"
+      - "device_brief/fixtures/**"
       - "device_brief/fonts/**"
-      - "002/**"
-      - "05/**"
+      - "RLCD_CLOCK/main/ui/ui_market_panel_layout.h"
+      - "RLCD_CLOCK/main/network/market_panel_contract.h"
+      - "RLCD_CLOCK/main/network/market_panel_service.cpp"
+      - "RLCD_CLOCK/main/network/aibrief_contract.h"
+      - "RLCD_CLOCK/main/core/app_network_config.h"
+      - "RLCD_CLOCK/main/assets/market_panel_*.c"
+      - "RLCD_CLOCK/tools/gen_market_panel_fonts.py"
   workflow_dispatch:
     inputs:
-      min_live_sources:
-        description: "至少多少个数据源抓到实时内容才更新设备图"
+      min_rows:
+        description: "12 行里至少多少行取到最新点位才更新设备图"
         required: false
-        default: "20"
-        type: string
-      news_per_source:
-        description: "快讯每源条数（0 = 全量推送，用满 48 页）"
-        required: false
-        default: "0"
+        default: "9"
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: aibrief-device-image
+  # 同一分支上的运行排队执行，避免两次运行抢着提交。
+  group: aibrief-device-image-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   render:
     name: 渲染 400x300 单色图并提交
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    env:
+      # 只有默认分支上的运行才把设备图提交回仓库（设备只读默认分支上的文件）；
+      # 其他分支只跑测试并渲染到临时目录，方便在合并前检查效果。
+      # 定时任务只会在默认分支上运行。
+      PUBLISH: ${{ github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch }}
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: 安装 Python
         uses: actions/setup-python@v5
@@ -57,57 +66,80 @@ jobs:
       - name: 安装渲染依赖
         run: python3 -m pip install --disable-pip-version-check pillow freetype-py
 
-      - name: 推送前运行逐页排版回归测试
+      - name: 运行回归测试
+        # 测试结果只取决于仓库内容：代码改动（push）和手动触发时跑，
+        # 每 5 分钟一次的定时任务不重复跑；渲染器保存前自带排版预检。
+        if: github.event_name != 'schedule'
         run: python3 device_brief/test_render_brief.py
 
-      - name: 抓取 002 数据并渲染多页
+      - name: 抓取行情并渲染面板
+        id: render
         env:
-          MIN_LIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_live_sources || '20' }}
-          NEWS_PER_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.news_per_source || '0' }}
-          BRIEF_FETCH_WORKERS: "16"
+          MIN_ROWS: ${{ github.event_name == 'workflow_dispatch' && inputs.min_rows || '9' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          if [[ "$PUBLISH" == "true" ]]; then
+            out_dir="aibrief"
+          else
+            out_dir="${RUNNER_TEMP}/aibrief-preview"
+          fi
+          echo "out_dir=${out_dir}" >> "$GITHUB_OUTPUT"
           python3 device_brief/render_brief.py \
-            --out-dir aibrief \
+            --out-dir "${out_dir}" \
             --require-live \
-            --require-fresh-market \
-            --min-live-sources "$MIN_LIVE" \
-            --news-per-source "$NEWS_PER_SOURCE"
-          python3 - <<'PY'
-          import json
-          meta = json.load(open("aibrief/meta.json", encoding="utf-8"))
-          print(f"实时源 {meta['live_sources']}/{meta['total_sources']} · {meta['pages']}页 · 字体 {meta.get('font','')} · 生成 {meta['generated_at']}")
-          print(f"版式 {meta.get('layout','')} · 预检 {meta.get('layout_validated')} · 快讯口径 {meta.get('news_mode')} · 全量 {meta.get('news_full')} · 收录 {meta.get('news_included')}/{meta.get('news_available')} · 截断 {meta.get('news_omitted')}")
-          freshness = meta.get("market_freshness") or {}
-          print(f"行情新鲜度 {freshness.get('ok')} · {freshness.get('reason','')}")
-          print(f"文件大小 {meta['bytes']} bytes")
-          PY
-          ls -lh aibrief/
-
-      - name: 提交设备图
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- aibrief; then
-            echo "设备图无变化"
+            --min-rows "${MIN_ROWS}"
+          status=$?
+          if [[ "$status" -eq 3 ]]; then
+            # 行情接口暂时取不到足够的数据：保留上一版设备图，本轮不算失败。
+            echo "::warning::有效行情不足，本轮不更新设备图"
+            echo "rendered=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [[ "$status" -ne 0 ]]; then
+            exit "$status"
+          fi
+          echo "rendered=true" >> "$GITHUB_OUTPUT"
+          ls -l "${out_dir}"
+
+      - name: 提交设备图
+        if: env.PUBLISH == 'true' && steps.render.outputs.rendered == 'true'
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add aibrief
-          git commit -m "Update AI brief device image [skip ci]"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          # 渲染结果就是 aibrief/ 应有的完整内容（含删除旧版多页简报的残页）。
+          rm -rf "${RUNNER_TEMP}/aibrief-new"
+          cp -r aibrief "${RUNNER_TEMP}/aibrief-new"
+          for attempt in 1 2 3; do
+            git add -A aibrief
+            if git diff --cached --quiet; then
+              echo "设备图无变化"
+              exit 0
+            fi
+            git commit -q -m "Update market panel device image [skip ci]"
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            # 远端先有了别的提交（例如 OTA 清单）：把本次结果放到最新提交上重试。
+            echo "推送被拒绝，第 ${attempt} 次重试"
+            git fetch --depth=1 origin "${GITHUB_REF_NAME}"
+            git reset -q --hard FETCH_HEAD
+            rm -rf aibrief
+            cp -r "${RUNNER_TEMP}/aibrief-new" aibrief
+          done
+          echo "连续 3 次推送失败" >&2
+          exit 1
 
-      - name: 保存产物
+      - name: 保存预览产物
+        # 定时任务每 5 分钟一次，不逐次留产物；只有手动触发和代码改动触发时保存。
+        if: github.event_name != 'schedule' && steps.render.outputs.rendered == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: aibrief-device-image
+          name: market-panel-device-image
           path: |
-            aibrief/latest.bin
-            aibrief/version.txt
-            aibrief/latest.png
-            aibrief/latest_combined.png
-            aibrief/latest_contact_sheet.png
-            aibrief/page_*.png
-            aibrief/meta.json
+            ${{ steps.render.outputs.out_dir }}/latest.bin
+            ${{ steps.render.outputs.out_dir }}/version.txt
+            ${{ steps.render.outputs.out_dir }}/latest.png
+            ${{ steps.render.outputs.out_dir }}/meta.json
           if-no-files-found: error
           retention-days: 14

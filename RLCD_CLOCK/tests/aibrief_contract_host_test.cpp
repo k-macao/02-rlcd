@@ -1,4 +1,4 @@
-// 校验章鱼 AI 简报负载解析与刷新窗口的纯逻辑（支持多页）。
+// 校验服务器位图（行情面板兜底通道）的负载解析、清单解析与读取时间格式的纯逻辑。
 #include "aibrief_contract.h"
 #include "aibrief_state.h"
 #include "ui_aibrief_page_format.h"
@@ -37,27 +37,26 @@ void test_parses_valid_payload()
     assert(bitmap[aibrief::kBitmapBytes - 1] ==
            payload[aibrief::kEnvelopeBytes + aibrief::kBitmapBytes - 1]);
 
-    // 多页解析
-    const size_t pages = 3;
-    payload = make_payload(aibrief::kWidth, aibrief::kHeight, pages);
-    std::vector<uint8_t> bitmaps(aibrief::kBitmapBytes * pages, 0);
+    // 按页解析：行情面板只有一页，恰好是设备的页数上限。
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages);
+    std::vector<uint8_t> bitmaps(aibrief::kBitmapBytes * aibrief::kMaxPages, 0xEE);
     size_t out_pages = 0;
     assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
                                         bitmaps.size(), &out_pages) ==
            aibrief::ParseResult::kOk);
-    assert(out_pages == pages);
-    assert(bitmaps[0] == 0);
-    assert(bitmaps[aibrief::kBitmapBytes] == 1);
-    assert(bitmaps[aibrief::kBitmapBytes * 2] == 2);
-
-    // 固件页位上限（255 页 = uint8 上限）
-    payload = make_payload(aibrief::kWidth, aibrief::kHeight, aibrief::kMaxPages);
-    bitmaps.assign(aibrief::kBitmapBytes * aibrief::kMaxPages, 0);
-    out_pages = 0;
-    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), bitmaps.data(),
-                                        bitmaps.size(), &out_pages) ==
-           aibrief::ParseResult::kOk);
     assert(out_pages == static_cast<size_t>(aibrief::kMaxPages));
+    assert(bitmaps[0] == 0);
+    assert(bitmaps[1] == 0x5A);
+
+    // 旧版多页简报（3 页）：整包拒收，输出缓冲不被改写。
+    payload = make_payload(aibrief::kWidth, aibrief::kHeight, 3);
+    std::vector<uint8_t> untouched(aibrief::kBitmapBytes * 3, 0xEE);
+    out_pages = 0;
+    assert(aibrief::parse_payload_multi(payload.data(), payload.size(), untouched.data(),
+                                        untouched.size(), &out_pages) ==
+           aibrief::ParseResult::kTooManyPages);
+    assert(out_pages == 0);
+    assert(untouched[0] == 0xEE && untouched.back() == 0xEE);
 }
 
 void test_rejects_bad_inputs()
@@ -94,32 +93,42 @@ void test_rejects_bad_inputs()
            aibrief::ParseResult::kBadSize);
 }
 
-void test_refresh_window()
-{
-    assert(aibrief::refresh_due(0, 1000, false));
-    assert(aibrief::refresh_due(0, 1000, true));
-    assert(!aibrief::refresh_due(100, 200, true));
-    assert(!aibrief::refresh_due(1000, 1000, true));
-    assert(aibrief::refresh_due(1, 1 + aibrief::kMaxRefreshAgeSeconds, true));
-    assert(aibrief::refresh_due(1000, 999, true));
-}
-
 void test_manifest_parse()
 {
+    // render_brief.py 写出的清单：单页行情面板。
     const char *text =
         "manifest=1 sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-        " pages=104 bytes=1560008 generated_at=2026-10-27 04:03:00\n";
+        " pages=1 bytes=15008 generated_at=2026-11-15 04:03:00\n";
     aibrief::ManifestInfo info = aibrief::parse_manifest(text, strlen(text));
     assert(info.ok);
     assert(info.has_sha);
+    assert(!info.oversized);
     assert(strcmp(info.sha256,
                   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef") == 0);
+    assert(info.pages == 1);
+    assert(info.bytes == 15008);
+
+    // 旧版多页简报的清单：合法但超出设备上限，标记 oversized，设备不下载整包。
+    const char *legacy =
+        "manifest=1 sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        " pages=104 bytes=1560008 generated_at=2026-10-27 04:03:00\n";
+    info = aibrief::parse_manifest(legacy, strlen(legacy));
+    assert(!info.ok);
+    assert(info.has_sha);
+    assert(info.oversized);
     assert(info.pages == 104);
     assert(info.bytes == 1560008);
+    // 页数没写错但字节数超限，同样拒收。
+    const char *too_big =
+        "sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        " pages=1 bytes=15009\n";
+    info = aibrief::parse_manifest(too_big, strlen(too_big));
+    assert(!info.ok && info.oversized);
 
     // 缺 sha256 / sha 非法 / 页数越界 / 超长 → 不可用于条件请求
     const char *no_sha = "manifest=1 pages=10 bytes=150008\n";
     assert(!aibrief::parse_manifest(no_sha, strlen(no_sha)).ok);
+    assert(!aibrief::parse_manifest(no_sha, strlen(no_sha)).oversized);
     const char *bad_sha = "sha256=zzzz pages=10\n";
     assert(!aibrief::parse_manifest(bad_sha, strlen(bad_sha)).ok);
     char too_many[160] = {};
@@ -128,43 +137,14 @@ void test_manifest_parse()
              "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
              aibrief::kMaxPages + 1);
     assert(!aibrief::parse_manifest(too_many, strlen(too_many)).ok);
+    assert(aibrief::parse_manifest(too_many, strlen(too_many)).oversized);
     assert(!aibrief::parse_manifest(nullptr, 0).ok);
     assert(!aibrief::parse_manifest("", 0).ok);
 
-    // 新窗口上限：255 页 + 每页 30 秒轮播
-    assert(aibrief::kMaxPages == 255);
-    assert(aibrief::kPageRotateSeconds == 30); // 每页停留 30 秒
-    assert(aibrief::kMaxBitmapBytes ==
-           static_cast<size_t>(aibrief::kBitmapBytes) * 255);
-}
-
-void test_manual_page_navigation()
-{
-    // BOOT 键手动翻页与自动轮播共用同一套环形索引：末页续到第 1 页，首页回退到末页。
-    assert(aibrief::next_page_index(0, 5) == 1);
-    assert(aibrief::next_page_index(4, 5) == 0);
-    assert(aibrief::previous_page_index(0, 5) == 4);
-    assert(aibrief::previous_page_index(3, 5) == 2);
-
-    // 固件页位上限 255 也要正确回绕（不能出现 256 之类的越界值）。
-    assert(aibrief::next_page_index(254, 255) == 0);
-    assert(aibrief::previous_page_index(0, 255) == 254);
-
-    // 单页或尚未取到位图：原地不动，索引始终为 0。
-    assert(aibrief::next_page_index(0, 1) == 0);
-    assert(aibrief::previous_page_index(0, 1) == 0);
-    assert(aibrief::next_page_index(7, 0) == 0);
-
-    // 越界输入按第 1 页处理，不会写出 page_count 之外的值。
-    assert(aibrief::next_page_index(9, 5) == 1);
-    assert(aibrief::previous_page_index(9, 5) == 4);
-
-    // 与自动轮播的步长一致：连按 5 次回到原页。
-    uint8_t page = 2;
-    for (int i = 0; i < 5; ++i) {
-        page = aibrief::next_page_index(page, 5);
-    }
-    assert(page == 2);
+    // 行情面板只有一页：设备只缓存一张 15000 字节的位图。
+    assert(aibrief::kMaxPages == 1);
+    assert(aibrief::kMaxBitmapBytes == aibrief::kBitmapBytes);
+    assert(aibrief::kMaxPayloadBytes == aibrief::kPayloadBytes);
 }
 
 void test_bit_helpers()
@@ -221,9 +201,7 @@ int main()
 {
     test_parses_valid_payload();
     test_rejects_bad_inputs();
-    test_refresh_window();
     test_manifest_parse();
-    test_manual_page_navigation();
     test_bit_helpers();
     test_read_time_and_page_indicator();
     test_failed_sync_keeps_last_successful_read_time();

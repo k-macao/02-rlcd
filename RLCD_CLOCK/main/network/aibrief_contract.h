@@ -1,5 +1,6 @@
-// 定义章鱼 AI 简报页 1bpp 图形负载的固定尺寸和解析规则。
-// v1.8+ 支持多页：单文件包含 1..kMaxPages 张 400x300 位图，设备每 30 秒自动翻页。
+// 定义服务器渲染位图（aibrief/latest.bin）的 1bpp 图形负载的固定尺寸和解析规则。
+// 这条通道现在承载行情数据面板：服务器每 5 分钟渲染一张 400x300 的面板位图，
+// 设备直连行情接口失败时用它兜底。标识符沿用 aibrief，因为下载地址与负载格式没有变。
 #pragma once
 
 #include <stddef.h>
@@ -16,44 +17,14 @@ inline constexpr size_t kBitmapBytes =
 // 服务器负载：4 字节魔数 + 小端宽度 + 小端高度 + N * 1bpp 位图（1 = 黑）。
 inline constexpr size_t kEnvelopeBytes = 8;
 inline constexpr size_t kPayloadBytes = kEnvelopeBytes + kBitmapBytes;
-// 多页支持：最多 255 页（3,825,000 字节位图 ≈ 3.65MB），完整展示 002 仓库全量内容。
-// 255 是协议硬上限：页数字段在设备侧用 uint8_t 传递（见 AibriefSnapshot::page_count）。
-inline constexpr int kMaxPages = 255;
+// 行情面板只有一页。负载格式本身仍允许多页（N * 15000 字节），但设备只缓存
+// kMaxPages 页：页数超出的负载（例如旧版多页简报）整包拒收，不会只显示其中一页。
+inline constexpr int kMaxPages = 1;
 inline constexpr size_t kMaxBitmapBytes = kBitmapBytes * static_cast<size_t>(kMaxPages);
 inline constexpr size_t kMaxPayloadBytes = kEnvelopeBytes + kMaxBitmapBytes;
-inline constexpr size_t kDownloadBufferBytes = kMaxPayloadBytes + 1;
 inline constexpr uint8_t kMagic[4] = {'A', 'I', 'B', '1'};
-// 设备端简报页每 5 分钟拉取一次已推送的页面（开机即联网获取）。
-inline constexpr uint32_t kMaxRefreshAgeSeconds = 5 * 60;
-// 分页自动轮播间隔：每页停留 30 秒。
-// 全量 255 页时一轮约 2.1 小时，与「每 3 小时更新一次」的节奏接近，
-// 内容更新后基本下一轮就能读到；换页频率与数据刷新彼此独立。
-inline constexpr uint32_t kPageRotateSeconds = 30;
 inline constexpr int kMaxRefreshAttempts = 2;
 inline constexpr uint32_t kRetrySettleMs = 150;
-
-// 环形翻页索引：自动轮播（每 30 秒）与 BOOT 键手动翻页共用同一套计算，
-// 保证两条路径的边界行为一致（末页续到第 1 页、首页回退到末页、单页不动）。
-constexpr uint8_t page_step(uint8_t current, uint8_t page_count, bool forward)
-{
-    if (page_count <= 1) {
-        return 0;
-    }
-    const uint8_t index = current < page_count ? current : 0;
-    const int stepped = forward ? (static_cast<int>(index) + 1)
-                                : (static_cast<int>(index) + page_count - 1);
-    return static_cast<uint8_t>(stepped % static_cast<int>(page_count));
-}
-
-constexpr uint8_t next_page_index(uint8_t current, uint8_t page_count)
-{
-    return page_step(current, page_count, true);
-}
-
-constexpr uint8_t previous_page_index(uint8_t current, uint8_t page_count)
-{
-    return page_step(current, page_count, false);
-}
 
 static_assert(kWidth % 8 == 0, "aibrief width must be byte aligned");
 static_assert(kBytesPerRow * 8 == kWidth, "aibrief row stride must cover width");
@@ -144,15 +115,17 @@ inline ParseResult parse_payload_multi(const uint8_t *data,
 }
 
 // 设备条件请求：服务器在 aibrief/version.txt 里放一行极简清单，
-// 例如 "manifest=1 sha256=abcd... pages=104 bytes=1560008 generated_at=..."。
-// 设备先拉这几十字节，与上次成功发布的 sha256 相同就跳过整包下载，
-// 避免每 5 分钟重下 3.8MB，也不会把轮播重置回第 1 页。
+// 例如 "manifest=1 sha256=abcd... pages=1 bytes=15008 generated_at=..."。
+// 设备先拉这几十字节，与上次成功发布的 sha256 相同就跳过整包下载；
+// 清单声明的页数或字节数超出设备上限时也不下载。
 inline constexpr size_t kManifestShaChars = 64;
 inline constexpr size_t kManifestMaxBytes = 320;
 
 struct ManifestInfo {
     bool ok = false;
     bool has_sha = false;
+    // 清单本身合法，但声明的负载超出设备上限（页数或字节数）：不必下载。
+    bool oversized = false;
     char sha256[kManifestShaChars + 1] = {};
     uint32_t pages = 0;
     uint32_t bytes = 0;
@@ -232,20 +205,12 @@ inline ManifestInfo parse_manifest(const char *text, size_t length)
         }
     }
     info.ok = info.has_sha;
-    if (info.ok && info.pages > static_cast<uint32_t>(kMaxPages)) {
+    if (info.ok && (info.pages > static_cast<uint32_t>(kMaxPages) ||
+                    info.bytes > kMaxPayloadBytes)) {
         info.ok = false;
+        info.oversized = true;
     }
     return info;
-}
-
-constexpr bool refresh_due(uint32_t last_sync_seconds,
-                           uint32_t now_seconds,
-                           bool available)
-{
-    return !available ||
-           last_sync_seconds == 0 ||
-           now_seconds < last_sync_seconds ||
-           now_seconds - last_sync_seconds >= kMaxRefreshAgeSeconds;
 }
 
 } // namespace aibrief

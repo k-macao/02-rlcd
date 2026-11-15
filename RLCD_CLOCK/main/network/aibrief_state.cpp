@@ -1,7 +1,6 @@
-// 集中发布章鱼 AI 简报位图、同步时间与页面请求，避免读到混合状态。
+// 集中发布主页的服务器位图、同步时间与页面请求，避免读到混合状态。
 // last_sync 记录最近一次尝试；last_success 只在成功发布位图时前进。
-// v1.8+ 支持多页：最多 kMaxPages（255）页，每页 30 秒轮播。
-// 修复：大数组改堆分配（PSRAM），避免 EXT_RAM_BSS 链接段溢出。
+// 位图缓存按 kMaxPages 页堆分配（优先 PSRAM）；行情面板只有一页，共 15000 字节。
 #include "aibrief_state.h"
 
 #include "app_constexpr.h"
@@ -19,8 +18,8 @@ StaticTaskMutex s_aibrief_mutex;
 AibriefSnapshot s_aibrief_state;
 AibriefPageRequestSnapshot s_aibrief_page_state;
 std::atomic<bool> s_aibrief_page_requested{false};
-// 堆分配：255×15000=3825000 字节（≈3.65MB），放在 PSRAM，避免 BSS 段过大导致链接失败。
-// 下载直接写进这块缓存，全流程只有一份位图，PSRAM 峰值比「下载缓冲 + 缓存」少 3.65MB。
+// 堆分配 kMaxPages * 15000 字节，优先放在 PSRAM。
+// 下载直接写进这块缓存，全流程只有一份位图。
 uint8_t* s_aibrief_bitmaps = nullptr;
 // 上次成功发布的清单 sha256（服务器 aibrief/version.txt）：内容没变就不重复下载。
 char s_aibrief_last_sha[aibrief::kManifestShaChars + 1] = {};
@@ -45,7 +44,7 @@ bool aibrief_state_init()
     if (!s_aibrief_mutex.init()) {
         return false;
     }
-    // 分配多页位图缓存，优先 PSRAM
+    // 分配位图缓存，优先 PSRAM
     if (!s_aibrief_bitmaps) {
         s_aibrief_bitmaps = static_cast<uint8_t*>(
             heap_caps_malloc(static_cast<size_t>(aibrief::kMaxPages) * aibrief::kBitmapBytes,
@@ -235,10 +234,13 @@ void aibrief_invalidate_bitmaps()
     {
         ScopedSemaphoreLock lock(s_aibrief_mutex);
         if (lock) {
-            // 下载途中失败时缓存可能只写了一半：直接作废，回到占位提示，等下一轮重下。
+            // 下载途中失败时缓存可能只写了一半：直接作废，等下一轮重下。
             s_aibrief_state.available = false;
             s_aibrief_state.page_count = 0;
             s_aibrief_state.current_page = 0;
+            // 同时忘掉上次的清单 sha256：否则服务器内容没变时，下一轮会因为
+            // 「清单一致」跳过下载，位图就一直补不回来。
+            s_aibrief_last_sha[0] = '\0';
         }
     }
     notify_ui_task();
@@ -287,7 +289,7 @@ bool aibrief_record_unchanged(time_t sync_time)
         }
         s_aibrief_state.live_source = true;
         s_aibrief_state.unchanged = true;
-        // 内容没变：只前进时间戳，保留当前页、位图与版本号（屏幕不闪、不重置轮播）。
+        // 内容没变：只前进时间戳，保留位图与版本号（屏幕不重画）。
         aibrief_record_sync_time(s_aibrief_state, sync_time, true);
     }
     notify_ui_task();
@@ -307,86 +309,6 @@ bool aibrief_clear_cache()
                static_cast<size_t>(aibrief::kMaxPages) * aibrief::kBitmapBytes);
     }
     return true;
-}
-
-namespace {
-
-// 自动轮播（每 30 秒）与 BOOT 键手动翻页共用：环形换页 + 版本号自增触发重绘。
-bool step_page_locked(bool forward)
-{
-    const uint8_t page_count = s_aibrief_state.page_count;
-    if (page_count <= 1) {
-        return false;
-    }
-    const uint8_t current = s_aibrief_state.current_page;
-    const uint8_t next = aibrief::page_step(current, page_count, forward);
-    if (next == current) {
-        return false;
-    }
-    s_aibrief_state.current_page = next;
-    ++s_aibrief_state.version;
-    if (s_aibrief_state.version == 0) {
-        ++s_aibrief_state.version;
-    }
-    return true;
-}
-
-} // namespace
-
-bool aibrief_advance_page()
-{
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available) {
-        return false;
-    }
-    return step_page_locked(true);
-}
-
-bool aibrief_retreat_page()
-{
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available) {
-        return false;
-    }
-    return step_page_locked(false);
-}
-
-bool aibrief_set_current_page(uint8_t page_index)
-{
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock || !s_aibrief_state.available) {
-        return false;
-    }
-    if (page_index >= s_aibrief_state.page_count) {
-        return false;
-    }
-    if (s_aibrief_state.current_page == page_index) {
-        return false;
-    }
-    s_aibrief_state.current_page = page_index;
-    ++s_aibrief_state.version;
-    if (s_aibrief_state.version == 0) {
-        ++s_aibrief_state.version;
-    }
-    return true;
-}
-
-uint8_t aibrief_page_count()
-{
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock) {
-        return 0;
-    }
-    return s_aibrief_state.page_count;
-}
-
-uint8_t aibrief_current_page_index()
-{
-    ScopedSemaphoreLock lock(s_aibrief_mutex);
-    if (!lock) {
-        return 0;
-    }
-    return s_aibrief_state.current_page;
 }
 
 bool aibrief_page_requested()
