@@ -1,88 +1,93 @@
-# 章鱼 AI 简报 → 400×300 设备图（多页轮播 / 杂志网格 2.0）
+# 全球行情数据面板 → 400×300 设备图
 
-把 [k-macao/002](https://github.com/k-macao/002) 的「全景分析」编辑成 RLCD 4.2 英寸设备可直接显示的多页 1bpp 位图。每页固定 400×300，设备每页停留 30 秒自动轮播（255 页一轮约 2.1 小时）；网页保留完整研报，设备端采用适合小屏阅读的杂志编辑版。
+把 A、港、美、韩、日 12 个指数的最新点位、涨跌幅、成交量和成交额渲染成 RLCD 4.2 英寸设备可直接显示的一页 1bpp 位图。
 
-![设备简报首页样张（离线示例数据）](sample.png)
+![面板样张（2026-11-13 收盘数据）](sample.png)
 
-[查看离线示例校样墙（全量快讯 + 政策深度/研报，页位用满）](sample_contact_sheet.png)
+新固件（v1.8.7 起）每分钟直连行情接口，在设备上自己画这张面板；这里的渲染器由 GitHub Actions 定时运行，输出同款位图到仓库根目录的 `aibrief/`，供旧固件显示，并在设备直连失败时兜底。面板内容、页脚状态和两条更新链路的说明见 [`docs/Aibrief_zh.md`](../docs/Aibrief_zh.md)。
 
-## 屏幕、字体与网格
+## 文件
 
-- **画布先适配设备**：所有页面先按 400×300 排版，正文安全区为 `x=12..388`、`y=48..273`，页眉、正文、页脚分区固定，不使用图片缩放来迁就内容。
-- **统一阿里巴巴普惠体 3.0、全页 16px**：标题、正文、标签、页眉和页脚均为 16px；页标题、栏目标题、卡片标题和快讯标题，以及数字及其数值串符号使用 `85 Bold`，其余文字使用 `55 Regular`，不描边、不叠影。渲染机读取 `device_brief/fonts/AlibabaPuHuiTi-3-55-Regular.ttf` 和 `AlibabaPuHuiTi-3-85-Bold.ttf`，可分别通过 `ALIBABA_PUHUITI_FONT`、`ALIBABA_PUHUITI_BOLD_FONT` 覆盖路径；缺少字体时直接停止，不回退其他字体家族。
-- **按混合字重真实测量**：标题和正文均按各自字重测量；小数、百分比、日期和时间作为完整数值串参与测量与折行，不在数值中间断行；4.2 英寸面板约 120dpi，不通过缩字塞内容。
-- **原生 1bpp 清晰渲染**：`mono_text.py` 使用 FreeType `FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT` 直接生成黑白字形，所有字形落在整数像素上，测量与绘制共用同一套整数 advance。不再经过灰度图、128 阈值、抖动或亚像素定位；页面预检只允许纯黑/纯白两类像素。面板本身是 1bpp，不能显示真正的灰阶抗锯齿，因此不制造噪点来假装平滑。
-- **杂志式版面**：统一 running header/footer、右下读取时间（不再显示页码）、阅读进度线；总结页使用指标行，行情页使用指数数据网格，热力图使用双栏数据卡，快讯使用双栏流并对末页做左右栏高度均衡。
-- **完整折行而非截句**：超长中英文标题会跨栏或跨页续排，结尾不省略。页脚只保留读取时间，页码已取消；阅读进度线仍按总页数推进。
-- **快讯全量推送**：默认把抓到的所有标题都排进去（`--news-per-source 0`），并按各来源轮转排序，任何截断点都各源均衡；只有 255 页装不下时才二分收敛到「页数不超上限的最大条数」，页眉标注「全量 N 条取 M 条」。
-
-## 推送前逐页预检
-
-`MultiPageRenderer.save()` 必须先完成全部页面，再逐页检查；任一项失败都不会创建或覆盖设备文件：
-
-1. 画布必须为 400×300，页数必须在本次预算及固件 1..255 页范围内。
-2. 所有文字必须恰好为 16px，不得越出画布或侵入页眉/页脚。
-3. 按 Regular/Bold 混合字重检查文字 bounding box，发现叠字直接失败。
-4. 逐页扫描像素，出现任何灰阶值就停止发布，确保设备收到原生 1bpp 点阵。
-5. 全部通过后才写入二进制和 PNG；页数减少时同步清理旧 `page_*.png`，避免残页混入。
-6. 同时生成 5 列校样墙，行数按实际页数计算，便于推送前逐页目检。
-
-运行 33 项离线回归测试：
-
-```bash
-python3 -m pip install pillow freetype-py
-python3 device_brief/test_render_brief.py
-```
-
-测试覆盖全页阿里巴巴普惠体 16px、标题/数字 Bold 与其他 Regular、MONO 字体调用、整数像素、纯黑白页面与灰阶阻断、数值串完整折行、单页/多页协议、右下读取时间（无页码）、安全区、文字叠压、40 个热力关键词、超长英文完整续排、页数预算自适应、离线演示、旧校样清理、每 3 小时 schedule、北京时间及旧行情阻断发布；另覆盖 AI 政策深度 / 政策研报两栏（含字典条目渲染）与 `version.txt` 清单（sha256 可回读、<320 字节）。
-
-实现参考 [FreeType 的单色 hinting 说明](https://github.com/freetype/freetype/blob/master/include/freetype/freetype.h)与 [freetype-py 的 MONO 示例](https://github.com/rougier/freetype-py/blob/master/examples/glyph-monochrome.py)。同时对比了 [ttfautohint-py](https://github.com/fonttools/ttfautohint-py) 预处理、不同阈值及像素字体方案；预处理没有带来足够收益，像素字体则会改变既定字体并存在字符覆盖问题，因此均未采用。真机 [lv_font_conv](https://github.com/lvgl/lv_font_conv) 在 `bpp=1` 时已经使用 MONO 与自动 hinting，无需增加灰阶或子像素格式。
+| 文件 | 作用 |
+| --- | --- |
+| `market_quotes.py` | 数据层（只用标准库）：四个行情接口的地址、解析、单位换算、多源合并和数字格式 |
+| `render_brief.py` | 排版与输出：画面板、排版预检、写设备负载和预览 |
+| `mono_text.py` | FreeType 单色（MONO + 自动 hinting）文字渲染，字宽与固件的 LVGL 字库一致 |
+| `fixtures_tool.py` | 生成 / 校验 `fixtures/` 里服务器与固件共用的期望值和基准图 |
+| `fixtures/` | 留档的接口实测响应（2026-11-13 收盘），以及由它们生成的期望值和三张基准图 |
+| `test_render_brief.py` | 回归测试，不联网 |
+| `fonts/` | 阿里巴巴普惠体 3.0 Regular / Bold |
 
 ## 用法
 
 ```bash
-# 完全离线的排版校样，不请求新闻或行情接口
-python3 device_brief/render_brief.py --demo --out-dir /tmp/rlcd-brief
+python3 -m pip install pillow==13.0.0 freetype-py==2.5.1
 
-# 实时数据；实时源、A 股新鲜度和全部排版预检通过后才更新正式目录
-python3 device_brief/render_brief.py --out-dir aibrief --require-live --require-fresh-market
+# 回归测试（不联网）
+python3 device_brief/test_render_brief.py
+
+# 离线演示：用 fixtures/ 里留档的数据出图，顶栏会标「离线演示」
+python3 device_brief/render_brief.py --demo --out-dir /tmp/market-panel
+
+# 实抓行情并更新正式目录；有效行情不足时保留上一版
+python3 device_brief/render_brief.py --out-dir aibrief --require-live
 ```
-
-输出：
-
-- `latest.bin`：设备负载（`AIB1` + 宽高 + N×15000 字节位图，N=1..255）。
-- `version.txt`：设备条件请求用的小清单（`sha256` / `pages` / `bytes` / `generated_at`），内容没变就不下载整包。
-- `latest.png`：首页 PNG。
-- `page_*.png`：每页原生 400×300 PNG。
-- `latest_combined.png`：垂直拼接总览。
-- `latest_contact_sheet.png`：5 列全页校样墙，供推送前审阅。
-- `meta.json`：北京时间生成时间、实际页数、字体、实时源、A 股新鲜度结果、快讯口径（`news_mode` / `news_full` / `news_limit`）、安全区、校验值及 `layout_validated=true`。
-
-常用参数：
 
 | 参数 | 说明 |
 | --- | --- |
-| `--demo` | 完全离线，使用 002 内置样例和行情快照 |
-| `--require-live` | 实时源少于阈值时退出 3，不更新设备图 |
-| `--require-fresh-market` | A 股不是最新可复盘交易日、接口不可用或回退旧快照时退出 3 |
-| `--min-live-sources N` | 实时源阈值，默认 20 |
-| `--limit N` | 每个来源抓取的条目数，默认 20（与 002 会员推送口径一致） |
-| `--news-per-source N` | 快讯每源条数；默认 `0` = 全量推送，放不下时自动收敛 |
-| `--pages N` | 本次最大页数；0 表示固件上限 255，不会直接裁掉超额页面 |
+| `--out-dir DIR` | 输出目录，默认 `aibrief` |
+| `--demo` | 不联网，使用 `fixtures/` 里的数据 |
+| `--require-live` | 有效行情少于 `--min-rows` 行时退出 3，不写任何文件；演示数据不算有效行情 |
+| `--min-rows N` | 12 行里至少多少行取到最新点位才更新，默认 9（与固件的 `kMinLiveRows` 相同） |
 
-退出码 `3` 表示实时源不足或行情不新鲜；退出码 `5` 表示排版预检未通过或分析内容本身超过页位。两种情况都保留上一版文件。
+退出码：`0` 成功（包括行情没变、无需更新），`3` 有效行情不足，`5` 排版预检未通过。后两种情况都保留上一版文件。
 
-## 内容分页与 255 页编辑预算
+输出：
 
-1. **AI 每日总结**：市场情绪、多空比例、信号样本、板块方向、资金流向。
-2. **AI 看盘·A股 / 港股 / 美股**：指数、成交、市场广度、板块、资金与策略；标准六维复盘按“指数与成交 / 板块与策略”组织。
-3. **AI 情绪热力图**：全部命中关键词（最多 40 个）的热度、净信号、情绪和港股 ETF 代码；重复的长产品说明留在网页研报。
-4. **AI 政策分析**：8 大政策维度、鹰鸽取向、净多空、源数与提及数。
-5. **AI 板块机会**：机会 Top4 + 承压 Top2，每个方向保留一条代表证据及 ETF 代码。
-6. **全网快讯**：6 大板块、69 源、跨源去重、连续编号、完整标题双栏分页。
+- `latest.bin`：设备负载，`AIB1` + 宽高 + 15000 字节位图，共 15008 字节。
+- `version.txt`：设备比对用的小清单（`sha256` / `pages` / `bytes` / `generated_at`）。
+- `latest.png`：同一张图的 PNG 预览。
+- `meta.json`：每行的原始数值、单元格文字、数据来源和行情时间。
 
-> 另含 002 网页的两张深度栏目：**AI 政策深度**（知识库历史对照、舆情与术语口径、政策传导图谱、四步推理链）与 **AI 政策研报**（结论评级、受益/承压方向、长逻辑与风险、LSTM / Prophet 式时序读数）。
+行情与上一版逐位相同时，四个文件都不重写（`meta.json` 里的生成时间也不更新），工作流因此不会产生空提交。旧版多页简报留下的 `page_*.png`、`latest_combined.png`、`latest_contact_sheet.png` 会在下一次运行时被清掉。
 
-设备协议最多 **255 页**（固件 `page_count` 是 uint8 的上限，位图 3,825,000 字节 ≈ 3.65MB）。渲染器先完整排分析栏目（含政策深度与研报），再按 **全量快讯** 用二分法寻找「页数不超过 255 的最大条数」，把页位用满：每个来源按轮转顺序出条，各源纳入条数相差不超过 1 条。页眉标注“全量 N 条取 M 条”，`meta.json` 记录 `news_available / news_included / news_omitted / news_limit`。同时写出 `version.txt` 清单（sha256 / 页数 / 字节数），设备先比对再决定是否下载整包。不会缩字、截句或直接删除超出页位的内容；分析栏目本身超过 255 页时退出 5，不推送半成品。若显式指定 `--news-per-source N`，则按该口径精选，放不下时沿 20 → 16 → 12 → 8 → 6 → 5 → 4 → 3 → 2 → 1 逐级收敛。
+## 数据源与合并规则
 
-> 正式渲染机需要能访问 002 的数据源。GitHub Actions（`.github/workflows/aibrief.yml`）**每 3 小时实时抓取一次（每天 8 次：07:10 / 10:10 / 13:10 / 16:10 / 19:10 / 22:10 / 01:10 / 04:10 北京时间）**，先跑排版测试，再检查实时源和 A 股新鲜度，随后逐页预检、生成校样并提交；任何数据闸门失败都保留上一版。设备会在 5 分钟内取到新图并每 30 秒自动翻页；之后每 5 分钟比对 `version.txt`，内容没变就不重复下载。
+| 数据源 | 用途 |
+| --- | --- |
+| 腾讯证券 `qt.gtimg.cn` | A、美指数整行；港股指数的点位、涨跌幅、成交额；日韩指数的点位（备用） |
+| 新浪财经 `hq.sinajs.cn`（需要 `Referer`） | 港股指数的成交股数；腾讯缺行时提供整行 |
+| Naver 金融 `polling.finance.naver.com` | KOSPI / KOSDAQ 整行；日经 225 成交量；东证指数整行 |
+
+- 日经 225 盘中用腾讯的实时点位加 Naver 的成交量；Naver 标记收盘、腾讯缺行或两者点位相差超过 3% 时整行用 Naver。
+- 东证指数只用 Naver（腾讯和新浪的 TOPIX 数据不可用）。
+- 美股、日本指数没有可靠的成交额，固定显示 `--`。
+- 点位不大于 0 或涨跌幅绝对值超过 50% 的行按脏数据丢弃。
+- 单个数据源失败只影响它负责的行或列，不影响其余数据。
+
+## 排版
+
+- 画布 400×300，只有纯黑和纯白；全页阿里巴巴普惠体 3.0、16px，数字串、顶栏标题和市场色块用 Bold，其余用 Regular。
+- 文字用 FreeType `FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT` 直接生成 1bpp 字形，落在整数像素上；字宽取 LVGL 字库的 `adv_w`（四舍五入到 1/16 像素），不做字距调整，这样服务器位图和固件自绘逐像素相同。
+- 保存前预检：尺寸、字号、文字越界、文字互相重叠、灰阶像素，任何一项不通过都不写文件。
+- 页脚右侧 `x=194..388`、`y=279..300` 留白，设备在这里写「每分钟更新」或「读取 HH:MM」。
+
+## 改动版面、格式或数据源时
+
+服务器和固件各有一份实现，必须同步改：
+
+1. 改 `render_brief.py` / `market_quotes.py`，同时改固件的 `RLCD_CLOCK/main/ui/ui_market_panel_layout.h`、`ui_market_panel_render.cpp`、`RLCD_CLOCK/main/network/market_panel_contract.h`（接口地址在 `main/core/app_network_config.h`）。
+2. 面板新增了文字：把字补进 `RLCD_CLOCK/tools/gen_market_panel_fonts.py` 的清单并重新生成字库。
+3. `python3 device_brief/fixtures_tool.py --write` 重新生成期望值和基准图。
+4. 运行 `test_render_brief.py` 和固件主机测试 `market_panel_contract_test`、`market_panel_view_test`（命令见 [`docs/Aibrief_zh.md`](../docs/Aibrief_zh.md)）。
+
+## 定时任务
+
+`.github/workflows/aibrief.yml`：
+
+- 定时 `*/5 * * * *`，另外在渲染器、fixtures 或固件里对应的常量文件有改动时立即运行。
+- 代码改动和手动触发时先跑回归测试；定时运行只渲染（渲染器保存前自带排版预检）。
+- 只有默认分支上的运行会提交 `aibrief/`；其他分支渲染到临时目录并上传为工作流产物。
+- 有效行情不足（退出码 3）时只给出警告，不算失败。
+- GitHub 的定时任务经常延后或被跳过，实际间隔会长于 5 分钟。
+- 开盘时段行情每次都在变，`main` 上最多每 5 分钟多一个 `Update market panel device image` 提交。设备全部升级到新固件后，可以把 cron 调稀（例如 `*/30 * * * *`），位图只剩兜底用途。

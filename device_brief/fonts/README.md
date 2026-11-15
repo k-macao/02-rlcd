@@ -1,11 +1,11 @@
-# AI 简报字体来源
+# 行情面板字体来源
 
-本目录的 AI 简报渲染统一使用 **阿里巴巴普惠体 3.0 / Alibaba PuHuiTi 3.0，Version 3.01**：
+本目录的行情数据面板渲染统一使用 **阿里巴巴普惠体 3.0 / Alibaba PuHuiTi 3.0，Version 3.01**：
 
-- `AlibabaPuHuiTi-3-55-Regular.ttf`：正文与其他非标题文字。
-- `AlibabaPuHuiTi-3-85-Bold.ttf`：页标题、栏目/卡片/快讯标题及完整数值串。
+- `AlibabaPuHuiTi-3-55-Regular.ttf`：指数名称、列标题、单位等文字。
+- `AlibabaPuHuiTi-3-85-Bold.ttf`：数值串、顶栏标题和市场色块。
 
-字体文件保持原样，渲染器不会回退到其他字体家族。固件中的小型 LVGL 字库由上述文件按界面实际字符集转换生成。
+字体文件保持原样，渲染器不会回退到其他字体家族。固件中的小型 LVGL 字库由上述文件按界面实际字符集转换生成（`RLCD_CLOCK/tools/gen_market_panel_fonts.py`）。
 
 ## 来源固定版本
 
