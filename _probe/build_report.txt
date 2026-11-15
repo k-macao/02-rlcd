@@ -1,0 +1,74 @@
+commit=eb95fa60ac675224f5554dc4f8e3dee013a8e563
+exit_code=0
+log_lines=2090
+
+=== errors with context ===
+
+=== warnings (project sources only, unique) ===
+
+=== size / partition lines ===
+Bootloader binary size 0x4e30 bytes. 0x31d0 bytes (39%) free.
+weather_clock.bin binary size 0x610d50 bytes. Smallest app partition is 0x6c0000 bytes. 0xaf2b0 bytes (10%) free.
+Project build complete. To flash, run:
+
+=== log tail ===
+[1736/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/audio/audio_chime.cpp.obj
+[1737/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/alarm/alarm_runtime_state.cpp.obj
+[1738/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/audio/audio_services.cpp.obj
+[1739/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/pomodoro/pomodoro_runtime_state.cpp.obj
+[1740/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_activation_flow.cpp.obj
+[1741/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/alarm/alarm_services.cpp.obj
+[1742/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_activation_storage.cpp.obj
+[1743/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/pomodoro/pomodoro_services.cpp.obj
+[1744/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_activation_client.cpp.obj
+[1745/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_auto_return_state.cpp.obj
+[1746/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_binding_voice_state.cpp.obj
+[1747/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_conversation_io.cpp.obj
+[1748/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_binding_voice.cpp.obj
+[1749/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_ai.cpp.obj
+[1750/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_audio_frames.cpp.obj
+[1751/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_mcp_json.cpp.obj
+[1752/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_conversation_events.cpp.obj
+[1753/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_mcp_schema.cpp.obj
+[1754/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_runtime_diagnostics.cpp.obj
+[1755/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_server_hello_parser.cpp.obj
+[1756/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_text_utils.cpp.obj
+[1757/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_mcp.cpp.obj
+[1758/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_mcp_arguments.cpp.obj
+[1759/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_power_session.cpp.obj
+[1760/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_snapshot_state.cpp.obj
+[1761/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_voice_codec.cpp.obj
+[1762/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_tts_playback.cpp.obj
+[1763/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_voice_io_storage.cpp.obj
+[1764/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/qweather_icons_36.c.obj
+[1765/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/input/input_tasks.cpp.obj
+[1766/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_voice.cpp.obj
+[1767/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/boot_anim.c.obj
+[1768/1780] Building CXX object esp-idf/main/CMakeFiles/__idf_main.dir/xiaozhi/xiaozhi_websocket_session.cpp.obj
+[1769/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/zh_flip_lunar_22.c.obj
+[1770/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/market_panel_bold_16.c.obj
+[1771/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/market_panel_text_16.c.obj
+[1772/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/zh_pomodoro_title_24.c.obj
+[1773/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/aggregate_numeric_20.c.obj
+[1774/1780] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/assets/zh_font_16.c.obj
+[1775/1780] Linking C static library esp-idf/main/libmain.a
+[1776/1780] Generating esp-idf/esp_system/ld/sections.ld
+[1777/1780] Building C object CMakeFiles/weather_clock.elf.dir/project_elf_src_esp32s3.c.obj
+[1778/1780] Linking CXX executable weather_clock.elf
+[1779/1780] Generating binary image from built executable
+esptool.py v4.12.dev1
+Creating esp32s3 image...
+Merged 4 ELF sections
+Successfully created esp32s3 image.
+Generated /app/repo/RLCD_CLOCK/build/weather_clock.bin
+[1780/1780] cd /app/repo/RLCD_CLOCK/build/esp-idf/esptool_py && /opt/esp/python_env/idf5.5_py3.12_env/bin/python /opt/esp/idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /app/repo/RLCD_CLOCK/build/partition_table/partition-table.bin /app/repo/RLCD_CLOCK/build/weather_clock.bin
+weather_clock.bin binary size 0x610d50 bytes. Smallest app partition is 0x6c0000 bytes. 0xaf2b0 bytes (10%) free.
+
+Project build complete. To flash, run:
+ idf.py flash
+or
+ idf.py -p PORT flash
+or
+ python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m 0x0 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin 0xf000 build/ota_data_initial.bin 0x20000 build/weather_clock.bin 0xfa0000 build/srmodels/srmodels.bin
+or from the "/app/repo/RLCD_CLOCK/build" directory
+ python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash "@flash_args"
