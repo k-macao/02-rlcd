@@ -61,7 +61,7 @@ constexpr const char *kQuoteUserAgent =
 
 static_assert(market_panel::kRowCount - kTencentOnlyRows < market_panel::kMinLiveRows,
               "without Tencent the panel cannot reach the live row threshold");
-static_assert(kResponseBufferBytes >= 2 * 3344,
+static_assert(kResponseBufferBytes >= 2 * 3348,
               "response buffer must keep headroom over the largest measured body");
 
 struct BodyContext {

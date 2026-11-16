@@ -1024,6 +1024,15 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("actions/workflows/aibrief.yml/runs", self.watchdog)
         self.assertIn('select(.status != "completed")', self.watchdog)
 
+    def test_no_probe_configuration_is_left_behind(self):
+        # 在工作分支上实测发布循环时会临时改工作流（让分支也发布、缩短一轮、强杀循环）；
+        # 这些改动不能带进 main：分支上也发布会和 main 抢 aibrief/，强杀会让每一轮都失败。
+        for name, text in (("aibrief.yml", self.loop), ("aibrief-watchdog.yml", self.watchdog)):
+            for marker in ("PROBE", "_probe", "pkill"):
+                self.assertNotIn(marker, text, f"{name}: {marker}")
+        self.assertEqual(self.setting("LOOP_MINUTES"), 330)
+        self.assertFalse((ROOT / "_probe").exists())
+
     def test_tests_and_loop_files_trigger_the_workflow(self):
         for path in ("device_brief/publish_loop.py", "device_brief/test_publish_loop.py",
                      "device_brief/render_brief.py", ".github/workflows/aibrief.yml",
