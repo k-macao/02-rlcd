@@ -1,0 +1,140 @@
+name: zz-probe
+
+# 临时探针：在 Actions 执行机上实测汇率接口（沙箱访问不了行情主机）。合并前必须删除。
+on:
+  push:
+    branches: ["arena/e4dbd6ef-02-rlcd"]
+    paths: [".github/workflows/zz-probe.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: probe fx endpoints
+        run: |
+          set +e
+          mkdir -p _probe/fx
+          python3 - <<'PY'
+          import json, pathlib, time, urllib.request
+
+          UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+          OUT = pathlib.Path("_probe/fx")
+          LOG = []
+
+          def log(text=""):
+              print(text)
+              LOG.append(text)
+
+          def get(url, referer=None, timeout=8):
+              headers = {"User-Agent": UA, "Accept": "*/*"}
+              if referer:
+                  headers["Referer"] = referer
+              started = time.time()
+              try:
+                  request = urllib.request.Request(url, headers=headers)
+                  with urllib.request.urlopen(request, timeout=timeout) as response:
+                      body = response.read(262144)
+                      return response.status, dict(response.headers), body, time.time() - started
+              except Exception as exc:  # noqa: BLE001
+                  return None, {}, repr(exc).encode(), time.time() - started
+
+          def show(label, url, referer=None, encoding="gbk", save=None):
+              status, headers, body, seconds = get(url, referer)
+              log(f"## {label}")
+              log(f"url={url}")
+              log(f"status={status} bytes={len(body)} seconds={seconds:.2f} "
+                  f"content-type={headers.get('Content-Type')} cache={headers.get('Cache-Control')}")
+              log(body.decode(encoding, "replace").strip())
+              log()
+              if save:
+                  (OUT / save).write_bytes(body)
+              return status, body
+
+          log(f"probe started {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())} UTC")
+          log()
+
+          # ---- 腾讯：逐个代码试，看哪些写法有数据
+          tencent_candidates = (
+              "whUSDCNY whUSDHKD whUSDKRW whHKDCNY whCNYHKD whHKDKRW whKRWHKD whUSDCNH whHKDCNH "
+              "whCNHHKD whUSDJPY whHKDJPY whJPYHKD whKRWCNY whCNYKRW "
+              "fxUSDCNY fxUSDHKD fxUSDKRW fxHKDCNY fx_susdcny fx_shkdcny "
+              "USDCNY HKDCNY s_whUSDCNY r_whUSDCNY wh_USDCNY FXUSDCNY whUSDX "
+              "hf_USDCNY hf_USDHKD fxUSDCNYC fxHKDCNYC whusdcny"
+          ).split()
+          valid = []
+          for symbol in tencent_candidates:
+              status, headers, body, seconds = get("https://qt.gtimg.cn/q=" + symbol)
+              text = body.decode("gbk", "replace").strip()
+              ok = status == 200 and "none_match" not in text and "~" in text
+              log(f"tencent {symbol:<12} status={status} bytes={len(body):>4} ok={ok} :: {text[:400]}")
+              if ok:
+                  valid.append(symbol)
+          log()
+          log("tencent valid: " + ",".join(valid))
+          log()
+
+          # ---- 新浪：未知代码返回空串，可以一次问完
+          sina_candidates = (
+              "fx_susdcny,fx_susdhkd,fx_susdkrw,fx_shkdcny,fx_scnyhkd,fx_shkdkrw,fx_skrwhkd,"
+              "fx_susdcnh,fx_shkdcnh,fx_scnhhkd,fx_susdjpy,fx_shkdjpy,fx_sjpyhkd,fx_skrwcny,"
+              "fx_scnykrw,USDCNY,HKDCNY,fx_shkdusd"
+          )
+          SINA_REFERER = "https://finance.sina.com.cn/"
+          show("sina candidates", "https://hq.sinajs.cn/list=" + sina_candidates,
+               SINA_REFERER, "gb18030", "sina_candidates.txt")
+
+          # ---- 同一时刻的生产接口快照（腾讯地址后面追加有数据的汇率代码）
+          base = ("https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,r_hkHSI,r_hkHSTECH,"
+                  "usDJI,usIXIC,usINX,gzN225,gzKS11,gzKOSDAQ")
+          show("tencent production", base, None, "gbk", "tencent_base.txt")
+          if valid:
+              show("tencent production + fx", base + "," + ",".join(valid), None, "gbk",
+                   "tencent_with_fx.txt")
+              show("tencent fx only", "https://qt.gtimg.cn/q=" + ",".join(valid), None, "gbk",
+                   "tencent_fx_only.txt")
+          show("sina production", "https://hq.sinajs.cn/list=rt_hkHSI,rt_hkHSTECH",
+               SINA_REFERER, "gb18030", "sina_hk.txt")
+          show("sina production + fx",
+               "https://hq.sinajs.cn/list=rt_hkHSI,rt_hkHSTECH,fx_susdcny,fx_susdhkd,fx_susdkrw",
+               SINA_REFERER, "gb18030", "sina_with_fx.txt")
+          show("naver kr",
+               "https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ",
+               None, "utf-8", "naver_kr.json")
+          show("naver jp",
+               "https://polling.finance.naver.com/api/realtime/worldstock/index/.N225,.TOPX",
+               None, "utf-8", "naver_jp.json")
+
+          # ---- 更新频率：每 30 秒取一次，共 7 次
+          log("## time series (every 30 s)")
+          for index in range(7):
+              stamp = time.strftime("%H:%M:%S", time.gmtime())
+              if valid:
+                  status, headers, body, seconds = get("https://qt.gtimg.cn/q=" + ",".join(valid))
+                  (OUT / f"series_tencent_{index}.txt").write_bytes(body)
+                  for line in body.decode("gbk", "replace").strip().splitlines():
+                      log(f"[{stamp}] T {line[:220]}")
+              status, headers, body, seconds = get(
+                  "https://hq.sinajs.cn/list=fx_susdcny,fx_susdhkd,fx_susdkrw,fx_shkdcny",
+                  SINA_REFERER)
+              (OUT / f"series_sina_{index}.txt").write_bytes(body)
+              for line in body.decode("gb18030", "replace").strip().splitlines():
+                  log(f"[{stamp}] S {line[:220]}")
+              if index < 6:
+                  time.sleep(30)
+          log()
+          log(f"probe finished {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())} UTC")
+          (OUT / "summary.txt").write_text("\n".join(LOG) + "\n", encoding="utf-8")
+          PY
+          echo "python exit=$?"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _probe
+          git commit -q -m "probe: fx endpoints [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "::notice title=probe::pushed $(git rev-parse --short HEAD) files=$(ls _probe/fx | wc -l)"
