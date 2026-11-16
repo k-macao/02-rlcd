@@ -1032,6 +1032,7 @@ class WorkflowTest(unittest.TestCase):
                 self.assertNotIn(marker, text, f"{name}: {marker}")
         self.assertEqual(self.setting("LOOP_MINUTES"), 330)
         self.assertFalse((ROOT / "_probe").exists())
+        self.assertEqual(sorted(path.name for path in WORKFLOWS.glob("zz-*")), [])
 
     def test_tests_and_loop_files_trigger_the_workflow(self):
         for path in ("device_brief/publish_loop.py", "device_brief/test_publish_loop.py",
