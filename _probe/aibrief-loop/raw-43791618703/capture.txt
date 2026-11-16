@@ -1,0 +1,5 @@
+fetched_at_utc=2026-11-16T02:21:06+00:00
+tencent_quotes.txt: HTTP 200, 3347 bytes
+sina_hk.txt: HTTP 200, 389 bytes
+naver_kr.json: HTTP 200, 2026 bytes
+naver_jp.json: HTTP 200, 2064 bytes
