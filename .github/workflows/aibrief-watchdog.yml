@@ -1,0 +1,43 @@
+name: 行情面板看门狗
+
+# 行情面板的设备图由 aibrief.yml 里的常驻循环每分钟更新，循环靠自己接力延续：
+# 每一轮都会预约好下一轮，中途意外中断时排队的那一轮会自动续上。
+# 这里兜的是整条链都断了的情况（没有任何运行中或排队中的运行，例如连续启动失败、
+# 运行被全部取消）：把循环重新拉起。
+#
+# GitHub 的定时任务不保证准点，在本仓库实际几小时才触发一次，所以它只适合做看门狗，
+# 不适合直接驱动更新。发现停更时也可以不等它：手动 Run workflow 运行本工作流或
+# 「生成行情数据面板设备图」即可。
+
+on:
+  schedule:
+    # 每小时两次，避开整点的高峰。
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  # 用 workflow_dispatch 触发 aibrief.yml。
+  actions: write
+
+jobs:
+  watchdog:
+    name: 发布循环不在运行时把它拉起来
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检查并拉起发布循环
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # 设备只读默认分支上的文件，循环也只在默认分支上发布。
+          BRANCH: ${{ github.event.repository.default_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          unfinished="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/aibrief.yml/runs?branch=${BRANCH}&per_page=20" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          if [[ "$unfinished" != "0" ]]; then
+            echo "发布循环正在运行或排队（${unfinished} 个未结束的运行），无需处理"
+            exit 0
+          fi
+          echo "没有运行中的发布循环，重新拉起"
+          gh workflow run aibrief.yml --repo "${GITHUB_REPOSITORY}" --ref "${BRANCH}" -f relay=true

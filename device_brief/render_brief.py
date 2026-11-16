@@ -8,8 +8,8 @@
 
 两条更新链路共用同一张版面：
 - 新固件（v1.8.7+）每分钟直连行情接口，在设备上按同一套坐标自绘面板；
-- 本脚本由 GitHub Actions 每 5 分钟出一张位图，供旧固件显示，
-  并在设备直连行情接口失败时兜底。
+- 本脚本由 GitHub Actions 里的常驻循环（``publish_loop.py``）每分钟出一张位图，
+  供旧固件显示，并在设备直连行情接口失败时兜底。
 
 版面坐标、固定文字和数字格式在固件里各有一份
 （``RLCD_CLOCK/main/ui/ui_market_panel_layout.h``、``ui_market_panel_render.cpp``、
@@ -27,13 +27,14 @@ FreeType 原生 MONO + 整数像素定位、页面只有纯黑 / 纯白；保存
 产物（默认写入 aibrief/）：
   latest.bin   AIB1 + 宽高 + 15000 字节 1bpp 位图（MSB first，1=黑），固定 1 页
   version.txt  设备条件请求用的小清单（sha256 / 页数 / 字节数），内容不变就不下载
-  latest.png   PNG 预览
   meta.json    行情时间、各数据源状态、逐行数值、预检结果、SHA-256
+  latest.png   PNG 预览（``--no-preview`` 时不生成，已有的会删掉）
 
 用法：
   python3 device_brief/render_brief.py                 # 抓取实时行情并渲染
   python3 device_brief/render_brief.py --demo          # 离线演示（fixtures 里的实测行情）
   python3 device_brief/render_brief.py --require-live  # 有效行数不足则退出 3，保留上一版（CI 用）
+  python3 device_brief/render_brief.py --no-preview    # 只出设备要读的文件（每分钟发布时用）
 """
 from __future__ import annotations
 
@@ -69,6 +70,7 @@ PANEL_PAGES = 1
 MAGIC = b"AIB1"
 # 设备先拉这个几十字节的小清单比对新旧 sha256，只有内容变了才下载位图。
 MANIFEST_NAME = "version.txt"
+PREVIEW_NAME = "latest.png"
 MANIFEST_VERSION = 1
 LAYOUT_VERSION = "3.0-market-panel-12rows"
 CN_TIMEZONE = market_quotes.TZ_CN
@@ -447,11 +449,15 @@ def panel_meta(panel: PanelData, now: datetime) -> dict:
     }
 
 
-def save(sheet: Sheet, out_dir: Path, meta: dict) -> dict:
+def save(sheet: Sheet, out_dir: Path, meta: dict, preview: bool = True) -> dict:
     """先完成全部校验，再创建/覆盖交付文件；位图没变时什么都不写。
 
     位图里只有行情和行情时间，没有渲染时间：休市期间每次运行得到的位图逐位相同，
     这里就不重写任何文件，工作流不会产生空提交，设备也不会重复下载同一张图。
+
+    ``preview=False`` 时不生成 PNG 预览，并删掉已有的那张（否则会留下一张与
+    ``latest.bin`` 对不上的旧图）。每分钟发布时用：PNG 本身已是压缩数据，git 无法
+    对它做增量压缩，实测占每次提交体积的一半以上，而设备并不读它。
     """
     validate(sheet)
     out_dir = Path(out_dir)
@@ -486,11 +492,15 @@ def save(sheet: Sheet, out_dir: Path, meta: dict) -> dict:
     removed = remove_stale_outputs(out_dir)
     bin_path = out_dir / "latest.bin"
     manifest_path = out_dir / MANIFEST_NAME
+    preview_path = out_dir / PREVIEW_NAME
+    if not preview and preview_path.is_file():
+        preview_path.unlink()
+        print(f"已删除 PNG 预览 {preview_path}（--no-preview）")
     unchanged = (
         bin_path.is_file() and bin_path.read_bytes() == payload
         and manifest_path.is_file()
         and parse_manifest(manifest_path.read_text(encoding="utf-8")).get("sha256") == sha256
-        and (out_dir / "latest.png").is_file() and (out_dir / "meta.json").is_file()
+        and (preview_path.is_file() or not preview) and (out_dir / "meta.json").is_file()
     )
     meta["unchanged"] = unchanged
     if unchanged:
@@ -499,7 +509,8 @@ def save(sheet: Sheet, out_dir: Path, meta: dict) -> dict:
         return meta
 
     bin_path.write_bytes(payload)
-    sheet.image.convert("1", dither=Image.NONE).save(out_dir / "latest.png")
+    if preview:
+        sheet.image.convert("1", dither=Image.NONE).save(preview_path)
     (out_dir / "meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest_path.write_text(
@@ -534,6 +545,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="有效行数不足 --min-rows 时退出 3，保留上一版")
     parser.add_argument("--min-rows", type=int, default=DEFAULT_MIN_ROWS,
                         help=f"至少多少行有最新点位才更新设备图（默认 {DEFAULT_MIN_ROWS}）")
+    parser.add_argument("--no-preview", action="store_true",
+                        help=f"不生成 {PREVIEW_NAME} 预览并删掉已有的（每分钟发布时用，"
+                             "PNG 占提交体积的一半以上而设备不读它）")
     args = parser.parse_args(argv)
     if not 1 <= args.min_rows <= len(market_quotes.PANEL_ROWS):
         parser.error(f"--min-rows 必须在 1..{len(market_quotes.PANEL_ROWS)} 之间")
@@ -556,7 +570,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         sheet = draw_panel(panel)
-        meta = save(sheet, Path(args.out_dir), panel_meta(panel, china_now()))
+        meta = save(sheet, Path(args.out_dir), panel_meta(panel, china_now()),
+                    preview=not args.no_preview)
     except LayoutError as exc:
         print(f"排版预检未通过：{exc}", file=sys.stderr)
         return 5

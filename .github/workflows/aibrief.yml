@@ -1,24 +1,41 @@
 name: 生成行情数据面板设备图
 
 # 设备主页是「全球行情」数据面板。新固件每分钟直连行情接口，在设备上自绘面板；
-# 这个工作流每 5 分钟用同样的数据源渲染一张同款位图，供旧固件显示，
+# 这个工作流用同样的数据源每分钟渲染一张同款位图提交到 aibrief/，供旧固件显示，
 # 并在设备直连行情接口失败时兜底。行情没有变化时不产生提交。
+#
+# GitHub 的定时任务（schedule）做不到每分钟，在本仓库实际几小时才触发一次，
+# 所以这里不用定时器，而是一个常驻循环（device_brief/publish_loop.py）：
+#   - 每 INTERVAL_SECONDS 秒抓一次行情并渲染，画面有变化就提交推送；
+#   - 单个任务最长 6 小时，所以一轮只跑 LOOP_MINUTES 分钟。每一轮正常运行几分钟后就
+#     预约好下一轮：同一分支只允许一个循环在跑，预约的运行会一直排队，等当前这轮
+#     结束（跑满、出错、被取消或执行机故障）就自动开始。所以 Actions 页面上平时
+#     总有一个运行中的和一个排队中的运行，这是正常状态；
+#   - 有代码推送或有人手动 Run workflow 时，正在跑的循环立刻让位，新代码一分钟内接管；
+#   - 整条链都断了（没有任何运行中或排队中的运行）时由 aibrief-watchdog.yml 重新
+#     拉起，也可以手动 Run workflow。
+#
+# 更新间隔改 INTERVAL_SECONDS。交易时段每次更新是 main 上的一个提交
+# （每分钟一次时每个交易日约 870 个，估算仓库每年增长约 0.65 GB）；改成 300 可以降到约五分之一。
+#
+# 要停止更新：先在 Actions 页面把本工作流和「行情面板看门狗」都 Disable，
+# 再把运行中和排队中的运行都取消（只取消不 Disable，排队的那一轮会接着跑）。
 
 on:
-  schedule:
-    # 每 5 分钟一次（GitHub 的定时任务在高峰期可能延后，属于平台行为）。
-    - cron: "*/5 * * * *"
   push:
     branches: ["**"]
-    # 渲染器、数据层或版面有改动时立即跑一遍测试并换图，不等下一次定时任务。
+    # 渲染器、数据层、版面或发布循环有改动时立即跑测试并换上新代码。
     # 固件里与渲染器各有一份的常量（版面、接口地址、字库清单）改动时也要跑测试比对。
     paths:
       - ".github/workflows/aibrief.yml"
+      - ".github/workflows/aibrief-watchdog.yml"
       - "device_brief/render_brief.py"
       - "device_brief/market_quotes.py"
       - "device_brief/mono_text.py"
+      - "device_brief/publish_loop.py"
       - "device_brief/fixtures_tool.py"
       - "device_brief/test_render_brief.py"
+      - "device_brief/test_publish_loop.py"
       - "device_brief/fixtures/**"
       - "device_brief/fonts/**"
       - "RLCD_CLOCK/main/ui/ui_market_panel_layout.h"
@@ -31,29 +48,65 @@ on:
   workflow_dispatch:
     inputs:
       min_rows:
-        description: "12 行里至少多少行取到最新点位才更新设备图"
+        description: "12 行里至少多少行取到最新点位才更新设备图（只对这一轮生效）"
         required: false
         default: "9"
         type: string
+      relay:
+        description: "自动接力 / 看门狗触发时为 true（跳过回归测试）；手动运行不用改"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  # 接力：循环用 workflow_dispatch 预约 / 触发下一轮。
+  actions: write
 
-concurrency:
-  # 同一分支上的运行排队执行，避免两次运行抢着提交。
-  group: aibrief-device-image-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  # 只有默认分支上的运行才把设备图提交回仓库（设备只读默认分支上的文件）并接力；
+  # 其他分支只渲染一次到临时目录，方便在合并前检查效果。
+  PUBLISH: ${{ github.ref_name == github.event.repository.default_branch }}
+  # 两次更新的间隔（秒）。
+  INTERVAL_SECONDS: "60"
+  # 一轮循环的时长（分钟）；单个任务上限 6 小时，留出环境准备和收尾的余量。
+  LOOP_MINUTES: "330"
 
 jobs:
-  render:
-    name: 渲染 400x300 单色图并提交
+  test:
+    name: 回归测试
+    # 测试结果只取决于仓库内容：代码推送和手动触发时跑，自动接力不重复跑。
+    # 测试不拦发布循环：固件与渲染器的常量对不上不应该让设备图停更。
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.relay) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      # 只有默认分支上的运行才把设备图提交回仓库（设备只读默认分支上的文件）；
-      # 其他分支只跑测试并渲染到临时目录，方便在合并前检查效果。
-      # 定时任务只会在默认分支上运行。
-      PUBLISH: ${{ github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch }}
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装渲染依赖
+        run: python3 -m pip install --disable-pip-version-check pillow==13.0.0 freetype-py==2.5.1
+
+      - name: 渲染器回归测试
+        run: python3 device_brief/test_render_brief.py
+
+      - name: 发布循环回归测试
+        run: python3 device_brief/test_publish_loop.py
+
+  render:
+    name: 每分钟渲染并提交设备图
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    concurrency:
+      # 同一分支上只有一个循环在跑，后来的运行排队：预约的接力一直排到当前这轮结束；
+      # 代码推送或手动触发的运行在排队时，正在跑的循环发现后会让位。
+      group: aibrief-device-image-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -67,80 +120,32 @@ jobs:
         # 固定版本：位图要与固件自绘逐像素相同，字形栅格化不能随依赖升级悄悄变化。
         run: python3 -m pip install --disable-pip-version-check pillow==13.0.0 freetype-py==2.5.1
 
-      - name: 运行回归测试
-        # 测试结果只取决于仓库内容：代码改动（push）和手动触发时跑，
-        # 每 5 分钟一次的定时任务不重复跑；渲染器保存前自带排版预检。
-        if: github.event_name != 'schedule'
-        run: python3 device_brief/test_render_brief.py
-
-      - name: 抓取行情并渲染面板
-        id: render
+      - name: 发布循环
         env:
+          GH_TOKEN: ${{ github.token }}
           MIN_ROWS: ${{ github.event_name == 'workflow_dispatch' && inputs.min_rows || '9' }}
         run: |
-          set -uo pipefail
-          if [[ "$PUBLISH" == "true" ]]; then
-            out_dir="aibrief"
-          else
-            out_dir="${RUNNER_TEMP}/aibrief-preview"
-          fi
-          echo "out_dir=${out_dir}" >> "$GITHUB_OUTPUT"
-          python3 device_brief/render_brief.py \
-            --out-dir "${out_dir}" \
-            --require-live \
-            --min-rows "${MIN_ROWS}"
-          status=$?
-          if [[ "$status" -eq 3 ]]; then
-            # 行情接口暂时取不到足够的数据：保留上一版设备图，本轮不算失败。
-            echo "::warning::有效行情不足，本轮不更新设备图"
-            echo "rendered=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ "$status" -ne 0 ]]; then
-            exit "$status"
-          fi
-          echo "rendered=true" >> "$GITHUB_OUTPUT"
-          ls -l "${out_dir}"
-
-      - name: 提交设备图
-        if: env.PUBLISH == 'true' && steps.render.outputs.rendered == 'true'
-        run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # 渲染结果就是 aibrief/ 应有的完整内容（含删除旧版多页简报的残页）。
-          rm -rf "${RUNNER_TEMP}/aibrief-new"
-          cp -r aibrief "${RUNNER_TEMP}/aibrief-new"
-          for attempt in 1 2 3; do
-            git add -A aibrief
-            if git diff --cached --quiet; then
-              echo "设备图无变化"
-              exit 0
-            fi
-            git commit -q -m "Update market panel device image [skip ci]"
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              exit 0
-            fi
-            # 远端先有了别的提交（例如 OTA 清单）：把本次结果放到最新提交上重试。
-            echo "推送被拒绝，第 ${attempt} 次重试"
-            git fetch --depth=1 origin "${GITHUB_REF_NAME}"
-            git reset -q --hard FETCH_HEAD
-            rm -rf aibrief
-            cp -r "${RUNNER_TEMP}/aibrief-new" aibrief
-          done
-          echo "连续 3 次推送失败" >&2
-          exit 1
+          if [[ "$PUBLISH" == "true" ]]; then
+            python3 device_brief/publish_loop.py \
+              --out-dir aibrief \
+              --publish \
+              --no-preview \
+              --interval "$INTERVAL_SECONDS" \
+              --loop-seconds "$((LOOP_MINUTES * 60))" \
+              --min-rows "$MIN_ROWS"
+          else
+            python3 device_brief/publish_loop.py \
+              --out-dir "${RUNNER_TEMP}/aibrief-preview" \
+              --loop-seconds 0 \
+              --min-rows "$MIN_ROWS"
+          fi
 
       - name: 保存预览产物
-        # 定时任务每 5 分钟一次，不逐次留产物；只有手动触发和代码改动触发时保存。
-        if: github.event_name != 'schedule' && steps.render.outputs.rendered == 'true'
+        if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: market-panel-device-image
-          path: |
-            ${{ steps.render.outputs.out_dir }}/latest.bin
-            ${{ steps.render.outputs.out_dir }}/version.txt
-            ${{ steps.render.outputs.out_dir }}/latest.png
-            ${{ steps.render.outputs.out_dir }}/meta.json
-          if-no-files-found: error
+          path: ${{ runner.temp }}/aibrief-preview/
+          if-no-files-found: warn
           retention-days: 14

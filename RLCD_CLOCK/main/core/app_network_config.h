@@ -22,9 +22,10 @@ inline constexpr const char *kOtaBackupManifestUrl = WEATHER_CLOCK_OTA_BACKUP_MA
 // 行情数据面板：设备每分钟直连下面四个公开行情接口（无需密钥），在本机画出面板。
 // 地址必须与服务器渲染器 device_brief/market_quotes.py 里的常量逐字一致，
 // device_brief/test_render_brief.py 会比对两边。
+// 港股指数必须用带 r_ 前缀的实时代码：不带前缀的 hkHSI / hkHSTECH 延迟 15 分钟。
 #ifndef WEATHER_CLOCK_MARKET_TENCENT_URL
 #define WEATHER_CLOCK_MARKET_TENCENT_URL \
-    "https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,hkHSI,hkHSTECH," \
+    "https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,r_hkHSI,r_hkHSTECH," \
     "usDJI,usIXIC,usINX,gzN225,gzKS11,gzKOSDAQ"
 #endif
 #ifndef WEATHER_CLOCK_MARKET_SINA_HK_URL

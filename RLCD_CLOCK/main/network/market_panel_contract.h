@@ -585,7 +585,8 @@ inline bool set_price_and_pct(Quote *quote, bool have_last, double last,
 // 响应是若干条 v_代码="字段~字段~…"; 语句（GBK 编码，名称字段不使用）。
 // 沪深 / 港 / 美（至少 38 个字段）：[3] 最新 [30] 时间 [32] 涨跌幅% [36] 成交量 [37] 成交额
 //   沪深指数 [36] 单位手、[37] 单位万元；
-//   港股指数 [36][37] 都是成交额（万港元），没有成交股数；
+//   港股指数 [36][37] 都是成交额（万港元），没有成交股数；只认实时代码 r_hkHSI /
+//   r_hkHSTECH（不带 r_ 的延迟 15 分钟）；
 //   美股指数 [36] 是成交股数，[37] 是「股数×点位」的无意义值，丢弃。
 // 环球指数（gz 前缀，至少 6 个字段）：[2] 北京时间 [3] 最新 [5] 涨跌幅%，没有成交量。
 inline bool parse_tencent(const char *text, size_t length, SourceQuotes *out)
@@ -604,8 +605,8 @@ inline bool parse_tencent(const char *text, size_t length, SourceQuotes *out)
     };
     static constexpr Symbol kSymbols[] = {
         {"sh000001", kRowSh000001, 'a'}, {"sz399001", kRowSz399001, 'a'},
-        {"sz399006", kRowSz399006, 'a'}, {"hkHSI", kRowHkHsi, 'h'},
-        {"hkHSTECH", kRowHkHstech, 'h'}, {"usDJI", kRowUsDji, 'u'},
+        {"sz399006", kRowSz399006, 'a'}, {"r_hkHSI", kRowHkHsi, 'h'},
+        {"r_hkHSTECH", kRowHkHstech, 'h'}, {"usDJI", kRowUsDji, 'u'},
         {"usIXIC", kRowUsIxic, 'u'},     {"usINX", kRowUsInx, 'u'},
         {"gzKS11", kRowKospi, 'g'},      {"gzKOSDAQ", kRowKosdaq, 'g'},
         {"gzN225", kRowN225, 'g'},

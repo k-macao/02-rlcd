@@ -47,10 +47,14 @@ FETCH_TIMEOUT = 8
 FETCH_ATTEMPTS = 2
 
 # 与固件 app_network_config.h 里的四个地址逐字一致。
+# 港股指数必须用带 r_ 前缀的实时代码：不带前缀的 hkHSI / hkHSTECH 延迟 15 分钟
+# （2026-11-16 盘中实测：同一次请求里 hkHSI 的行情时间是 09:45:16，r_hkHSI 是 10:00:21）。
 TENCENT_URL = (
-    "https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,hkHSI,hkHSTECH,"
+    "https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,r_hkHSI,r_hkHSTECH,"
     "usDJI,usIXIC,usINX,gzN225,gzKS11,gzKOSDAQ"
 )
+# 腾讯实时港股代码的前缀；行键不带它（hkHSI / hkHSTECH），与新浪一致。
+TENCENT_REALTIME_PREFIX = "r_"
 SINA_HK_URL = "https://hq.sinajs.cn/list=rt_hkHSI,rt_hkHSTECH"
 SINA_REFERER = "https://finance.sina.com.cn/"
 NAVER_KR_URL = "https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ"
@@ -76,7 +80,7 @@ MAX_ABS_PCT = 50.0
 
 @dataclass(frozen=True)
 class RowSpec:
-    key: str      # 行唯一键（同时是腾讯 / Naver 的代码）
+    key: str      # 行唯一键（同时是腾讯 / Naver 的代码；港股在腾讯的代码是 r_ + 行键）
     market: str   # 市场标签：A / 港 / 美 / 韩 / 日
     name: str     # 面板上显示的名称
 
@@ -265,7 +269,8 @@ def parse_tencent(text: str) -> Dict[str, Quote]:
     沪深 / 港 / 美（长格式，至少 38 个字段）：
         [3] 最新  [30] 时间  [32] 涨跌幅%  [36] 成交量  [37] 成交额
       沪深指数 [36] 单位手、[37] 单位万元；
-      港股指数 [36][37] 都是成交额（万港元），没有成交股数；
+      港股指数 [36][37] 都是成交额（万港元），没有成交股数；只认实时代码
+      ``r_hkHSI`` / ``r_hkHSTECH``（不带 ``r_`` 的延迟 15 分钟），返回的键去掉 ``r_``；
       美股指数 [36] 是成交股数，[37] 是「股数×点位」的无意义值，丢弃。
     环球指数（gz 前缀，至少 6 个字段）：
         [2] 北京时间  [3] 最新  [5] 涨跌幅%（没有成交量）
@@ -291,9 +296,10 @@ def parse_tencent(text: str) -> Dict[str, Quote]:
                 quote.volume = volume * 100 if volume else None      # 手 → 股
                 quote.turnover = amount * 1e4 if amount else None    # 万元 → 元
                 quote.time = _parse_time(fields[30], "%Y%m%d%H%M%S", TZ_CN)
-            elif symbol.startswith("hk"):
+            elif symbol.startswith(TENCENT_REALTIME_PREFIX + "hk"):
                 quote.turnover = amount * 1e4 if amount else None    # 万港元 → 港元
                 quote.time = _parse_time(fields[30], "%Y/%m/%d %H:%M:%S", TZ_HK)
+                symbol = symbol[len(TENCENT_REALTIME_PREFIX):]
             elif symbol.startswith("us"):
                 quote.volume = volume
                 quote.time = _parse_time(fields[30], "%Y-%m-%d %H:%M:%S", TZ_US)

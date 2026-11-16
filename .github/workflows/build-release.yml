@@ -214,7 +214,8 @@ jobs:
           cp firmware/versions.json "$RUNNER_TEMP/versions.json"
           git config user.name "GitHub Actions Firmware Builder"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # main 同时被 AI 简报定时任务等流程写入，推送可能被拒绝，这里重试几次。
+          # main 同时被行情面板发布循环（交易时段每分钟一个提交）等流程写入，
+          # 推送可能被拒绝，这里重试几次。
           for attempt in 1 2 3; do
             echo "=== OTA 清单推送尝试 ${attempt}/3 ==="
             git fetch origin main
@@ -250,23 +251,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git checkout -B version-bump origin/main
-          current_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
-          echo "main 当前版本: $current_ver, 刚发布版本: $VERSION"
-          if [[ "$current_ver" != "$VERSION" ]]; then
-            echo "main 版本已不是 $VERSION（可能是已 bump），跳过自动递增"
-            exit 0
-          fi
-          python3 .github/scripts/bump_version.py
-          new_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
-          echo "新版本: $new_ver"
           git config user.name "GitHub Actions Firmware Builder"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add RLCD_CLOCK/CMakeLists.txt firmware/OTA_RELEASE_NOTES.md
-          git commit -m "chore: bump version ${VERSION} -> ${new_ver} [skip ci]"
-          git push origin HEAD:main
-          echo "已自动递增版本号到 $new_ver"
+          # main 上的行情面板发布循环在交易时段每分钟推送一次，这里的推送可能被拒绝。
+          # 每次都从 main 的最新提交重新递增再推送；不重试的话发版会停在
+          # 「Release 已发布、main 的版本号没递增」的状态，只能手工修。
+          for attempt in 1 2 3 4 5; do
+            echo "=== 版本号递增推送尝试 ${attempt}/5 ==="
+            git fetch origin main
+            git checkout -B version-bump origin/main
+            current_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+            echo "main 当前版本: $current_ver, 刚发布版本: $VERSION"
+            if [[ "$current_ver" != "$VERSION" ]]; then
+              echo "main 版本已不是 $VERSION（可能是已 bump），跳过自动递增"
+              exit 0
+            fi
+            python3 .github/scripts/bump_version.py
+            new_ver="$(sed -n 's/.*PROJECT_VER \"\(v[^\"]*\)\".*/\1/p' RLCD_CLOCK/CMakeLists.txt | head -n 1)"
+            echo "新版本: $new_ver"
+            git add RLCD_CLOCK/CMakeLists.txt firmware/OTA_RELEASE_NOTES.md
+            git commit -m "chore: bump version ${VERSION} -> ${new_ver} [skip ci]"
+            if git push origin HEAD:main; then
+              echo "已自动递增版本号到 $new_ver"
+              exit 0
+            fi
+            echo "推送失败：main 可能刚被其他工作流更新，稍后重试" >&2
+            sleep $((attempt * 5))
+          done
+          echo "版本号递增连续 5 次推送失败" >&2
+          exit 1
 
       - name: 保存 Actions 构建产物
         uses: actions/upload-artifact@v4
