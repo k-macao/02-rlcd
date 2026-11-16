@@ -1,0 +1,262 @@
+{
+  "generated_at": "2026-11-16 09:51:52",
+  "timezone": "Asia/Shanghai",
+  "panel": "market",
+  "markets": [
+    "A",
+    "港",
+    "美",
+    "韩",
+    "日"
+  ],
+  "as_of": "2026-11-16 09:51:51",
+  "demo": false,
+  "live_rows": 12,
+  "total_rows": 12,
+  "sources": {
+    "tencent": true,
+    "sina": true,
+    "naver_kr": true,
+    "naver_jp": true
+  },
+  "source_labels": {
+    "tencent": "腾讯证券",
+    "sina": "新浪财经",
+    "naver_kr": "Naver 金融（韩国）",
+    "naver_jp": "Naver 金融（日本）"
+  },
+  "two_market_turnover": 411810940000.0,
+  "volume_unit": "股",
+  "turnover_unit": "本币",
+  "rows": [
+    {
+      "market": "A",
+      "key": "sh000001",
+      "name": "上证指数",
+      "last": 3601.81,
+      "pct": -0.9,
+      "volume": 12386309800.0,
+      "turnover": 189378350000.0,
+      "time": "2026-11-16T09:51:51+08:00",
+      "source": "tencent",
+      "cells": [
+        "3,601.81",
+        "-0.90%",
+        "124亿",
+        "1,894亿"
+      ]
+    },
+    {
+      "market": "A",
+      "key": "sz399001",
+      "name": "深证成指",
+      "last": 10783.22,
+      "pct": -1.69,
+      "volume": 15117004100.0,
+      "turnover": 222432590000.0,
+      "time": "2026-11-16T09:51:48+08:00",
+      "source": "tencent",
+      "cells": [
+        "10,783.22",
+        "-1.69%",
+        "151亿",
+        "2,224亿"
+      ]
+    },
+    {
+      "market": "A",
+      "key": "sz399006",
+      "name": "创业板指",
+      "last": 2359.6,
+      "pct": -2.74,
+      "volume": 4301432400.0,
+      "turnover": 103240410000.0,
+      "time": "2026-11-16T09:51:48+08:00",
+      "source": "tencent",
+      "cells": [
+        "2,359.60",
+        "-2.74%",
+        "43.0亿",
+        "1,032亿"
+      ]
+    },
+    {
+      "market": "港",
+      "key": "hkHSI",
+      "name": "恒生指数",
+      "last": 23715.09,
+      "pct": 0.33,
+      "volume": 1891977027.0,
+      "turnover": 17471953600.0,
+      "time": "2026-11-16T09:36:44+08:00",
+      "source": "tencent",
+      "cells": [
+        "23,715.09",
+        "+0.33%",
+        "18.9亿",
+        "175亿"
+      ]
+    },
+    {
+      "market": "港",
+      "key": "hkHSTECH",
+      "name": "恒生科技",
+      "last": 3828.76,
+      "pct": 0.41,
+      "volume": 314525085.0,
+      "turnover": 5090346080.0,
+      "time": "2026-11-16T09:36:44+08:00",
+      "source": "tencent",
+      "cells": [
+        "3,828.76",
+        "+0.41%",
+        "3.15亿",
+        "50.9亿"
+      ]
+    },
+    {
+      "market": "美",
+      "key": "usDJI",
+      "name": "道琼斯",
+      "last": 52347.55,
+      "pct": 0.1,
+      "volume": 645244111.0,
+      "turnover": null,
+      "time": "2026-11-13T16:43:26-05:00",
+      "source": "tencent",
+      "cells": [
+        "52,347.55",
+        "+0.10%",
+        "6.45亿",
+        "--"
+      ]
+    },
+    {
+      "market": "美",
+      "key": "usIXIC",
+      "name": "纳斯达克",
+      "last": 25136.27,
+      "pct": -0.91,
+      "volume": 7740442365.0,
+      "turnover": null,
+      "time": "2026-11-13T17:15:59-05:00",
+      "source": "tencent",
+      "cells": [
+        "25,136.27",
+        "-0.91%",
+        "77.4亿",
+        "--"
+      ]
+    },
+    {
+      "market": "美",
+      "key": "usINX",
+      "name": "标普500",
+      "last": 7561.67,
+      "pct": -0.4,
+      "volume": 2727332784.0,
+      "turnover": null,
+      "time": "2026-11-13T16:43:19-05:00",
+      "source": "tencent",
+      "cells": [
+        "7,561.67",
+        "-0.40%",
+        "27.3亿",
+        "--"
+      ]
+    },
+    {
+      "market": "韩",
+      "key": "KOSPI",
+      "name": "KOSPI",
+      "last": 5135.99,
+      "pct": -2.92,
+      "volume": 88523000.0,
+      "turnover": 6147751000000.0,
+      "time": "2026-11-16T10:51:51+09:00",
+      "source": "naver_kr",
+      "cells": [
+        "5,135.99",
+        "-2.92%",
+        "8,852万",
+        "6.15万亿"
+      ]
+    },
+    {
+      "market": "韩",
+      "key": "KOSDAQ",
+      "name": "KOSDAQ",
+      "last": 672.72,
+      "pct": -3.85,
+      "volume": 214181000.0,
+      "turnover": 2498600000000.0,
+      "time": "2026-11-16T10:51:51+09:00",
+      "source": "naver_kr",
+      "cells": [
+        "672.72",
+        "-3.85%",
+        "2.14亿",
+        "2.50万亿"
+      ]
+    },
+    {
+      "market": "日",
+      "key": "N225",
+      "name": "日经225",
+      "last": 60273.82,
+      "pct": -1.42,
+      "volume": 635029000.0,
+      "turnover": null,
+      "time": "2026-11-16T09:50:50+08:00",
+      "source": "tencent",
+      "cells": [
+        "60,273.82",
+        "-1.42%",
+        "6.35亿",
+        "--"
+      ]
+    },
+    {
+      "market": "日",
+      "key": "TOPX",
+      "name": "东证指数",
+      "last": 3920.79,
+      "pct": -0.53,
+      "volume": 985513000.0,
+      "turnover": null,
+      "time": "2026-11-16T10:36:52+09:00",
+      "source": "naver_jp",
+      "cells": [
+        "3,920.79",
+        "-0.53%",
+        "9.86亿",
+        "--"
+      ]
+    }
+  ],
+  "width": 400,
+  "height": 300,
+  "pages": 1,
+  "bytes": 15008,
+  "page_bytes": 15000,
+  "sha256": "b5dea0004292099731ea0d061d5e5e05c1ab62a252fbc745952ecd63be358f7d",
+  "crc32_bitmap": "d9ab1467",
+  "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
+  "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
+  "font_family": "Alibaba PuHuiTi 3.0",
+  "font_size": 16,
+  "numeric_font_weight": "Bold",
+  "text_font_weight": "Regular",
+  "rasterizer": "FreeType FT_LOAD_TARGET_MONO + FT_LOAD_FORCE_AUTOHINT",
+  "pixel_positioning": "integer",
+  "gray_levels": 2,
+  "layout": "3.0-market-panel-12rows",
+  "layout_validated": true,
+  "device_overlay_box": [
+    194,
+    279,
+    388,
+    300
+  ],
+  "unchanged": false
+}
