@@ -336,7 +336,7 @@ class PublishTest(LoopTestCase):
         self.assertEqual(self.origin_file("aibrief/latest.bin"), "latest.bin:A")
         self.assertEqual(git(self.work, "rev-parse", "HEAD"),
                          git(self.origin, "rev-parse", "main"))
-        self.assertIn("发布失败，下一轮重试", self.output.getvalue())
+        self.assertIn("发布失败，下一周期重试", self.output.getvalue())
 
     def test_unreachable_remote_leaves_no_local_commit_and_recovers(self):
         away = self.tmp / "origin.away"

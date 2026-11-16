@@ -18,14 +18,13 @@ GitHub 的定时任务（schedule）做不到每分钟，在本仓库实际几�
   一个周期就能接管；让位时不再接力。
 - 这一轮还没有正常运行够几分钟就退出时不预约后继，由看门狗工作流
   （aibrief-watchdog.yml）重新拉起，避免启动即出错时无限快速自触发。
-- 行情不足（渲染器退出码 3）或渲染超时只跳过这一轮；推送被拒绝时把结果叠到
-  远端最新提交上重试，仍失败就恢复到远端状态，下一轮重新来过。
-
-- 每分钟一个提交，仓库历史增长很快。``--no-preview`` 让渲染器不出 PNG 预览
-  （设备不读它，而它占每次提交体积的一半以上），发布时都带上。
+- 行情不足（渲染器退出码 3）或渲染超时只跳过这一个周期；推送被拒绝时把结果叠到
+  远端最新提交上重试，仍失败就恢复到远端状态，下一个周期重新来过。
+- 每分钟一个提交，仓库历史增长很快：发布时带上 ``--no-preview``，让渲染器不出
+  PNG 预览（设备不读它，而它占每次提交体积的一半以上）。
 
 用法：
-    # 默认分支：每分钟发布，跑满后接力
+    # 默认分支：每分钟发布，一轮 5.5 小时，自己接力
     python3 device_brief/publish_loop.py --out-dir aibrief --publish --no-preview
     # 其他分支 / 本地：只渲染一次到指定目录，不提交
     python3 device_brief/publish_loop.py --out-dir /tmp/market-panel --loop-seconds 0
@@ -278,8 +277,8 @@ class Publisher:
                     return PUBLISH_UNCHANGED, "远端已是同样内容"
                 if attempt < PUSH_ATTEMPTS:
                     log(f"推送被拒绝，叠到远端最新提交后重试（{attempt}/{PUSH_ATTEMPTS}）")
-            # 放弃这一轮：回到远端状态。磁盘上的设备图随之变回已发布的那一版，
-            # 下一轮渲染会发现「有变化」并重新提交，不会留下只存在本地的提交。
+            # 放弃这个周期：回到远端状态。磁盘上的设备图随之变回已发布的那一版，
+            # 下一个周期渲染后会发现「有变化」并重新提交，不会留下只存在本地的提交。
             self.git("reset", "-q", "--hard", base)
             return PUBLISH_FAILED, detail or "git push 失败"
         finally:
@@ -388,7 +387,7 @@ def run_iteration(config: Config, publisher: Optional[Publisher], stats: Stats) 
         log(f"无变化{('（' + detail + '）') if detail else ''}：{summary}")
     else:
         stats.push_failures += 1
-        annotate(stats, "warning", f"发布失败，下一轮重试：{detail}")
+        annotate(stats, "warning", f"发布失败，下一周期重试：{detail}")
 
 
 def run_loop(config: Config,
@@ -507,8 +506,8 @@ def parse_args(argv: Optional[List[str]]) -> Config:
     parser.add_argument("--min-rows", type=int, default=DEFAULT_MIN_ROWS,
                         help=f"至少多少行有最新点位才更新（默认 {DEFAULT_MIN_ROWS}）")
     parser.add_argument("--publish", action="store_true",
-                        help="把变化提交并推送到 origin/<branch>，跑满时长后触发下一轮")
-    parser.add_argument("--no-relay", action="store_true", help="发布但不触发下一轮")
+                        help="把变化提交并推送到 origin/<branch>，并预约 / 触发下一轮接力")
+    parser.add_argument("--no-relay", action="store_true", help="发布但不预约、不触发下一轮")
     parser.add_argument("--no-preview", action="store_true",
                         help="不生成 latest.png 预览并删掉已有的；每分钟发布时带上，"
                              "PNG 占提交体积的一半以上而设备不读它")
