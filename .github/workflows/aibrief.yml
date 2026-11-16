@@ -66,11 +66,12 @@ permissions:
 env:
   # 只有默认分支上的运行才把设备图提交回仓库（设备只读默认分支上的文件）并接力；
   # 其他分支只渲染一次到临时目录，方便在合并前检查效果。
-  PUBLISH: ${{ github.ref_name == github.event.repository.default_branch }}
+  # PROBE（临时）：在工作分支上实测发布、预约接力、让位；合并前恢复。
+  PUBLISH: "true"
   # 两次更新的间隔（秒）。
   INTERVAL_SECONDS: "60"
   # 一轮循环的时长（分钟）；单个任务上限 6 小时，留出环境准备和收尾的余量。
-  LOOP_MINUTES: "330"
+  LOOP_MINUTES: "8"
 
 jobs:
   test:
@@ -128,7 +129,7 @@ jobs:
           set -euo pipefail
           if [[ "$PUBLISH" == "true" ]]; then
             python3 device_brief/publish_loop.py \
-              --out-dir aibrief \
+              --out-dir _probe/aibrief-loop \
               --publish \
               --no-preview \
               --interval "$INTERVAL_SECONDS" \
