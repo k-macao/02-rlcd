@@ -1,1 +1,1 @@
-manifest=1 sha256=2781133bdf12275e83cb6e5f12ee7bce4f879ad8664477f6bdcb1daf3f9cb715 pages=1 bytes=15008 generated_at=2026-11-16 10:14:44
+manifest=1 sha256=480653afc8e9a55af5b696b9cd4b6f6537e15e1e954b60a12baedc950c088ab8 pages=1 bytes=15008 generated_at=2026-11-16 10:15:45
