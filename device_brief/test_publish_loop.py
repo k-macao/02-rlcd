@@ -903,8 +903,10 @@ class CommandLineTest(unittest.TestCase):
         stats = publish_loop.Stats(iterations=5, rendered=5, pushed=2, unchanged=3, relayed=True)
         with tempfile.TemporaryDirectory() as tmp:
             summary = Path(tmp) / "summary.md"
+            # 测试本身也在 Actions 里跑：这里先按「不在 Actions 里」的环境来。
             with mock.patch.object(publish_loop, "run_loop", return_value=stats), \
-                    mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}), \
+                    mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary),
+                                                 "GITHUB_ACTIONS": ""}), \
                     redirect_stdout(io.StringIO()) as out:
                 code = publish_loop.main(["--loop-seconds", "0"])
             self.assertEqual(code, 0)
@@ -913,7 +915,7 @@ class CommandLineTest(unittest.TestCase):
             self.assertNotIn("::notice", out.getvalue())
         # 在 Actions 里每轮留一条 notice：不用翻日志就能看到这一轮的结果。
         with mock.patch.object(publish_loop, "run_loop", return_value=stats), \
-                mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "GITHUB_STEP_SUMMARY": ""}), \
                 redirect_stdout(io.StringIO()) as out:
             publish_loop.main(["--loop-seconds", "0"])
         notices = [line for line in out.getvalue().splitlines() if line.startswith("::notice")]
@@ -921,6 +923,7 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("发布 2，无变化 3", notices[0])
         failed = publish_loop.Stats(iterations=5, rendered=0, skipped=5)
         with mock.patch.object(publish_loop, "run_loop", return_value=failed), \
+                mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": "", "GITHUB_ACTIONS": ""}), \
                 redirect_stdout(io.StringIO()):
             self.assertEqual(publish_loop.main(["--loop-seconds", "0"]), 1)
 
