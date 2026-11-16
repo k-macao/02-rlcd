@@ -32,6 +32,7 @@ jobs:
 
       - name: Build
         run: |
+          set +e
           set -uo pipefail
           docker run --rm \
             -e IDF_TARGET=esp32s3 \
@@ -41,17 +42,18 @@ jobs:
             /bin/bash -c 'git config --global --add safe.directory "*" && idf.py build' > /tmp/build.log 2>&1
           status=$?
           tail -5 /tmp/build.log
-          errors=$(grep -c ' error: ' /tmp/build.log || true)
+          errors=$(grep -c ' error: ' /tmp/build.log)
           project_warnings=$(grep -E '/app/repo/RLCD_CLOCK/main/.*warning: ' /tmp/build.log | sort -u | wc -l)
-          all_warnings=$(grep -c 'warning: ' /tmp/build.log || true)
+          all_warnings=$(grep -c 'warning: ' /tmp/build.log)
           size=$(grep -E 'binary size 0x[0-9a-f]+ bytes' /tmp/build.log | tail -1 | tr -s ' ')
-          version=$(grep -E 'App "weather_clock" version|Project version|PROJECT_VER' /tmp/build.log | head -1 | tr -s ' ')
-          market=$(strings RLCD_CLOCK/build/weather_clock.bin 2>/dev/null | grep -m1 'qt.gtimg.cn' || true)
-          summary="commit=${GITHUB_SHA:0:7} exit=${status} errors=${errors} project_warnings=${project_warnings} all_warnings=${all_warnings} | ${size} | ${version} | url_in_bin=${market}"
+          market=$(strings RLCD_CLOCK/build/weather_clock.bin 2>/dev/null | grep -m1 'qt.gtimg.cn')
+          lines=$(wc -l < /tmp/build.log)
+          summary="commit=${GITHUB_SHA:0:7} exit=${status} log_lines=${lines} errors=${errors} project_warnings=${project_warnings} all_warnings=${all_warnings} | ${size} | url_in_bin=${market}"
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
           if [[ "$status" == "0" ]]; then
             echo "::notice title=ESP-IDF build::${summary}"
           else
-            first_error=$(grep -m3 ' error: ' /tmp/build.log | tr '\n' ' ' | cut -c1-600)
-            echo "::error title=ESP-IDF build::${summary} | ${first_error}"
+            detail=$( { grep -n -m8 -E ' error: |Error|ERROR|FAILED|failed' /tmp/build.log; echo '--- tail ---'; tail -n 25 /tmp/build.log; } | cut -c1-300 | escape)
+            echo "::error title=ESP-IDF build::${summary}%0A${detail}"
           fi
           exit "$status"
