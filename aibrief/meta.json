@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17 07:49:36",
+  "generated_at": "2026-11-17 07:50:36",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-17 07:49:35",
+  "as_of": "2026-11-17 07:50:34",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -169,34 +169,34 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 5100.5,
-      "pct": 0.0,
-      "volume": null,
-      "turnover": null,
-      "time": "2026-11-17T08:49:35+09:00",
+      "last": 4944.32,
+      "pct": -3.06,
+      "volume": 743000.0,
+      "turnover": 104067000000.0,
+      "time": "2026-11-17T08:50:34+09:00",
       "source": "naver_kr",
       "cells": [
-        "5,100.50",
-        "0.00%",
-        "--",
-        "--"
+        "4,944.32",
+        "-3.06%",
+        "74.3万",
+        "1,041亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 665.65,
-      "pct": 0.0,
-      "volume": null,
-      "turnover": null,
-      "time": "2026-11-17T08:49:35+09:00",
+      "last": 638.83,
+      "pct": -4.03,
+      "volume": 2098000.0,
+      "turnover": 17412000000.0,
+      "time": "2026-11-17T08:50:34+09:00",
       "source": "naver_kr",
       "cells": [
-        "665.65",
-        "0.00%",
-        "--",
-        "--"
+        "638.83",
+        "-4.03%",
+        "210万",
+        "174亿"
       ]
     },
     {
@@ -224,7 +224,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-17T08:34:35+09:00",
+      "time": "2026-11-17T08:35:35+09:00",
       "source": "naver_jp",
       "cells": [
         "3,901.37",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "6bc531b6965bf3ff5bb1b744cc06dcb78e7f2687d08c6fdf6c7086d7d3903693",
-  "crc32_bitmap": "e7cdf1fc",
+  "sha256": "9952f6d88e30c67b546f4a73e8f974ef79172ff9911f09d63e6965232fa894ab",
+  "crc32_bitmap": "b2a613ef",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
