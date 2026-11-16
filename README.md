@@ -71,7 +71,7 @@
 - 设备每分钟直连腾讯、新浪、Naver 的公开行情接口更新一次，无需密钥；行情没有变化时不重绘屏幕。
 - 美股和日本指数的成交额数据源不提供，显示 `--`；日本指数的成交量延迟约 15 分钟。
 - **BOOT 短按** 立即刷新，**长按 KEY** 进入设置。离线模式和低电量模式下暂停更新。
-- 直连失败时自动改用仓库里 `aibrief/latest.bin` 这张服务器位图（GitHub Actions 定时生成，旧固件也读它）。
+- 直连失败时自动改用仓库里 `aibrief/latest.bin` 这张服务器位图（GitHub Actions 每分钟生成，旧固件也读它）。
 
 数据来源、页脚状态和两条更新链路见[全球行情数据面板说明](docs/Aibrief_zh.md)，服务器渲染器见 [device_brief/README.md](device_brief/README.md)。
 

@@ -16,7 +16,7 @@ name: 生成行情数据面板设备图
 #     拉起，也可以手动 Run workflow。
 #
 # 更新间隔改 INTERVAL_SECONDS。交易时段每次更新是 main 上的一个提交
-# （每分钟一次时每个交易日约 870 个，仓库每年约增长 0.6 GB）；改成 300 可以降到五分之一。
+# （每分钟一次时每个交易日约 870 个，仓库每年约增长 0.65 GB）；改成 300 可以降到约五分之一。
 #
 # 要停止更新：先在 Actions 页面把本工作流和「行情面板看门狗」都 Disable，
 # 再把运行中和排队中的运行都取消（只取消不 Disable，排队的那一轮会接着跑）。
@@ -66,12 +66,11 @@ permissions:
 env:
   # 只有默认分支上的运行才把设备图提交回仓库（设备只读默认分支上的文件）并接力；
   # 其他分支只渲染一次到临时目录，方便在合并前检查效果。
-  # PROBE（临时）：在工作分支上实测发布、预约接力、让位；合并前恢复。
-  PUBLISH: "true"
+  PUBLISH: ${{ github.ref_name == github.event.repository.default_branch }}
   # 两次更新的间隔（秒）。
   INTERVAL_SECONDS: "60"
   # 一轮循环的时长（分钟）；单个任务上限 6 小时，留出环境准备和收尾的余量。
-  LOOP_MINUTES: "8"
+  LOOP_MINUTES: "330"
 
 jobs:
   test:
@@ -121,9 +120,6 @@ jobs:
         # 固定版本：位图要与固件自绘逐像素相同，字形栅格化不能随依赖升级悄悄变化。
         run: python3 -m pip install --disable-pip-version-check pillow==13.0.0 freetype-py==2.5.1
 
-      - name: PROBE 抓取原始行情（临时）
-        run: python3 _probe/capture_raw.py _probe/aibrief-loop/raw || true
-
       - name: 发布循环
         env:
           GH_TOKEN: ${{ github.token }}
@@ -131,10 +127,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PUBLISH" == "true" ]]; then
-            # PROBE（临时）：400 秒后强杀循环，模拟执行机故障，验证排队的后继会自动接上。
-            ( sleep 400; pkill -9 -f device_brief/publish_loop.py ) &
             python3 device_brief/publish_loop.py \
-              --out-dir _probe/aibrief-loop \
+              --out-dir aibrief \
               --publish \
               --no-preview \
               --interval "$INTERVAL_SECONDS" \
