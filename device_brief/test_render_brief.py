@@ -416,11 +416,15 @@ class PayloadTest(unittest.TestCase):
         self.panel = panel_from(*ALL_SOURCES)
         self.now = datetime(2026, 11, 14, 6, 20, tzinfo=mq.TZ_CN)
 
-    def save(self, panel=None, now=None):
+    def save(self, panel=None, now=None, preview=True):
         panel = panel or self.panel
         with redirect_stdout(io.StringIO()):
             return render_brief.save(render_brief.draw_panel(panel), self.out,
-                                     render_brief.panel_meta(panel, now or self.now))
+                                     render_brief.panel_meta(panel, now or self.now),
+                                     preview=preview)
+
+    def names(self) -> list[str]:
+        return sorted(path.name for path in self.out.iterdir())
 
     def test_payload_is_a_single_aib1_page(self):
         meta = self.save()
@@ -467,10 +471,10 @@ class PayloadTest(unittest.TestCase):
     def test_unchanged_quotes_do_not_rewrite_files(self):
         first = self.save()
         self.assertFalse(first["unchanged"])
-        names = sorted(path.name for path in self.out.iterdir())
+        names = self.names()
         self.assertEqual(names, ["latest.bin", "latest.png", "meta.json", "version.txt"])
         before = {name: (self.out / name).read_bytes() for name in names}
-        # 5 分钟后再跑一次、行情没变：文件逐字节不变（meta 里的生成时间也不更新）。
+        # 之后再跑一次、行情没变：文件逐字节不变（meta 里的生成时间也不更新）。
         second = self.save(now=datetime(2026, 11, 14, 6, 25, tzinfo=mq.TZ_CN))
         self.assertTrue(second["unchanged"])
         self.assertEqual(before, {name: (self.out / name).read_bytes() for name in names})
@@ -491,6 +495,47 @@ class PayloadTest(unittest.TestCase):
         meta = self.save()
         self.assertFalse(meta["unchanged"])
         self.assertTrue((self.out / "version.txt").is_file())
+
+    def test_without_preview_only_the_device_files_are_written(self):
+        # 每分钟发布时不出 PNG：设备不读它，而它占每次提交体积的一半以上。
+        first = self.save(preview=False)
+        self.assertFalse(first["unchanged"])
+        self.assertEqual(self.names(), ["latest.bin", "meta.json", "version.txt"])
+        with_preview = Path(self.tmp.name) / "with-preview"
+        with redirect_stdout(io.StringIO()):
+            render_brief.save(render_brief.draw_panel(self.panel), with_preview,
+                              render_brief.panel_meta(self.panel, self.now))
+        for name in ("latest.bin", "version.txt", "meta.json"):
+            self.assertEqual((self.out / name).read_bytes(), (with_preview / name).read_bytes(),
+                             name)
+        # 行情没变时照样什么都不写（不会因为没有 PNG 而每轮重写、每轮提交）。
+        before = {name: (self.out / name).read_bytes() for name in self.names()}
+        second = self.save(preview=False, now=datetime(2026, 11, 14, 6, 21, tzinfo=mq.TZ_CN))
+        self.assertTrue(second["unchanged"])
+        self.assertEqual(before, {name: (self.out / name).read_bytes() for name in self.names()})
+        # 行情变了：三个文件更新，仍然没有 PNG。
+        self.panel.rows[0].quote.last += 1.0
+        third = self.save(preview=False)
+        self.assertFalse(third["unchanged"])
+        self.assertEqual(self.names(), ["latest.bin", "meta.json", "version.txt"])
+
+    def test_without_preview_an_existing_png_is_removed(self):
+        # 否则仓库里会留下一张与 latest.bin 对不上的旧预览。
+        self.save()
+        before = {name: (self.out / name).read_bytes()
+                  for name in ("latest.bin", "meta.json", "version.txt")}
+        meta = self.save(preview=False, now=datetime(2026, 11, 14, 6, 21, tzinfo=mq.TZ_CN))
+        self.assertTrue(meta["unchanged"])
+        self.assertEqual(self.names(), ["latest.bin", "meta.json", "version.txt"])
+        self.assertEqual(before, {name: (self.out / name).read_bytes() for name in before})
+
+    def test_preview_comes_back_when_requested_again(self):
+        self.save(preview=False)
+        meta = self.save()
+        self.assertFalse(meta["unchanged"])
+        self.assertEqual(self.names(), ["latest.bin", "latest.png", "meta.json", "version.txt"])
+        with render_brief.Image.open(self.out / "latest.png") as image:
+            self.assertEqual(image.size, (400, 300))
 
     def test_leftovers_of_the_old_multi_page_brief_are_removed(self):
         self.out.mkdir(parents=True)
@@ -529,6 +574,16 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual((self.out / "latest.bin").stat().st_size, 15008)
         meta = json.loads((self.out / "meta.json").read_text(encoding="utf-8"))
         self.assertTrue(meta["demo"])
+
+    def test_no_preview_option(self):
+        code, _, _ = run_main(["--demo", "--out-dir", str(self.out)])
+        self.assertEqual(code, 0)
+        self.assertTrue((self.out / "latest.png").is_file())
+        code, stdout, _ = run_main(["--demo", "--no-preview", "--out-dir", str(self.out)])
+        self.assertEqual(code, 0)
+        self.assertIn("已删除 PNG 预览", stdout)
+        self.assertEqual(sorted(path.name for path in self.out.iterdir()),
+                         ["latest.bin", "meta.json", "version.txt"])
 
     def test_demo_data_never_counts_as_live(self):
         code, _, stderr = run_main(["--demo", "--require-live", "--out-dir", str(self.out)])
@@ -776,33 +831,11 @@ class FirmwareParityTest(unittest.TestCase):
 
 
 class WorkflowTest(unittest.TestCase):
+    """发布循环本身的测试在 test_publish_loop.py；这里只管本文件依赖的触发条件。"""
+
     def setUp(self):
         self.workflow = (ROOT / ".github" / "workflows" / "aibrief.yml").read_text(
             encoding="utf-8")
-
-    def has(self, needle: str) -> bool:
-        return needle in self.workflow
-
-    def test_schedule_runs_every_five_minutes(self):
-        self.assertEqual(self.workflow.count("- cron:"), 1)
-        self.assertTrue(self.has('- cron: "*/5 * * * *"'))
-
-    def test_workflow_uses_the_current_command_line(self):
-        for needle in ("device_brief/test_render_brief.py", "device_brief/render_brief.py",
-                       "--require-live", "--min-rows"):
-            self.assertTrue(self.has(needle), needle)
-        # 旧版多页简报的参数已经不存在。
-        for stale in ("--require-fresh-market", "--min-live-sources", "--news-per-source"):
-            self.assertFalse(self.has(stale), stale)
-        # 命令行里出现的每个参数渲染器都认识。
-        with redirect_stdout(io.StringIO()) as usage:
-            with self.assertRaises(SystemExit):
-                render_brief.main(["--help"])
-        for option in re.findall(r"(?<![\w-])--[a-z][a-z-]+", self.workflow):
-            if option in ("--disable-pip-version-check", "--depth", "--cached", "--quiet",
-                          "--hard"):
-                continue   # pip / git 自己的参数
-            self.assertIn(option, usage.getvalue(), option)
 
     def test_parity_inputs_trigger_the_workflow(self):
         """测试会读的渲染器文件和固件文件改动时，工作流必须被触发。"""
@@ -816,11 +849,20 @@ class WorkflowTest(unittest.TestCase):
                      "RLCD_CLOCK/main/core/app_network_config.h",
                      "RLCD_CLOCK/main/assets/market_panel_*.c",
                      "RLCD_CLOCK/tools/gen_market_panel_fonts.py"):
-            self.assertTrue(self.has(f'- "{path}"'), path)
+            self.assertIn(f'- "{path}"', self.workflow, path)
 
-    def test_only_the_default_branch_publishes(self):
-        self.assertTrue(self.has("github.event.repository.default_branch"))
-        self.assertTrue(self.has("if: env.PUBLISH == 'true'"))
+    def test_workflow_runs_this_test_file_with_pinned_dependencies(self):
+        self.assertIn("python3 device_brief/test_render_brief.py", self.workflow)
+        # 位图要与固件自绘逐像素相同：渲染依赖必须固定版本。
+        installs = re.findall(r"pip install [^\n]*", self.workflow)
+        self.assertTrue(installs)
+        for line in installs:
+            self.assertRegex(line, r"pillow==[\d.]+ freetype-py==[\d.]+")
+
+    def test_removed_command_line_flags_are_gone(self):
+        # 旧版多页简报的参数已经不存在。
+        for stale in ("--require-fresh-market", "--min-live-sources", "--news-per-source"):
+            self.assertNotIn(stale, self.workflow)
 
 
 if __name__ == "__main__":
