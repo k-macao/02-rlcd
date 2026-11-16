@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17 06:28:36",
+  "generated_at": "2026-11-17 07:03:36",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-17 06:28:10",
+  "as_of": "2026-11-17 07:03:34",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -137,7 +137,7 @@
       "name": "纳斯达克",
       "last": 24509.76,
       "pct": -2.49,
-      "volume": 8221916767.0,
+      "volume": 8223551132.0,
       "turnover": null,
       "time": "2026-11-16T17:15:59-05:00",
       "source": "tencent",
@@ -170,16 +170,16 @@
       "key": "KOSPI",
       "name": "KOSPI",
       "last": 5100.5,
-      "pct": -3.59,
-      "volume": 221296000.0,
-      "turnover": 16458294000000.0,
-      "time": "2026-11-16T20:15:00+09:00",
+      "pct": 0.0,
+      "volume": null,
+      "turnover": null,
+      "time": "2026-11-17T08:03:34+09:00",
       "source": "naver_kr",
       "cells": [
         "5,100.50",
-        "-3.59%",
-        "2.21亿",
-        "16.5万亿"
+        "0.00%",
+        "--",
+        "--"
       ]
     },
     {
@@ -187,16 +187,16 @@
       "key": "KOSDAQ",
       "name": "KOSDAQ",
       "last": 665.65,
-      "pct": -4.86,
-      "volume": 446420000.0,
-      "turnover": 4881148000000.0,
-      "time": "2026-11-16T20:15:00+09:00",
+      "pct": 0.0,
+      "volume": null,
+      "turnover": null,
+      "time": "2026-11-17T08:03:34+09:00",
       "source": "naver_kr",
       "cells": [
         "665.65",
-        "-4.86%",
-        "4.46亿",
-        "4.88万亿"
+        "0.00%",
+        "--",
+        "--"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "63e03ad3b862b155d13c765ded0dad04f9b23da271d455549bcc531766cae0ef",
-  "crc32_bitmap": "19b0ec4f",
+  "sha256": "beeba54561e2f627d3b4f36e6d10ee9db75c1d16d9fe3686f0f5a32e5562514f",
+  "crc32_bitmap": "a1581aa2",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
