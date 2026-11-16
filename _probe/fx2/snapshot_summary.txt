@@ -1,0 +1,74 @@
+snapshot started 2026-11-16 11:45:52 UTC
+## tencent final
+url=https://qt.gtimg.cn/q=sh000001,sz399001,sz399006,r_hkHSI,r_hkHSTECH,usDJI,usIXIC,usINX,gzN225,gzKS11,gzKOSDAQ,whUSDHKD,whUSDCNY
+status=200 bytes=3696 seconds=1.30
+v_sh000001="1~上证指数~000001~3602.57~3634.35~3611.54~461643487~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161427~-31.78~-0.87~3623.12~3586.57~3602.57/461643487/706214352273~461643487~70621435~0.95~16.43~~3623.12~3586.57~1.01~567329.36~631315.94~0.00~-1~-1~1.03~0~3603.52~~~~~~70621435.2273~0.0000~0~ ~ZS~-9.23~-1.59~~~~4258.86~3574.27~-0.97~-3.44~-8.27~4865879337250~~-7.51~-12.86~4865879337250~~~-9.72~0.00~~CNY~0~~0.00~0~";
+v_sz399001="51~深证成指~399001~10690.78~10968.79~10881.91~520171170~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161406~-278.01~-2.53~10881.91~10642.37~10690.78/520171170/778276106973~520171170~77827611~2.11~33.78~~10881.91~10642.37~2.18~308237.68~362728.65~0.00~-1~-1~0.93~0~10768.32~~~~~~77827610.6973~0.0000~0~ ~ZS~-20.96~-4.08~~~~16374.02~10642.37~-2.91~-9.53~-25.52~2467946706699~~1.60~-25.15~2467946706699~~~-19.11~-0.04~~CNY~0~~0.00~0~";
+v_sz399006="51~创业板指~399006~2320.02~2426.08~2395.52~152931711~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161421~-106.06~-4.37~2398.19~2308.90~2320.02/152931711/369316401561~152931711~36931640~2.82~42.39~~2398.19~2308.90~3.68~113214.61~142553.54~0.00~-1~-1~0.86~0~2353.89~~~~~~36931640.1561~0.0000~0~ ~ZS~-27.57~-5.64~~~~4380.41~2308.90~-5.64~-15.52~-36.02~543254534251~~11.85~-30.29~543254534251~~~-25.44~-0.08~~CNY~0~~0.00~0~";
+v_r_hkHSI="100~恒生指数~HSI~23753.840~23637.600~23708.600~17410798.5795~0~0~23753.840~0~0~0~0~0~0~0~0~0~23753.840~0~0~0~0~0~0~0~0~0~0.0~2026/11/16 18:31:11~116.240~0.49~23894.010~23649.100~23753.840~17410798.5795~17410798.580~0~0~~0~0~1.04~0~0~Hang Seng Index~0~28056.100~22518.000~1.02~-30.70~0~0~0~0~0~0.00~0.00~0.00~0~-7.32~-2.84~ZS~~~1.54~-1.79~-7.57~0.00~0.00~0.00~0.000~~-10.67~HKD~1~";
+v_r_hkHSTECH="100~恒生科技指数~HSTECH~3801.640~3813.190~3828.810~4602407.8684~0~0~3801.640~0~0~0~0~0~0~0~0~0~3801.640~0~0~0~0~0~0~0~0~0~0.0~2026/11/16 16:08:36~-11.550~-0.30~3851.360~3797.080~3801.640~4602407.8684~4602407.868~0~0~~0~0~1.42~0~0~Hang Seng TECH Index~0~6001.020~3706.300~0.99~-18.38~0~0~0~0~0~0.00~0.00~0.00~0~-31.08~-5.92~ZS~~~-0.98~-7.46~-19.12~0.00~0.00~0.00~0.000~~-27.87~HKD~1~";
+v_usDJI="200~道琼斯~.DJI~52347.55~52297.09~52490.68~645244111~0~0~51990.64~0~0~0~0~0~0~0~0~0~52519.80~0~0~0~0~0~0~0~0~0~~2026-11-13 16:43:26~50.46~0.10~52521.48~52017.86~USD~645244111~33744453848700~~~~~~0.96~~~Dow Jones~~54744.33~45057.28~0~~~~8.91~2.07~ZS~~~1.12~0.66~-0.78~~~0.89~~~52297.19~~~~~";
+v_usIXIC="200~纳斯达克~.IXIC~25136.27~25366.09~25408.00~7740442365~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~~2026-11-13 17:15:59~-229.82~-0.91~25423.09~24872.41~USD~7740442365~194565869331229~~~~~~2.17~~~Nasdaq Composite~~27722.75~20690.25~0~~~~8.15~2.27~ZS~~~-1.18~-3.84~-3.57~~~0.88~~~25136.27~~~~~";
+v_usINX="200~标普500~.INX~7561.67~7592.40~7616.85~2727332784~0~0~7493.75~0~0~0~0~0~0~0~0~0~7570.05~0~0~0~0~0~0~0~0~0~~2026-11-13 16:43:19~-30.73~-0.40~7621.78~7499.40~USD~2727332784~20623190492789~~~~~~1.61~~~S&P 500 Index~~7844.52~6316.91~0~~~~10.46~2.51~ZS~~~-0.24~-1.28~-1.04~~~0.86~~~7561.67~~~~~";
+v_gzN225="N225~日经225指数~2026-11-16 14:30:01~59661.80~-1480.55~-2.42~AP~";
+v_gzKS11="KS11~韩国首尔综合~2026-11-16 14:32:50~5100.50~-190.03~-3.59~AP~";
+v_gzKOSDAQ="KOSDAQ~韩国高斯达克指数~2026-11-16 14:33:00~665.65~-34.01~-4.86~AP~";
+v_whUSDHKD="310~美元港元~USDHKD~7.8452~0~20261116194534~7.8456~7.8438~7.8465~7.8430~7.8465~7.8467~-0.0004~-0.01~0.06~-0.02~-0.04~-0.02~0.81~7.8486~7.7692~2026-11-16";
+v_whUSDCNY="310~美元人民币~USDCNY~6.6671~0~20261116194538~6.6710~6.6704~6.6722~6.6647~6.6671~6.6672~-0.0039~-0.06~-0.07~0.29~-0.21~-1.11~-4.58~7.1181~6.6449~2026-11-16";
+
+## sina final
+url=https://hq.sinajs.cn/list=rt_hkHSI,rt_hkHSTECH,fx_susdhkd,fx_susdkrw
+status=200 bytes=763 seconds=0.82
+var hq_str_rt_hkHSI="HSI,恒生指数,23708.600,23637.600,23894.010,23649.100,23753.840,116.240,0.490,0.000,0.000,174107985.795,10670009851,0.000,0.000,28056.100,22518.000,2026/11/16,16:09:11,,,,,,";
+var hq_str_rt_hkHSTECH="HSTECH,恒生科技指数,3828.810,3813.190,3851.360,3797.080,3801.640,-11.550,-0.300,0.000,0.000,46024078.684,1273530220,0.000,0.000,6025.530,3706.300,2026/11/16,16:08:36,,,,,,";
+var hq_str_fx_susdhkd="19:45:43,7.846600,7.846700,7.845500,23,7.845500,7.846800,7.844500,7.846600,美元兑港元即期汇率,0.010000,0.001100,0.0002932,,7.849100,7.781500,,2026-11-16";
+var hq_str_fx_susdkrw="19:45:35,1334.57,1334.82,1335.000000,5.3e+04,1333.380000,1337.100000,1331.800000,1334.57,美元兑韩元即期汇率,-0.03,-0.43,0.003975,,1561.500000,1320.620000,,2026-11-16";
+
+## naver kr
+url=https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ
+status=200 bytes=2031 seconds=1.14
+{"pollingInterval":70000,"datas":[{"itemCode":"KOSPI","stockName":"코스피","stockExchangeType":{"code":"KS","zoneId":"Asia/Seoul","nationType":"KOR","delayTime":0,"startTime":"0900","endTime":"1530","closePriceSendTime":"1630","nameKor":"코스피","nameEng":"KOSPI","nationCode":"KOR","nationName":"대한민국","stockType":"domestic","name":"KOSPI"},"closePrice":"5,100.50","compareToPreviousClosePrice":"-190.03","compareToPreviousPrice":{"code":"5","text":"하락","name":"FALLING"},"fluctuationsRatio":"-3.59","openPrice":"5,305.40","highPrice":"5,327.99","lowPrice":"5,069.83","accumulatedTradingVolume":"221,296천주","accumulatedTradingValue":"16,458,294백만","marketStatus":"CLOSE","localTradedAt":"2026-11-16T20:15:00+09:00","symbolCode":"KOSPI","closePriceRaw":"5100.50","compareToPreviousClosePriceRaw":"-190.03","fluctuationsRatioRaw":"-3.59","openPriceRaw":"5305.40","highPriceRaw":"5327.99","lowPriceRaw":"5069.83","accumulatedTradingVolumeRaw":"221296000","accumulatedTradingValueRaw":"16458294000000"},{"itemCode":"KOSDAQ","stockName":"코스닥","stockExchangeType":{"code":"KQ","zoneId":"Asia/Seoul","nationType":"KOR","delayTime":0,"startTime":"0900","endTime":"1530","closePriceSendTime":"1630","nameKor":"코스닥","nameEng":"KOSDAQ","nationCode":"KOR","nationName":"대한민국","stockType":"domestic","name":"KOSDAQ"},"closePrice":"665.65","compareToPreviousClosePrice":"-34.01","compareToPreviousPrice":{"code":"5","text":"하락","name":"FALLING"},"fluctuationsRatio":"-4.86","openPrice":"705.88","highPrice":"708.34","lowPrice":"664.98","accumulatedTradingVolume":"446,420천주","accumulatedTradingValue":"4,881,148백만","marketStatus":"CLOSE","localTradedAt":"2026-11-16T20:15:00+09:00","symbolCode":"KOSDAQ","closePriceRaw":"665.65","compareToPreviousClosePriceRaw":"-34.01","fluctuationsRatioRaw":"-4.86","openPriceRaw":"705.88","highPriceRaw":"708.34","lowPriceRaw":"664.98","accumulatedTradingVolumeRaw":"446420000","accumulatedTradingValueRaw":"4881148000000"}],"time":"20261116204555"}
+
+## naver jp
+url=https://polling.finance.naver.com/api/realtime/worldstock/index/.N225,.TOPX
+status=200 bytes=2073 seconds=0.75
+{"pollingInterval":70000,"datas":[{"reutersCode":".N225","indexName":"니케이 225","stockExchangeType":{"code":"TYO","zoneId":"Asia/Tokyo","nationType":"JPN","delayTime":15,"startTime":"0900","endTime":"1530","closePriceSendTime":"1901","nameKor":"도쿄 거래소","nameEng":"Tokyo Stock Exchange","nationCode":"JPN","nationName":"일본","stockType":"worldstock","name":"TOKYO"},"closePrice":"59,662.02","compareToPreviousClosePrice":"-1,480.33","compareToPreviousPrice":{"code":"5","text":"하락","name":"FALLING"},"fluctuationsRatio":"-2.42","openPrice":"61,348.21","highPrice":"61,389.35","lowPrice":"59,630.51","accumulatedTradingVolume":"1,737,132천주","accumulatedTradingValue":"6,268백만(JPY)","marketStatus":"CLOSE","localTradedAt":"2026-11-16T15:45:03+09:00","symbolCode":"N225","closePriceRaw":"59662.02","compareToPreviousClosePriceRaw":"-1480.33","fluctuationsRatioRaw":"-2.42","openPriceRaw":"61348.21","highPriceRaw":"61389.35","lowPriceRaw":"59630.51","accumulatedTradingVolumeRaw":"1737132000","accumulatedTradingValueRaw":"6268000000"},{"reutersCode":".TOPX","indexName":"토픽스","stockExchangeType":{"code":"TYO","zoneId":"Asia/Tokyo","nationType":"JPN","delayTime":15,"startTime":"0900","endTime":"1530","closePriceSendTime":"1901","nameKor":"도쿄 거래소","nameEng":"Tokyo Stock Exchange","nationCode":"JPN","nationName":"일본","stockType":"worldstock","name":"TOKYO"},"closePrice":"3,901.37","compareToPreviousClosePrice":"-40.20","compareToPreviousPrice":{"code":"5","text":"하락","name":"FALLING"},"fluctuationsRatio":"-1.02","openPrice":"3,952.68","highPrice":"3,954.80","lowPrice":"3,898.14","accumulatedTradingVolume":"2,720,731천주","accumulatedTradingValue":"-","marketStatus":"CLOSE","localTradedAt":"2026-11-16T15:30:02+09:00","symbolCode":"TOPX","closePriceRaw":"3901.37","compareToPreviousClosePriceRaw":"-40.20","fluctuationsRatioRaw":"-1.02","openPriceRaw":"3952.68","highPriceRaw":"3954.80","lowPriceRaw":"3898.14","accumulatedTradingVolumeRaw":"2720731000","accumulatedTradingValueRaw":""}],"time":"20261116204555"}
+
+## tencent mixed unknown
+url=https://qt.gtimg.cn/q=sh000001,whUSDKRW,sz399001,whUSDHKD
+status=200 bytes=1117 seconds=0.81
+v_sh000001="1~上证指数~000001~3602.57~3634.35~3611.54~461643487~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161427~-31.78~-0.87~3623.12~3586.57~3602.57/461643487/706214352273~461643487~70621435~0.95~16.43~~3623.12~3586.57~1.01~567329.36~631315.94~0.00~-1~-1~1.03~0~3603.52~~~~~~70621435.2273~0.0000~0~ ~ZS~-9.23~-1.59~~~~4258.86~3574.27~-0.97~-3.44~-8.27~4865879337250~~-7.51~-12.86~4865879337250~~~-9.72~0.00~~CNY~0~~0.00~0~";
+v_sz399001="51~深证成指~399001~10690.78~10968.79~10881.91~520171170~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161406~-278.01~-2.53~10881.91~10642.37~10690.78/520171170/778276106973~520171170~77827611~2.11~33.78~~10881.91~10642.37~2.18~308237.68~362728.65~0.00~-1~-1~0.93~0~10768.32~~~~~~77827610.6973~0.0000~0~ ~ZS~-20.96~-4.08~~~~16374.02~10642.37~-2.91~-9.53~-25.52~2467946706699~~1.60~-25.15~2467946706699~~~-19.11~-0.04~~CNY~0~~0.00~0~";
+v_whUSDHKD="310~美元港元~USDHKD~7.8452~0~20261116194534~7.8456~7.8438~7.8465~7.8430~7.8465~7.8467~-0.0004~-0.01~0.06~-0.02~-0.04~-0.02~0.81~7.8486~7.7692~2026-11-16";
+
+## tencent unknown first
+url=https://qt.gtimg.cn/q=whUSDKRW,sh000001
+status=200 bytes=467 seconds=0.81
+v_sh000001="1~上证指数~000001~3602.57~3634.35~3611.54~461643487~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20261116161427~-31.78~-0.87~3623.12~3586.57~3602.57/461643487/706214352273~461643487~70621435~0.95~16.43~~3623.12~3586.57~1.01~567329.36~631315.94~0.00~-1~-1~1.03~0~3603.52~~~~~~70621435.2273~0.0000~0~ ~ZS~-9.23~-1.59~~~~4258.86~3574.27~-0.97~-3.44~-8.27~4865879337250~~-7.51~-12.86~4865879337250~~~-9.72~0.00~~CNY~0~~0.00~0~";
+
+## sina mixed unknown
+url=https://hq.sinajs.cn/list=rt_hkHSI,fx_snosuch,fx_susdkrw
+status=200 bytes=409 seconds=0.60
+var hq_str_rt_hkHSI="HSI,恒生指数,23708.600,23637.600,23894.010,23649.100,23753.840,116.240,0.490,0.000,0.000,174107985.795,10670009851,0.000,0.000,28056.100,22518.000,2026/11/16,16:09:11,,,,,,";
+var hq_str_fx_snosuch="";
+var hq_str_fx_susdkrw="19:45:47,1334.7,1335.6,1335.000000,5.3e+04,1333.380000,1337.100000,1331.800000,1334.7,美元兑韩元即期汇率,-0.02,-0.3,0.003975,,1561.500000,1320.620000,,2026-11-16";
+
+tencent whKRWUSD     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whKRWJPY     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whJPYKRW     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whEURKRW     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whKRWCNH     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxKRWCNY     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxCNYKRW     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxKRWUSD     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxKRWHKD     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxHKDKRW     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whUSDKRWX    status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whKRW        status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whUSDKOR     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent fxUSDKRWC    status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whHKDUSD     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whCNYUSD     status=200 bytes=  21 :: v_pv_none_match="1";
+tencent whEURUSD     status=200 bytes= 169 :: v_whEURUSD="310~欧元美元~EURUSD~1.1005~0~20261116194542~1.1022~1.1022~1.1030~1.1002~1.1005~1.1006~-0.0017~-0.15~-1.94~-1.63~-1.84~-4.88~-6.30~1.2065~1.1002~2026-11-16";
+
+snapshot finished 2026-11-16 11:46:11 UTC
