@@ -134,6 +134,19 @@ void test_parses_tencent_fixture()
     // 腾讯港股指数没有成交股数，[36][37] 都是万港元。
     assert(hsi.volume == 0.0 && near(hsi.turnover, 195857007140.0));
 
+    // 港股只认带 r_ 的实时代码：不带 r_ 的 hkHSI / hkHSTECH 延迟 15 分钟，不能当最新数据用。
+    std::string delayed = read_fixture("tencent_quotes.txt");
+    size_t renamed = 0;
+    for (size_t pos = 0; (pos = delayed.find("v_r_hk", pos)) != std::string::npos; ++renamed) {
+        delayed.erase(pos + 2, 2);
+    }
+    assert(renamed == 2);
+    SourceQuotes delayed_quotes;
+    assert(market_panel::parse_tencent(delayed.data(), delayed.size(), &delayed_quotes));
+    assert(!delayed_quotes.rows[market_panel::kRowHkHsi].valid);
+    assert(!delayed_quotes.rows[market_panel::kRowHkHstech].valid);
+    assert(delayed_quotes.rows[market_panel::kRowSh000001].valid);
+
     const Quote &dow = sources.tencent.rows[market_panel::kRowUsDji];
     assert(dow.valid && near(dow.last, 52347.55) && near(dow.pct, 0.10));
     // 美股指数只取成交股数，丢弃「股数×点位」的无意义成交额。

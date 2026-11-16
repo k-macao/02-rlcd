@@ -108,6 +108,15 @@ class QuoteParsingTest(unittest.TestCase):
         hsi = quotes["hkHSI"]
         self.assertIsNone(hsi.volume)
         self.assertAlmostEqual(hsi.turnover, 195_857_007_140.0, delta=1e4)
+        # 港股只认带 r_ 的实时代码（不带的延迟 15 分钟）；返回的键不带 r_，与新浪一致。
+        self.assertIn("r_hkHSI,r_hkHSTECH,", mq.TENCENT_URL)
+        self.assertNotIn(",hkHSI", mq.TENCENT_URL)
+        self.assertNotIn("r_hkHSI", quotes)
+        delayed = mq.parse_tencent(
+            mq.fixture_text(mq.SOURCE_TENCENT).replace("v_r_hk", "v_hk"))
+        self.assertNotIn("hkHSI", delayed)
+        self.assertNotIn("hkHSTECH", delayed)
+        self.assertIn("sh000001", delayed)
         # 美股指数：只有成交股数；成交额字段是无意义值，必须丢弃。
         dji = quotes["usDJI"]
         self.assertAlmostEqual(dji.volume, 645_244_111.0)

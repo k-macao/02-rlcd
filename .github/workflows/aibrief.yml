@@ -131,6 +131,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PUBLISH" == "true" ]]; then
+            # PROBE（临时）：400 秒后强杀循环，模拟执行机故障，验证排队的后继会自动接上。
+            ( sleep 400; pkill -9 -f device_brief/publish_loop.py ) &
             python3 device_brief/publish_loop.py \
               --out-dir _probe/aibrief-loop \
               --publish \
