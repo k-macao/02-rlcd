@@ -910,7 +910,7 @@ class CommandLineTest(unittest.TestCase):
                     redirect_stdout(io.StringIO()) as out:
                 code = publish_loop.main(["--loop-seconds", "0"])
             self.assertEqual(code, 0)
-            self.assertIn("发布 2，无变化 3", out.getvalue())
+            self.assertIn("共 5 个周期：发布 2，无变化 3，发布失败 0", out.getvalue())
             self.assertIn("已触发下一轮", summary.read_text(encoding="utf-8"))
             self.assertNotIn("::notice", out.getvalue())
         # 在 Actions 里每轮留一条 notice：不用翻日志就能看到这一轮的结果。
@@ -921,6 +921,9 @@ class CommandLineTest(unittest.TestCase):
         notices = [line for line in out.getvalue().splitlines() if line.startswith("::notice")]
         self.assertEqual(len(notices), 1)
         self.assertIn("发布 2，无变化 3", notices[0])
+        # 只渲染不发布（分支上的单次预览）时不写「发布 0」这种容易误会的话。
+        self.assertIn("共 1 个周期：渲染成功 1（不发布），",
+                      publish_loop.summary_text(publish_loop.Stats(iterations=1, rendered=1)))
         failed = publish_loop.Stats(iterations=5, rendered=0, skipped=5)
         with mock.patch.object(publish_loop, "run_loop", return_value=failed), \
                 mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": "", "GITHUB_ACTIONS": ""}), \

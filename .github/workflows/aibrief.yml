@@ -121,6 +121,9 @@ jobs:
         # 固定版本：位图要与固件自绘逐像素相同，字形栅格化不能随依赖升级悄悄变化。
         run: python3 -m pip install --disable-pip-version-check pillow==13.0.0 freetype-py==2.5.1
 
+      - name: PROBE 抓取原始行情（临时）
+        run: python3 _probe/capture_raw.py _probe/aibrief-loop/raw || true
+
       - name: 发布循环
         env:
           GH_TOKEN: ${{ github.token }}

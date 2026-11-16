@@ -474,9 +474,14 @@ def summary_text(stats: Stats) -> str:
     else:
         ending = "正常结束"
     unexpected = f"，意外错误 {stats.unexpected_errors}" if stats.unexpected_errors else ""
-    return (f"共 {stats.iterations} 次：发布 {stats.pushed}，无变化 {stats.unchanged}，"
-            f"行情不足或超时 {stats.skipped}，渲染出错 {stats.render_errors}，"
-            f"发布失败 {stats.push_failures}{unexpected}；{ending}")
+    published = stats.pushed + stats.unchanged + stats.push_failures
+    if stats.rendered and not published:
+        rendered = f"渲染成功 {stats.rendered}（不发布）"
+    else:
+        rendered = (f"发布 {stats.pushed}，无变化 {stats.unchanged}，"
+                    f"发布失败 {stats.push_failures}")
+    return (f"共 {stats.iterations} 个周期：{rendered}，行情不足或超时 {stats.skipped}，"
+            f"渲染出错 {stats.render_errors}{unexpected}；{ending}")
 
 
 def write_step_summary(text: str) -> None:
