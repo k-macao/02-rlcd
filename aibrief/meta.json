@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17 15:30:05",
+  "generated_at": "2026-11-17 15:31:05",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-17 15:30:03",
+  "as_of": "2026-11-17 15:31:03",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -54,7 +54,7 @@
       "pct": -0.49,
       "volume": 53788563800.0,
       "turnover": 767179960000.0,
-      "time": "2026-11-17T15:29:45+08:00",
+      "time": "2026-11-17T15:30:45+08:00",
       "source": "tencent",
       "cells": [
         "10,638.52",
@@ -71,7 +71,7 @@
       "pct": -1.2,
       "volume": 15789441400.0,
       "turnover": 365832090000.0,
-      "time": "2026-11-17T15:30:00+08:00",
+      "time": "2026-11-17T15:31:00+08:00",
       "source": "tencent",
       "cells": [
         "2,292.20",
@@ -84,34 +84,34 @@
       "market": "港",
       "key": "hkHSI",
       "name": "恒生指数",
-      "last": 23532.77,
-      "pct": -0.93,
-      "volume": 9521625884.0,
-      "turnover": 170944313550.0,
-      "time": "2026-11-17T15:30:03+08:00",
+      "last": 23537.53,
+      "pct": -0.91,
+      "volume": 9553007586.0,
+      "turnover": 171511750490.0,
+      "time": "2026-11-17T15:31:03+08:00",
       "source": "tencent",
       "cells": [
-        "23,532.77",
-        "-0.93%",
-        "95.2亿",
-        "1,709亿"
+        "23,537.53",
+        "-0.91%",
+        "95.5亿",
+        "1,715亿"
       ]
     },
     {
       "market": "港",
       "key": "hkHSTECH",
       "name": "恒生科技",
-      "last": 3761.62,
-      "pct": -1.05,
-      "volume": 1484579216.0,
-      "turnover": 56629137980.00001,
-      "time": "2026-11-17T15:30:02+08:00",
+      "last": 3762.46,
+      "pct": -1.03,
+      "volume": 1489522957.0,
+      "turnover": 56855318880.0,
+      "time": "2026-11-17T15:31:02+08:00",
       "source": "tencent",
       "cells": [
-        "3,761.62",
-        "-1.05%",
-        "14.8亿",
-        "566亿"
+        "3,762.46",
+        "-1.03%",
+        "14.9亿",
+        "569亿"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "8efd09c6d1001d6a4d690cf6dfcd041b5736640b76b0fc5d6a3d5597a39ae814",
-  "crc32_bitmap": "b6bdf379",
+  "sha256": "7ef3f0dad97aa723e68f9a42adb64bbb4e3fe3eb39b549f854b8b80555486191",
+  "crc32_bitmap": "3871ef7f",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
