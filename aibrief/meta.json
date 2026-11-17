@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17 16:00:04",
+  "generated_at": "2026-11-17 16:01:05",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-17 16:00:03",
+  "as_of": "2026-11-17 16:01:04",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": -0.5,
       "volume": 44407469800.0,
       "turnover": 690514640000.0,
-      "time": "2026-11-17T15:59:27+08:00",
+      "time": "2026-11-17T16:00:27+08:00",
       "source": "tencent",
       "cells": [
         "3,584.58",
@@ -54,7 +54,7 @@
       "pct": -0.49,
       "volume": 53788563800.0,
       "turnover": 767179960000.0,
-      "time": "2026-11-17T15:59:45+08:00",
+      "time": "2026-11-17T16:00:45+08:00",
       "source": "tencent",
       "cells": [
         "10,638.52",
@@ -71,7 +71,7 @@
       "pct": -1.2,
       "volume": 15789441400.0,
       "turnover": 365832090000.0,
-      "time": "2026-11-17T16:00:00+08:00",
+      "time": "2026-11-17T16:01:00+08:00",
       "source": "tencent",
       "cells": [
         "2,292.20",
@@ -86,9 +86,9 @@
       "name": "恒生指数",
       "last": 23545.14,
       "pct": -0.88,
-      "volume": 10682419820.0,
-      "turnover": 187931294030.0,
-      "time": "2026-11-17T16:00:03+08:00",
+      "volume": 10682419826.0,
+      "turnover": 187931295370.0,
+      "time": "2026-11-17T16:01:04+08:00",
       "source": "tencent",
       "cells": [
         "23,545.14",
@@ -105,7 +105,7 @@
       "pct": -0.94,
       "volume": 1639770078.0,
       "turnover": 62814847270.0,
-      "time": "2026-11-17T16:00:02+08:00",
+      "time": "2026-11-17T16:01:04+08:00",
       "source": "tencent",
       "cells": [
         "3,766.06",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "bdcfb3a236b7ba53a96fe3d595842e05da7ff1dc7e1d8b17ec731f557a5b6762",
-  "crc32_bitmap": "09542128",
+  "sha256": "ce981d57c4d74cd4b299559971e839bdbe23e9005130fd9b6fc6959ce4aa19e4",
+  "crc32_bitmap": "691c09ea",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
