@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18 16:04:00",
+  "generated_at": "2026-11-18 16:05:00",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-18 16:03:58",
+  "as_of": "2026-11-18 16:04:58",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": 0.09,
       "volume": 42393483200.0,
       "turnover": 650231690000.0,
-      "time": "2026-11-18T16:03:00+08:00",
+      "time": "2026-11-18T16:04:00+08:00",
       "source": "tencent",
       "cells": [
         "3,587.83",
@@ -54,7 +54,7 @@
       "pct": 0.2,
       "volume": 50703574400.0,
       "turnover": 719470540000.0,
-      "time": "2026-11-18T16:03:09+08:00",
+      "time": "2026-11-18T16:04:09+08:00",
       "source": "tencent",
       "cells": [
         "10,659.41",
@@ -71,7 +71,7 @@
       "pct": 0.85,
       "volume": 14844973900.0,
       "turnover": 336830830000.0,
-      "time": "2026-11-18T16:03:24+08:00",
+      "time": "2026-11-18T16:04:24+08:00",
       "source": "tencent",
       "cells": [
         "2,311.62",
@@ -88,7 +88,7 @@
       "pct": -0.87,
       "volume": 10793472372.0,
       "turnover": 167841872090.0,
-      "time": "2026-11-18T16:03:58+08:00",
+      "time": "2026-11-18T16:04:58+08:00",
       "source": "tencent",
       "cells": [
         "23,304.53",
@@ -105,7 +105,7 @@
       "pct": -0.45,
       "volume": 1673616439.0,
       "turnover": 47397867950.0,
-      "time": "2026-11-18T16:03:58+08:00",
+      "time": "2026-11-18T16:04:58+08:00",
       "source": "tencent",
       "cells": [
         "3,741.21",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "e7f8b790a1729ab759eef49ef201e5e5e224b80ad7df178dcaf535334f52e657",
-  "crc32_bitmap": "d8016e55",
+  "sha256": "3db5ec3f37cdf5be51754e80a031895d141584f5198dc9aeea709e9d143c27d3",
+  "crc32_bitmap": "392cbb93",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
