@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 05:18:46",
+  "generated_at": "2026-11-19 05:19:47",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 05:18:40",
+  "as_of": "2026-11-19 05:19:41",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -120,9 +120,9 @@
       "name": "道琼斯",
       "last": 50198.17,
       "pct": -1.11,
-      "volume": 684285221.0,
+      "volume": 684481024.0,
       "turnover": null,
-      "time": "2026-11-18T16:18:40-05:00",
+      "time": "2026-11-18T16:19:41-05:00",
       "source": "tencent",
       "cells": [
         "50,198.17",
@@ -137,9 +137,9 @@
       "name": "纳斯达克",
       "last": 24429.88,
       "pct": 0.42,
-      "volume": 6979393433.0,
+      "volume": 6981117761.0,
       "turnover": null,
-      "time": "2026-11-18T16:18:30-05:00",
+      "time": "2026-11-18T16:19:30-05:00",
       "source": "tencent",
       "cells": [
         "24,429.88",
@@ -154,9 +154,9 @@
       "name": "标普500",
       "last": 7323.63,
       "pct": -0.23,
-      "volume": 3025314703.0,
+      "volume": 3026400081.0,
       "turnover": null,
-      "time": "2026-11-18T16:18:40-05:00",
+      "time": "2026-11-18T16:19:40-05:00",
       "source": "tencent",
       "cells": [
         "7,323.63",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "dac3dc969401fa097a8b69469c73ab870042d15f641087bb6e118f2fe437ead9",
-  "crc32_bitmap": "9b655165",
+  "sha256": "de3f1739211be45292c177888c9cf7cfe18854027748b366af7824a3ad618b52",
+  "crc32_bitmap": "cb75825d",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
