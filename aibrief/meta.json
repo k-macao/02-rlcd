@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18 16:01:00",
+  "generated_at": "2026-11-18 16:02:00",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-18 16:00:58",
+  "as_of": "2026-11-18 16:01:58",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": 0.09,
       "volume": 42393483200.0,
       "turnover": 650231690000.0,
-      "time": "2026-11-18T16:00:00+08:00",
+      "time": "2026-11-18T16:01:00+08:00",
       "source": "tencent",
       "cells": [
         "3,587.83",
@@ -54,7 +54,7 @@
       "pct": 0.2,
       "volume": 50703574400.0,
       "turnover": 719470540000.0,
-      "time": "2026-11-18T16:00:09+08:00",
+      "time": "2026-11-18T16:01:09+08:00",
       "source": "tencent",
       "cells": [
         "10,659.41",
@@ -71,7 +71,7 @@
       "pct": 0.85,
       "volume": 14844973900.0,
       "turnover": 336830830000.0,
-      "time": "2026-11-18T16:00:24+08:00",
+      "time": "2026-11-18T16:01:24+08:00",
       "source": "tencent",
       "cells": [
         "2,311.62",
@@ -86,9 +86,9 @@
       "name": "恒生指数",
       "last": 23304.53,
       "pct": -0.87,
-      "volume": 10793357571.0,
-      "turnover": 167840713649.99997,
-      "time": "2026-11-18T16:00:58+08:00",
+      "volume": 10793357871.0,
+      "turnover": 167840716860.0,
+      "time": "2026-11-18T16:01:58+08:00",
       "source": "tencent",
       "cells": [
         "23,304.53",
@@ -105,7 +105,7 @@
       "pct": -0.45,
       "volume": 1673616439.0,
       "turnover": 47397867950.0,
-      "time": "2026-11-18T16:00:58+08:00",
+      "time": "2026-11-18T16:01:58+08:00",
       "source": "tencent",
       "cells": [
         "3,741.21",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "67ecf9f93510ed9c985a0ec814d29e2f6c9d093c3debbc21f2a137470faf92a5",
-  "crc32_bitmap": "9cc94496",
+  "sha256": "44cc690051dcfc39f7db06eefb8384fda2f3bba6de78f72324b3d0c8710b6177",
+  "crc32_bitmap": "fc816c54",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
