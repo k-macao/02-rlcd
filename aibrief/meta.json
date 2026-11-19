@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 08:44:46",
+  "generated_at": "2026-11-19 08:45:46",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 08:44:45",
+  "as_of": "2026-11-19 08:45:46",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -173,7 +173,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:44:45+09:00",
+      "time": "2026-11-19T09:45:46+09:00",
       "source": "naver_kr",
       "cells": [
         "5,067.44",
@@ -190,7 +190,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:44:45+09:00",
+      "time": "2026-11-19T09:45:46+09:00",
       "source": "naver_kr",
       "cells": [
         "662.81",
@@ -203,16 +203,16 @@
       "market": "日",
       "key": "N225",
       "name": "日经225",
-      "last": 59511.06,
+      "last": 59516.1,
       "pct": 0.83,
-      "volume": 316258000.0,
+      "volume": 322240000.0,
       "turnover": null,
-      "time": "2026-11-19T08:43:55+08:00",
+      "time": "2026-11-19T08:44:55+08:00",
       "source": "tencent",
       "cells": [
-        "59,511.06",
+        "59,516.10",
         "+0.83%",
-        "3.16亿",
+        "3.22亿",
         "--"
       ]
     },
@@ -220,16 +220,16 @@
       "market": "日",
       "key": "TOPX",
       "name": "东证指数",
-      "last": 3811.64,
-      "pct": -0.32,
-      "volume": 486348000.0,
+      "last": 3813.34,
+      "pct": -0.28,
+      "volume": 494054000.0,
       "turnover": null,
-      "time": "2026-11-19T09:29:46+09:00",
+      "time": "2026-11-19T09:30:46+09:00",
       "source": "naver_jp",
       "cells": [
-        "3,811.64",
-        "-0.32%",
-        "4.86亿",
+        "3,813.34",
+        "-0.28%",
+        "4.94亿",
         "--"
       ]
     }
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "99855de0e4c6e56f2f171014adc636580a682ad20251e6b33622d1b5cf758a3b",
-  "crc32_bitmap": "3966b885",
+  "sha256": "f50b1c89e28ba1af6ad40c9bce5590699587d2237ba8dd27063c56d2b8eaf59f",
+  "crc32_bitmap": "a5797268",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
