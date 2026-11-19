@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 08:05:47",
+  "generated_at": "2026-11-19 08:06:46",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 08:05:46",
+  "as_of": "2026-11-19 08:06:46",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -173,7 +173,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:05:46+09:00",
+      "time": "2026-11-19T09:06:46+09:00",
       "source": "naver_kr",
       "cells": [
         "5,067.44",
@@ -190,7 +190,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:05:46+09:00",
+      "time": "2026-11-19T09:06:46+09:00",
       "source": "naver_kr",
       "cells": [
         "662.81",
@@ -203,15 +203,15 @@
       "market": "日",
       "key": "N225",
       "name": "日经225",
-      "last": 59335.02,
-      "pct": 0.53,
+      "last": 59371.83,
+      "pct": 0.59,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T08:05:00+08:00",
+      "time": "2026-11-19T08:05:59+08:00",
       "source": "tencent",
       "cells": [
-        "59,335.02",
-        "+0.53%",
+        "59,371.83",
+        "+0.59%",
         "--",
         "--"
       ]
@@ -224,7 +224,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T08:50:46+09:00",
+      "time": "2026-11-19T08:51:46+09:00",
       "source": "naver_jp",
       "cells": [
         "3,824.00",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "b0f55d578a44aaf0d403140832f2b0d026433a56b7a773eea399b4aa5a610c73",
-  "crc32_bitmap": "d465111c",
+  "sha256": "30752f6b3c789db40a204b693f17ae60bc360f6baec9d6fb9d49529f97fa88ff",
+  "crc32_bitmap": "fecc30f9",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
