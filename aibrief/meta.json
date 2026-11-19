@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 19:12:15",
+  "generated_at": "2026-11-19 19:13:16",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 19:12:00",
+  "as_of": "2026-11-19 19:13:00",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -173,7 +173,7 @@
       "pct": 1.39,
       "volume": 195695000.0,
       "turnover": 13417025000000.0,
-      "time": "2026-11-19T20:12:00+09:00",
+      "time": "2026-11-19T20:13:00+09:00",
       "source": "naver_kr",
       "cells": [
         "5,137.89",
@@ -190,7 +190,7 @@
       "pct": 3.32,
       "volume": 398792000.0,
       "turnover": 4795050000000.0,
-      "time": "2026-11-19T20:12:00+09:00",
+      "time": "2026-11-19T20:13:00+09:00",
       "source": "naver_kr",
       "cells": [
         "684.81",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "d86a748f6d74f9fa4894fcb83974a0415885f9d7c61373a2227ea596d8d599da",
-  "crc32_bitmap": "0149de37",
+  "sha256": "6b519343abc877046fd64a19a6bb938f6a176f94ed9b1c7f985a3bed61c94aac",
+  "crc32_bitmap": "080ca6e4",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
