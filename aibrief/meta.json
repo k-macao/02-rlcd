@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 17:16:16",
+  "generated_at": "2026-11-19 17:17:15",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 17:16:05",
+  "as_of": "2026-11-19 17:17:05",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -88,7 +88,7 @@
       "pct": -1.95,
       "volume": 11729779724.0,
       "turnover": 229548685190.0,
-      "time": "2026-11-19T17:16:05+08:00",
+      "time": "2026-11-19T17:17:05+08:00",
       "source": "tencent",
       "cells": [
         "22,841.62",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "211034478e50fd57eafa9c64e96d936b977508ae3a9b9f957058a7fe92c556d8",
-  "crc32_bitmap": "7fe9de5c",
+  "sha256": "1be8b986b41014ead1c514cd604324a5ef8338d3aa2b6b33d68d797b5410fcff",
+  "crc32_bitmap": "92587fa3",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
