@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 16:06:15",
+  "generated_at": "2026-11-19 16:07:15",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 16:06:13",
+  "as_of": "2026-11-19 16:07:14",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": -0.28,
       "volume": 41291275500.0,
       "turnover": 636909060000.0,
-      "time": "2026-11-19T16:05:27+08:00",
+      "time": "2026-11-19T16:06:27+08:00",
       "source": "tencent",
       "cells": [
         "3,577.62",
@@ -54,7 +54,7 @@
       "pct": -0.71,
       "volume": 49146419700.0,
       "turnover": 668238210000.0,
-      "time": "2026-11-19T16:05:42+08:00",
+      "time": "2026-11-19T16:06:42+08:00",
       "source": "tencent",
       "cells": [
         "10,583.20",
@@ -71,7 +71,7 @@
       "pct": -0.79,
       "volume": 13999162600.0,
       "turnover": 310120730000.0,
-      "time": "2026-11-19T16:05:57+08:00",
+      "time": "2026-11-19T16:06:57+08:00",
       "source": "tencent",
       "cells": [
         "2,293.34",
@@ -88,7 +88,7 @@
       "pct": -2.03,
       "volume": 11264855474.0,
       "turnover": 219934409329.99997,
-      "time": "2026-11-19T16:06:13+08:00",
+      "time": "2026-11-19T16:07:14+08:00",
       "source": "tencent",
       "cells": [
         "22,821.64",
@@ -105,7 +105,7 @@
       "pct": -2.39,
       "volume": 1814859704.0,
       "turnover": 83572592040.0,
-      "time": "2026-11-19T16:06:12+08:00",
+      "time": "2026-11-19T16:07:14+08:00",
       "source": "tencent",
       "cells": [
         "3,646.93",
@@ -173,7 +173,7 @@
       "pct": 1.39,
       "volume": 186750000.0,
       "turnover": 12752243000000.0,
-      "time": "2026-11-19T17:06:00+09:00",
+      "time": "2026-11-19T17:07:00+09:00",
       "source": "naver_kr",
       "cells": [
         "5,137.89",
@@ -190,7 +190,7 @@
       "pct": 3.32,
       "volume": 371561000.0,
       "turnover": 4494752000000.0,
-      "time": "2026-11-19T17:06:00+09:00",
+      "time": "2026-11-19T17:07:00+09:00",
       "source": "naver_kr",
       "cells": [
         "684.81",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "2ef1938fa80e21d4275ba32dadee11b844e9b740c5e1b0dd8db123928fa649bd",
-  "crc32_bitmap": "46c000bc",
+  "sha256": "d6344e14ecb3c7009d7756a7347bf8ca66966d5c60806efda29db7de5ee053a3",
+  "crc32_bitmap": "ab71a143",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
