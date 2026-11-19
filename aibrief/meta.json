@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 09:12:47",
+  "generated_at": "2026-11-19 09:13:46",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-19 09:12:45",
+  "as_of": "2026-11-19 09:13:45",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": -0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:12:00+08:00",
+      "time": "2026-11-19T09:13:00+08:00",
       "source": "tencent",
       "cells": [
         "3,587.80",
@@ -54,7 +54,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:12:42+08:00",
+      "time": "2026-11-19T09:13:42+08:00",
       "source": "tencent",
       "cells": [
         "10,659.41",
@@ -71,7 +71,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:11:57+08:00",
+      "time": "2026-11-19T09:12:57+08:00",
       "source": "tencent",
       "cells": [
         "2,311.62",
@@ -88,7 +88,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": 1084391110.0,
-      "time": "2026-11-19T09:12:45+08:00",
+      "time": "2026-11-19T09:13:45+08:00",
       "source": "tencent",
       "cells": [
         "23,294.75",
@@ -105,7 +105,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-19T09:12:44+08:00",
+      "time": "2026-11-19T09:13:44+08:00",
       "source": "tencent",
       "cells": [
         "3,736.33",
@@ -169,34 +169,34 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 5054.23,
-      "pct": -0.26,
-      "volume": 24944000.0,
-      "turnover": 1492802000000.0,
-      "time": "2026-11-19T10:12:45+09:00",
+      "last": 5072.52,
+      "pct": 0.1,
+      "volume": 26261000.0,
+      "turnover": 1564429000000.0,
+      "time": "2026-11-19T10:13:45+09:00",
       "source": "naver_kr",
       "cells": [
-        "5,054.23",
-        "-0.26%",
-        "2,494万",
-        "1.49万亿"
+        "5,072.52",
+        "+0.10%",
+        "2,626万",
+        "1.56万亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 663.22,
-      "pct": 0.06,
-      "volume": 48522000.0,
-      "turnover": 603146000000.0,
-      "time": "2026-11-19T10:12:45+09:00",
+      "last": 665.92,
+      "pct": 0.47,
+      "volume": 50915000.0,
+      "turnover": 631480000000.0,
+      "time": "2026-11-19T10:13:45+09:00",
       "source": "naver_kr",
       "cells": [
-        "663.22",
-        "+0.06%",
-        "4,852万",
-        "6,031亿"
+        "665.92",
+        "+0.47%",
+        "5,092万",
+        "6,315亿"
       ]
     },
     {
@@ -205,14 +205,14 @@
       "name": "日经225",
       "last": 59536.59,
       "pct": 0.87,
-      "volume": 449507000.0,
+      "volume": 454888000.0,
       "turnover": null,
       "time": "2026-11-19T09:12:05+08:00",
       "source": "tencent",
       "cells": [
         "59,536.59",
         "+0.87%",
-        "4.50亿",
+        "4.55亿",
         "--"
       ]
     },
@@ -220,16 +220,16 @@
       "market": "日",
       "key": "TOPX",
       "name": "东证指数",
-      "last": 3821.97,
-      "pct": -0.05,
-      "volume": 667435000.0,
+      "last": 3819.86,
+      "pct": -0.11,
+      "volume": 674245000.0,
       "turnover": null,
-      "time": "2026-11-19T09:57:46+09:00",
+      "time": "2026-11-19T09:58:46+09:00",
       "source": "naver_jp",
       "cells": [
-        "3,821.97",
-        "-0.05%",
-        "6.67亿",
+        "3,819.86",
+        "-0.11%",
+        "6.74亿",
         "--"
       ]
     }
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "b3a1272a9ee44dfc90bdff8edcd91972cd5bb72cb26f697fb322187c56822d9c",
-  "crc32_bitmap": "d7057938",
+  "sha256": "f9fef50cddf32fc119dc4a14435ed890cf7203ceb11a9a90b96572a3cab25808",
+  "crc32_bitmap": "c8e21789",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
