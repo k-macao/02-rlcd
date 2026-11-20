@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20 16:06:19",
+  "generated_at": "2026-11-20 16:07:19",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-20 16:06:18",
+  "as_of": "2026-11-20 16:07:18",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": -1.23,
       "volume": 49971172700.0,
       "turnover": 702573850000.0,
-      "time": "2026-11-20T16:05:27+08:00",
+      "time": "2026-11-20T16:06:27+08:00",
       "source": "tencent",
       "cells": [
         "3,533.79",
@@ -54,7 +54,7 @@
       "pct": -3.09,
       "volume": 57180860700.0,
       "turnover": 719626570000.0,
-      "time": "2026-11-20T16:06:12+08:00",
+      "time": "2026-11-20T16:07:12+08:00",
       "source": "tencent",
       "cells": [
         "10,256.39",
@@ -71,7 +71,7 @@
       "pct": -3.54,
       "volume": 16523450600.0,
       "turnover": 334978240000.0,
-      "time": "2026-11-20T16:05:27+08:00",
+      "time": "2026-11-20T16:06:27+08:00",
       "source": "tencent",
       "cells": [
         "2,212.13",
@@ -88,7 +88,7 @@
       "pct": -1.84,
       "volume": 13941246827.0,
       "turnover": 258553597660.0,
-      "time": "2026-11-20T16:06:18+08:00",
+      "time": "2026-11-20T16:07:18+08:00",
       "source": "tencent",
       "cells": [
         "22,421.09",
@@ -105,7 +105,7 @@
       "pct": -3.74,
       "volume": 1979390565.0,
       "turnover": 68471090570.0,
-      "time": "2026-11-20T16:06:18+08:00",
+      "time": "2026-11-20T16:07:18+08:00",
       "source": "tencent",
       "cells": [
         "3,512.71",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "1c3a6f1d06af7f11d544b544586d2bca108d4f02df401035bf03670d38c669a9",
-  "crc32_bitmap": "df513af1",
+  "sha256": "a005d92ac97e5d043103602eae8826c05ce4786c9cec7cdf79baae70f1f49a0b",
+  "crc32_bitmap": "32e09b0e",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
