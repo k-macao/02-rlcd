@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23 15:30:49",
+  "generated_at": "2026-11-23 15:31:49",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-23 15:30:48",
+  "as_of": "2026-11-23 15:31:48",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": 0.15,
       "volume": 51219271400.0,
       "turnover": 738500420000.0,
-      "time": "2026-11-23T15:30:00+08:00",
+      "time": "2026-11-23T15:31:27+08:00",
       "source": "tencent",
       "cells": [
         "3,538.95",
@@ -54,7 +54,7 @@
       "pct": 1.93,
       "volume": 60737209000.0,
       "turnover": 814379750000.0,
-      "time": "2026-11-23T15:30:03+08:00",
+      "time": "2026-11-23T15:31:03+08:00",
       "source": "tencent",
       "cells": [
         "10,454.37",
@@ -71,7 +71,7 @@
       "pct": 3.08,
       "volume": 18825119900.0,
       "turnover": 400628300000.0,
-      "time": "2026-11-23T15:30:18+08:00",
+      "time": "2026-11-23T15:31:18+08:00",
       "source": "tencent",
       "cells": [
         "2,280.20",
@@ -84,34 +84,34 @@
       "market": "港",
       "key": "hkHSI",
       "name": "恒生指数",
-      "last": 22367.35,
-      "pct": -0.19,
-      "volume": 12621866631.0,
-      "turnover": 218887873330.0,
-      "time": "2026-11-23T15:30:48+08:00",
+      "last": 22374.29,
+      "pct": -0.16,
+      "volume": 12648680183.0,
+      "turnover": 219500860610.0,
+      "time": "2026-11-23T15:31:48+08:00",
       "source": "tencent",
       "cells": [
-        "22,367.35",
-        "-0.19%",
+        "22,374.29",
+        "-0.16%",
         "126亿",
-        "2,189亿"
+        "2,195亿"
       ]
     },
     {
       "market": "港",
       "key": "hkHSTECH",
       "name": "恒生科技",
-      "last": 3507.35,
-      "pct": -0.11,
-      "volume": 2257241039.0,
-      "turnover": 59795296600.0,
-      "time": "2026-11-23T15:30:48+08:00",
+      "last": 3509.16,
+      "pct": -0.06,
+      "volume": 2263428985.0,
+      "turnover": 59977601530.0,
+      "time": "2026-11-23T15:31:48+08:00",
       "source": "tencent",
       "cells": [
-        "3,507.35",
-        "-0.11%",
+        "3,509.16",
+        "-0.06%",
         "22.6亿",
-        "598亿"
+        "600亿"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "fc3fe4c69524b8b1a852f4ffffb410d37f7c28cb3b85499a4c8c48304246922f",
-  "crc32_bitmap": "bef52838",
+  "sha256": "cf1b33274c8f57f078c9dbc947cf364dcc1c9eff75595f58fa678cbdbda62b64",
+  "crc32_bitmap": "919eae2b",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
