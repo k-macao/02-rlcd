@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23 12:42:32",
+  "generated_at": "2026-11-23 12:43:32",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-23 12:42:31",
+  "as_of": "2026-11-23 12:43:31",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -169,15 +169,15 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 4702.77,
-      "pct": -3.43,
-      "volume": 156603000.0,
-      "turnover": 11266188000000.0,
-      "time": "2026-11-23T13:42:31+09:00",
+      "last": 4710.7,
+      "pct": -3.27,
+      "volume": 156939000.0,
+      "turnover": 11292612000000.0,
+      "time": "2026-11-23T13:43:31+09:00",
       "source": "naver_kr",
       "cells": [
-        "4,702.77",
-        "-3.43%",
+        "4,710.70",
+        "-3.27%",
         "1.57亿",
         "11.3万亿"
       ]
@@ -186,17 +186,17 @@
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 638.76,
-      "pct": -1.07,
-      "volume": 296733000.0,
-      "turnover": 3351142000000.0,
-      "time": "2026-11-23T13:42:31+09:00",
+      "last": 640.41,
+      "pct": -0.82,
+      "volume": 297418000.0,
+      "turnover": 3361841000000.0,
+      "time": "2026-11-23T13:43:31+09:00",
       "source": "naver_kr",
       "cells": [
-        "638.76",
-        "-1.07%",
+        "640.41",
+        "-0.82%",
         "2.97亿",
-        "3.35万亿"
+        "3.36万亿"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "53894547a2c4e7cebb06685be2c7767f2cfd93383bebc5250397102f38e1f090",
-  "crc32_bitmap": "2fa43d0e",
+  "sha256": "18c1bf737db310b3e16380c65562650ccfc97baffeb68eace92b927df27a59fe",
+  "crc32_bitmap": "19bc22ce",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
