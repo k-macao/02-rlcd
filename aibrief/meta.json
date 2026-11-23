@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23 09:08:32",
+  "generated_at": "2026-11-23 09:09:32",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-23 09:08:30",
+  "as_of": "2026-11-23 09:09:30",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -88,7 +88,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": 945679740.0,
-      "time": "2026-11-23T09:08:30+08:00",
+      "time": "2026-11-23T09:09:30+08:00",
       "source": "tencent",
       "cells": [
         "22,410.80",
@@ -105,7 +105,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-23T09:08:30+08:00",
+      "time": "2026-11-23T09:09:30+08:00",
       "source": "tencent",
       "cells": [
         "3,511.14",
@@ -169,34 +169,34 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 4667.84,
-      "pct": -4.15,
-      "volume": 69701000.0,
-      "turnover": 4819242000000.0,
-      "time": "2026-11-23T10:08:30+09:00",
+      "last": 4668.5,
+      "pct": -4.14,
+      "volume": 70468000.0,
+      "turnover": 4863473000000.0,
+      "time": "2026-11-23T10:09:30+09:00",
       "source": "naver_kr",
       "cells": [
-        "4,667.84",
-        "-4.15%",
-        "6,970万",
-        "4.82万亿"
+        "4,668.50",
+        "-4.14%",
+        "7,047万",
+        "4.86万亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 626.85,
-      "pct": -2.92,
-      "volume": 141324000.0,
-      "turnover": 1544995000000.0,
-      "time": "2026-11-23T10:08:30+09:00",
+      "last": 625.98,
+      "pct": -3.05,
+      "volume": 143053000.0,
+      "turnover": 1565412000000.0,
+      "time": "2026-11-23T10:09:30+09:00",
       "source": "naver_kr",
       "cells": [
-        "626.85",
-        "-2.92%",
-        "1.41亿",
-        "1.54万亿"
+        "625.98",
+        "-3.05%",
+        "1.43亿",
+        "1.57万亿"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "ea2e30e7aa543009187be381cd2148958d13cd6eb765db690994c5f9c8940bbd",
-  "crc32_bitmap": "abbb7cd3",
+  "sha256": "0db4c851af5000e8d241f8e988d903b2412e6791658d8bd679553089eb79b15f",
+  "crc32_bitmap": "8df6efaa",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
