@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24 05:01:24",
+  "generated_at": "2026-11-24 05:02:24",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-24 05:01:20",
+  "as_of": "2026-11-24 05:02:19",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -118,14 +118,14 @@
       "market": "美",
       "key": "usDJI",
       "name": "道琼斯",
-      "last": 49598.97,
+      "last": 49597.72,
       "pct": 3.01,
-      "volume": 1162567851.0,
+      "volume": 1164876291.0,
       "turnover": null,
-      "time": "2026-11-23T16:01:20-05:00",
+      "time": "2026-11-23T16:02:19-05:00",
       "source": "tencent",
       "cells": [
-        "49,598.97",
+        "49,597.72",
         "+3.01%",
         "11.6亿",
         "--"
@@ -137,14 +137,14 @@
       "name": "纳斯达克",
       "last": 24089.56,
       "pct": 6.51,
-      "volume": 8346920433.0,
+      "volume": 8375778219.0,
       "turnover": null,
-      "time": "2026-11-23T16:01:00-05:00",
+      "time": "2026-11-23T16:02:00-05:00",
       "source": "tencent",
       "cells": [
         "24,089.56",
         "+6.51%",
-        "83.5亿",
+        "83.8亿",
         "--"
       ]
     },
@@ -152,16 +152,16 @@
       "market": "美",
       "key": "usINX",
       "name": "标普500",
-      "last": 7237.84,
+      "last": 7237.73,
       "pct": 4.74,
-      "volume": 4051067933.0,
+      "volume": 4071875519.0,
       "turnover": null,
-      "time": "2026-11-23T16:01:20-05:00",
+      "time": "2026-11-23T16:02:19-05:00",
       "source": "tencent",
       "cells": [
-        "7,237.84",
+        "7,237.73",
         "+4.74%",
-        "40.5亿",
+        "40.7亿",
         "--"
       ]
     },
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "2df76bcb3c04e52e835ee6db7da42d1575f0e4b13f76f43391661df3d9b33537",
-  "crc32_bitmap": "1c5459cf",
+  "sha256": "7b069601afab771969a013b417bebad1390617a00fe9dac75266a27f25b9574a",
+  "crc32_bitmap": "2af6c5d5",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
