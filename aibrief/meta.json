@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25 05:58:07",
+  "generated_at": "2026-11-25 05:59:06",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-25 05:57:30",
+  "as_of": "2026-11-25 05:58:30",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -137,14 +137,14 @@
       "name": "纳斯达克",
       "last": 23733.54,
       "pct": -1.48,
-      "volume": 8060255084.0,
+      "volume": 8072155992.0,
       "turnover": null,
-      "time": "2026-11-24T16:57:30-05:00",
+      "time": "2026-11-24T16:58:30-05:00",
       "source": "tencent",
       "cells": [
         "23,733.54",
         "-1.48%",
-        "80.6亿",
+        "80.7亿",
         "--"
       ]
     },
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "c28de1e4a0ac19e1529d97d2165f4aa3e2835ccd4f6263c9399140d221f1ebca",
-  "crc32_bitmap": "0a496cc3",
+  "sha256": "22060021e568e34999a5fb9d414d28312ee7c517a0e1a077040904407633af2a",
+  "crc32_bitmap": "a5c86c87",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
