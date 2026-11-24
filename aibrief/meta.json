@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25 05:34:06",
+  "generated_at": "2026-11-25 05:35:06",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-25 05:33:30",
+  "as_of": "2026-11-25 05:34:59",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -137,9 +137,9 @@
       "name": "纳斯达克",
       "last": 23733.54,
       "pct": -1.48,
-      "volume": 7997442257.0,
+      "volume": 7999590308.0,
       "turnover": null,
-      "time": "2026-11-24T16:33:30-05:00",
+      "time": "2026-11-24T16:34:59-05:00",
       "source": "tencent",
       "cells": [
         "23,733.54",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "40d8f7afe0c4628360f4e05819698dd0debf3d7a5c7962d70d8e118ef4e350b3",
-  "crc32_bitmap": "2a316556",
+  "sha256": "c319e65ee599257bc0139a0caf34ad6a764ec91df1df58498b8bace2d2fd1439",
+  "crc32_bitmap": "cb1cb090",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
