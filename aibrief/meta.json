@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26 03:28:08",
+  "generated_at": "2026-11-26 03:29:08",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-26 03:28:00",
+  "as_of": "2026-11-26 03:28:59",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -118,16 +118,16 @@
       "market": "美",
       "key": "usDJI",
       "name": "道琼斯",
-      "last": 50317.66,
+      "last": 50319.99,
       "pct": 0.6,
-      "volume": 496888645.0,
+      "volume": 497613981.0,
       "turnover": null,
-      "time": "2026-11-25T14:28:00-05:00",
+      "time": "2026-11-25T14:28:59-05:00",
       "source": "tencent",
       "cells": [
-        "50,317.66",
+        "50,319.99",
         "+0.60%",
-        "4.97亿",
+        "4.98亿",
         "--"
       ]
     },
@@ -135,15 +135,15 @@
       "market": "美",
       "key": "usIXIC",
       "name": "纳斯达克",
-      "last": 23572.71,
-      "pct": -0.68,
-      "volume": 7445547509.0,
+      "last": 23570.37,
+      "pct": -0.69,
+      "volume": 7450839297.0,
       "turnover": null,
-      "time": "2026-11-25T14:28:00-05:00",
+      "time": "2026-11-25T14:28:59-05:00",
       "source": "tencent",
       "cells": [
-        "23,572.71",
-        "-0.68%",
+        "23,570.37",
+        "-0.69%",
         "74.5亿",
         "--"
       ]
@@ -152,15 +152,15 @@
       "market": "美",
       "key": "usINX",
       "name": "标普500",
-      "last": 7185.23,
-      "pct": -0.22,
-      "volume": 2108961086.0,
+      "last": 7185.61,
+      "pct": -0.21,
+      "volume": 2112811028.0,
       "turnover": null,
-      "time": "2026-11-25T14:28:00-05:00",
+      "time": "2026-11-25T14:28:59-05:00",
       "source": "tencent",
       "cells": [
-        "7,185.23",
-        "-0.22%",
+        "7,185.61",
+        "-0.21%",
         "21.1亿",
         "--"
       ]
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "c6af729b6bd7225a4cb2aab67ce69d0b8863f5db1d9cd20ce3f8a333a8efbd45",
-  "crc32_bitmap": "20fb80ab",
+  "sha256": "8ee2c8eaa05dbeb25fc936a8541e4f22b9cc87fd970100f5bb1759cd85bf1a7b",
+  "crc32_bitmap": "efc62b9f",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
