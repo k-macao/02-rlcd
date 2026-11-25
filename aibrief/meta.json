@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26 07:56:21",
+  "generated_at": "2026-11-26 07:57:20",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-26 07:56:20",
+  "as_of": "2026-11-26 07:57:19",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -169,34 +169,34 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 4733.48,
-      "pct": 0.77,
-      "volume": 1088000.0,
-      "turnover": 169831000000.0,
-      "time": "2026-11-26T08:56:20+09:00",
+      "last": 4725.47,
+      "pct": 0.6,
+      "volume": 1211000.0,
+      "turnover": 196323000000.0,
+      "time": "2026-11-26T08:57:19+09:00",
       "source": "naver_kr",
       "cells": [
-        "4,733.48",
-        "+0.77%",
-        "109万",
-        "1,698亿"
+        "4,725.47",
+        "+0.60%",
+        "121万",
+        "1,963亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 654.17,
-      "pct": 0.54,
-      "volume": 1788000.0,
-      "turnover": 18298000000.0,
-      "time": "2026-11-26T08:56:20+09:00",
+      "last": 654.64,
+      "pct": 0.61,
+      "volume": 1873000.0,
+      "turnover": 19592000000.0,
+      "time": "2026-11-26T08:57:19+09:00",
       "source": "naver_kr",
       "cells": [
-        "654.17",
-        "+0.54%",
-        "179万",
-        "183亿"
+        "654.64",
+        "+0.61%",
+        "187万",
+        "196亿"
       ]
     },
     {
@@ -224,7 +224,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-26T08:41:20+09:00",
+      "time": "2026-11-26T08:42:20+09:00",
       "source": "naver_jp",
       "cells": [
         "3,746.20",
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "3fe91a29ef55ee000cd16a1af478631f9a1cca7aba4e873b7601f2b2f89db9a0",
-  "crc32_bitmap": "1261f8a3",
+  "sha256": "03f2e6598cab203dba54d025c48f08807c8fff95856dfc86f2919674b0acebb4",
+  "crc32_bitmap": "63d34ec5",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
