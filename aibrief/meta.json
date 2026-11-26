@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26 09:13:20",
+  "generated_at": "2026-11-26 09:14:20",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-26 09:13:20",
+  "as_of": "2026-11-26 09:14:19",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": -0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-26T09:13:00+08:00",
+      "time": "2026-11-26T09:14:00+08:00",
       "source": "tencent",
       "cells": [
         "3,476.41",
@@ -54,7 +54,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-26T09:13:15+08:00",
+      "time": "2026-11-26T09:14:15+08:00",
       "source": "tencent",
       "cells": [
         "10,086.36",
@@ -71,7 +71,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-26T09:12:30+08:00",
+      "time": "2026-11-26T09:13:30+08:00",
       "source": "tencent",
       "cells": [
         "2,183.58",
@@ -88,7 +88,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": 1031967570.0,
-      "time": "2026-11-26T09:13:19+08:00",
+      "time": "2026-11-26T09:14:19+08:00",
       "source": "tencent",
       "cells": [
         "21,966.01",
@@ -105,7 +105,7 @@
       "pct": 0.0,
       "volume": null,
       "turnover": null,
-      "time": "2026-11-26T09:13:18+08:00",
+      "time": "2026-11-26T09:14:18+08:00",
       "source": "tencent",
       "cells": [
         "3,378.26",
@@ -169,50 +169,50 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 4781.96,
-      "pct": 1.8,
-      "volume": 58068000.0,
-      "turnover": 4407490000000.0,
-      "time": "2026-11-26T10:13:20+09:00",
+      "last": 4790.96,
+      "pct": 1.99,
+      "volume": 58456000.0,
+      "turnover": 4438405000000.0,
+      "time": "2026-11-26T10:14:19+09:00",
       "source": "naver_kr",
       "cells": [
-        "4,781.96",
-        "+1.80%",
-        "5,807万",
-        "4.41万亿"
+        "4,790.96",
+        "+1.99%",
+        "5,846万",
+        "4.44万亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 666.51,
-      "pct": 2.44,
-      "volume": 168464000.0,
-      "turnover": 2137727000000.0,
-      "time": "2026-11-26T10:13:20+09:00",
+      "last": 667.46,
+      "pct": 2.59,
+      "volume": 169629000.0,
+      "turnover": 2149174000000.0,
+      "time": "2026-11-26T10:14:19+09:00",
       "source": "naver_kr",
       "cells": [
-        "666.51",
-        "+2.44%",
-        "1.68亿",
-        "2.14万亿"
+        "667.46",
+        "+2.59%",
+        "1.70亿",
+        "2.15万亿"
       ]
     },
     {
       "market": "日",
       "key": "N225",
       "name": "日经225",
-      "last": 57977.67,
-      "pct": 1.69,
-      "volume": 538075000.0,
+      "last": 58013.02,
+      "pct": 1.76,
+      "volume": 542707000.0,
       "turnover": null,
-      "time": "2026-11-26T09:11:30+08:00",
+      "time": "2026-11-26T09:13:10+08:00",
       "source": "tencent",
       "cells": [
-        "57,977.67",
-        "+1.69%",
-        "5.38亿",
+        "58,013.02",
+        "+1.76%",
+        "5.43亿",
         "--"
       ]
     },
@@ -220,16 +220,16 @@
       "market": "日",
       "key": "TOPX",
       "name": "东证指数",
-      "last": 3783.64,
-      "pct": 1.0,
-      "volume": 776342000.0,
+      "last": 3784.57,
+      "pct": 1.02,
+      "volume": 781995000.0,
       "turnover": null,
-      "time": "2026-11-26T09:58:20+09:00",
+      "time": "2026-11-26T09:59:20+09:00",
       "source": "naver_jp",
       "cells": [
-        "3,783.64",
-        "+1.00%",
-        "7.76亿",
+        "3,784.57",
+        "+1.02%",
+        "7.82亿",
         "--"
       ]
     }
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "c4e85e669b6235aa570fc239eb1e338a3e631a9d89e50ae39b116bb1fcf85c20",
-  "crc32_bitmap": "b3ecf0e8",
+  "sha256": "939157287ee8a9028c68165458f0cb527ceef7d038653d310c3cdda740c2cb70",
+  "crc32_bitmap": "73c32fa3",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
