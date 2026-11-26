@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26 15:40:33",
+  "generated_at": "2026-11-26 15:41:33",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-26 15:40:32",
+  "as_of": "2026-11-26 15:41:31",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -37,7 +37,7 @@
       "pct": 0.01,
       "volume": 45406295900.0,
       "turnover": 613332810000.0,
-      "time": "2026-11-26T15:40:27+08:00",
+      "time": "2026-11-26T15:41:27+08:00",
       "source": "tencent",
       "cells": [
         "3,476.88",
@@ -54,7 +54,7 @@
       "pct": -0.02,
       "volume": 54473368600.0,
       "turnover": 704044360000.0,
-      "time": "2026-11-26T15:40:15+08:00",
+      "time": "2026-11-26T15:41:15+08:00",
       "source": "tencent",
       "cells": [
         "10,084.04",
@@ -84,34 +84,34 @@
       "market": "港",
       "key": "hkHSI",
       "name": "恒生指数",
-      "last": 22302.54,
-      "pct": 1.53,
-      "volume": 11369453980.0,
-      "turnover": 191325590780.00003,
-      "time": "2026-11-26T15:40:32+08:00",
+      "last": 22297.96,
+      "pct": 1.51,
+      "volume": 11462919559.0,
+      "turnover": 191801930330.0,
+      "time": "2026-11-26T15:41:31+08:00",
       "source": "tencent",
       "cells": [
-        "22,302.54",
-        "+1.53%",
-        "114亿",
-        "1,913亿"
+        "22,297.96",
+        "+1.51%",
+        "115亿",
+        "1,918亿"
       ]
     },
     {
       "market": "港",
       "key": "hkHSTECH",
       "name": "恒生科技",
-      "last": 3432.57,
-      "pct": 1.61,
-      "volume": 1422100461.0,
-      "turnover": 45165152010.0,
-      "time": "2026-11-26T15:40:32+08:00",
+      "last": 3432.3,
+      "pct": 1.6,
+      "volume": 1424881691.0,
+      "turnover": 45272551530.0,
+      "time": "2026-11-26T15:41:30+08:00",
       "source": "tencent",
       "cells": [
-        "3,432.57",
-        "+1.61%",
+        "3,432.30",
+        "+1.60%",
         "14.2亿",
-        "452亿"
+        "453亿"
       ]
     },
     {
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "9639ede64bff8416f7dc8c465aa5682b0f80ed44d3545acf678ee2aea8ea0837",
-  "crc32_bitmap": "f960a7fb",
+  "sha256": "aba574457f881293a7e0a178c7d1e9c75885453cef2b0be55dd6aef8c599f73a",
+  "crc32_bitmap": "d4ef6136",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
