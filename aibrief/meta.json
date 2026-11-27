@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27 08:14:17",
+  "generated_at": "2026-11-27 08:15:17",
   "timezone": "Asia/Shanghai",
   "panel": "market",
   "markets": [
@@ -9,7 +9,7 @@
     "韩",
     "日"
   ],
-  "as_of": "2026-11-27 08:14:16",
+  "as_of": "2026-11-27 08:15:16",
   "demo": false,
   "live_rows": 12,
   "total_rows": 12,
@@ -169,50 +169,50 @@
       "market": "韩",
       "key": "KOSPI",
       "name": "KOSPI",
-      "last": 4724.87,
-      "pct": 0.29,
-      "volume": 14705000.0,
-      "turnover": 991121000000.0,
-      "time": "2026-11-27T09:14:16+09:00",
+      "last": 4726.24,
+      "pct": 0.32,
+      "volume": 15332000.0,
+      "turnover": 1037479000000.0,
+      "time": "2026-11-27T09:15:16+09:00",
       "source": "naver_kr",
       "cells": [
-        "4,724.87",
-        "+0.29%",
-        "1,470万",
-        "9,911亿"
+        "4,726.24",
+        "+0.32%",
+        "1,533万",
+        "1.04万亿"
       ]
     },
     {
       "market": "韩",
       "key": "KOSDAQ",
       "name": "KOSDAQ",
-      "last": 674.8,
-      "pct": 2.91,
-      "volume": 62018000.0,
-      "turnover": 757930000000.0,
-      "time": "2026-11-27T09:14:16+09:00",
+      "last": 674.47,
+      "pct": 2.86,
+      "volume": 64683000.0,
+      "turnover": 793150000000.0,
+      "time": "2026-11-27T09:15:16+09:00",
       "source": "naver_kr",
       "cells": [
-        "674.80",
-        "+2.91%",
-        "6,202万",
-        "7,579亿"
+        "674.47",
+        "+2.86%",
+        "6,468万",
+        "7,932亿"
       ]
     },
     {
       "market": "日",
       "key": "N225",
       "name": "日经225",
-      "last": 57791.71,
-      "pct": 0.51,
-      "volume": null,
+      "last": 57631.25,
+      "pct": 0.23,
+      "volume": 60261000.0,
       "turnover": null,
-      "time": "2026-11-27T08:13:00+08:00",
+      "time": "2026-11-27T08:14:50+08:00",
       "source": "tencent",
       "cells": [
-        "57,791.71",
-        "+0.51%",
-        "--",
+        "57,631.25",
+        "+0.23%",
+        "6,026万",
         "--"
       ]
     },
@@ -220,16 +220,16 @@
       "market": "日",
       "key": "TOPX",
       "name": "东证指数",
-      "last": 3750.4,
-      "pct": 0.0,
-      "volume": null,
+      "last": 3778.03,
+      "pct": 0.74,
+      "volume": 152392000.0,
       "turnover": null,
-      "time": "2026-11-27T08:59:17+09:00",
+      "time": "2026-11-27T09:00:17+09:00",
       "source": "naver_jp",
       "cells": [
-        "3,750.40",
-        "0.00%",
-        "--",
+        "3,778.03",
+        "+0.74%",
+        "1.52亿",
         "--"
       ]
     }
@@ -239,8 +239,8 @@
   "pages": 1,
   "bytes": 15008,
   "page_bytes": 15000,
-  "sha256": "d2595762a84e66263d629a212773335bf3b8816626172f8bd72d42c39d02a738",
-  "crc32_bitmap": "bd038521",
+  "sha256": "cf435b7edc1a0247acb7ad017c4f46e1a625956f3b12cbcb7b88a47a4bfcec6c",
+  "crc32_bitmap": "6f7ab915",
   "font": "AlibabaPuHuiTi-3-55-Regular.ttf",
   "bold_font": "AlibabaPuHuiTi-3-85-Bold.ttf",
   "font_family": "Alibaba PuHuiTi 3.0",
